@@ -219,7 +219,7 @@ MODULE NameListHandling
   IMPLICIT NONE
   SAVE
 
-  INTEGER, PARAMETER :: nvars = 12 
+  INTEGER, PARAMETER :: nvars = 10 
 
   CHARACTER (len = 200) :: Conventions, contact, experiment_id, experiment, &
     driving_experiment, driving_model_id, driving_model_ensemble_member, &
@@ -291,7 +291,7 @@ END INTERFACE
 ! filenames
 
 CHARACTER (len = *), PARAMETER :: fnNMLexp = "runctrl.access13hist.nml"
-CHARACTER (len = *), PARAMETER :: fnNMLvar = "runctrl.vars.nml_vars_on_plevels"  !"runctrl.vars.nml_vars_on_plevels" !"runctrl.vars.nml_pr"
+CHARACTER (len = *), PARAMETER :: fnNMLvar = "runctrl.vars.nml" !"runctrl.vars.nml_evp_roff" !"runctrl.vars.nml_water_column" ! "runctrl.vars.nml_vars_on_plevels"  !"runctrl.vars.nml_vars_on_plevels" !"runctrl.vars.nml_pr"
 
 CHARACTER (len = *), PARAMETER :: PathFileNameInTEST = "testWRFin.nc"
 CHARACTER (len = *), PARAMETER :: PathFileNameOutTEST = "testESGout.nc"
@@ -309,8 +309,10 @@ INTEGER :: lvl_dimid, lon_dimid, lat_dimid, rec_dimid, height_dimid, &
   nb2_dimid
 INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, &
   rotated_pole_varid, height_varid, rec_varid, pp_varid, pb_varid, ph_varid, &
-  phb_varid, qv_varid, theta_varid, t2_varid, recbnds_varid, rainnc_varid, &
-  rainc_varid, snownc_varid, u10_varid, v10_varid, u_varid, v_varid
+  phb_varid, qv_varid, qc_varid, qi_varid, qr_varid, qs_varid, &
+  theta_varid, t2_varid, recbnds_varid, rainnc_varid, &
+  rainc_varid, snownc_varid, u10_varid, v10_varid, u_varid, v_varid, &
+  sfcevp_varid, potevp_varid, sfroff_varid, udroff_varid
 
 ! input data general query
 INTEGER :: ncid_in, ndims_in, nvars_in, ngatts_in, unlimdimid_in !!!, formatp_in
@@ -323,10 +325,13 @@ CHARACTER (len = 19), DIMENSION(:), ALLOCATABLE :: InVarDataRec
 
 ! data
 REAL, DIMENSION(:,:), ALLOCATABLE :: data_in, psl_in, t2_in, TimeRefArraySelYear, &
-  cldfra_inv, u10_in, v10_in, cape, cin, lcl, lfc, Time_bnds 
+  cldfra_inv, u10_in, v10_in, cape, cin, lcl, lfc, prw, clwvi, clivi, potevp_in, &
+  Time_bnds 
 REAL, DIMENSION(:,:,:), ALLOCATABLE :: pp_in, pb_in, ph_in, phb_in, qv_in, qvs, &
-  theta_in, t_in, ph_fl, p_in, cldfra_in, u_in, v_in, var3d_in, var_pl, &
-  rainnc_in, rainc_in, rad_in, t_p, snownc_in, GeoInLonLat
+  qc_in, qr_in, qi_in, qs_in,  theta_in, t_in, ph_fl, p_in, cldfra_in, &
+  u_in, v_in, var3d_in, var_pl, &
+  rainnc_in, rainc_in, rad_in, t_p, snownc_in, GeoInLonLat, &
+  sfcevp_in, sfroff_in, udroff_in
 REAL, DIMENSION(:,:,:,:), ALLOCATABLE :: smois_in
 REAL, DIMENSION(:), ALLOCATABLE :: GeoInRLat, GeoInRLon, pout
 
@@ -334,7 +339,7 @@ REAL :: t_ii
 
 REAL, PARAMETER :: cp = 1004 !J kg-1 K-1
 REAL, PARAMETER :: R = 287.05 !J kg-1 K-1
-REAL, PARAMETER :: L = 2501000. !J kg-1 K-1
+REAL, PARAMETER :: L = 2501000. !J kg-1
 REAL, PARAMETER :: a = 610.78 !
 REAL, PARAMETER :: b = 17.27 !
 REAL, PARAMETER :: c = 273.15 !
@@ -541,8 +546,8 @@ DO ifrq = 1, 1, 1
 !-------------------------------------------------------------------------------
 ! loop over the different variables
 
-  DO ivar = 1, nvars, 1
-  !DO ivar = 1, 9, 1
+!  DO ivar = 1, nvars, 1
+  DO ivar = 1, 1, 1
 
     PRINT *,"============================================================"
     PRINT *, "*** ", TRIM(var_cmip(ivar)), " ***"
@@ -964,6 +969,8 @@ DO ifrq = 1, 1, 1
 
         IF ( (var_cmip(ivar) == "psl") .or. (height(ivar) == 850) &
               .or.(height(ivar) == 500) .or. (height(ivar) == 200) &
+              .or. (var_cmip(ivar) == "prw") .or. (var_cmip(ivar) == "clwvi") &
+              .or. (var_cmip(ivar) == "clivi") &
               .or. (var_cmip(ivar) == "cape")) THEN
 
           ALLOCATE( pp_in( xfocus, yfocus, 40 ), STAT=sts )
@@ -972,6 +979,11 @@ DO ifrq = 1, 1, 1
           ALLOCATE( phb_in( xfocus, yfocus, 40 ), STAT=sts )
           ALLOCATE( theta_in( xfocus, yfocus, 40 ), STAT=sts )
           ALLOCATE( qv_in( xfocus, yfocus, 40  ), STAT=sts )
+          ALLOCATE( qc_in( xfocus, yfocus, 40  ), STAT=sts )
+          ALLOCATE( qi_in( xfocus, yfocus, 40  ), STAT=sts )
+          ALLOCATE( qr_in( xfocus, yfocus, 40  ), STAT=sts )
+          ALLOCATE( qs_in( xfocus, yfocus, 40  ), STAT=sts )
+
           ALLOCATE( t_in( xfocus, yfocus, 40 ), STAT=sts )
           ALLOCATE( ph_fl( xfocus, yfocus, 40 ), STAT=sts )
           ALLOCATE( u_in( xfocus+1, yfocus, 40 ), STAT=sts )
@@ -982,7 +994,6 @@ DO ifrq = 1, 1, 1
           ALLOCATE( t2_in ( xfocus, yfocus ), STAT=sts )          
           
 
-
           ALLOCATE( t_p( xfocus, yfocus, 40 ), STAT=sts )
           ALLOCATE( qvs( xfocus, yfocus, 40 ), STAT=sts )
           ALLOCATE( cape( xfocus, yfocus ), STAT=sts )
@@ -990,6 +1001,9 @@ DO ifrq = 1, 1, 1
           ALLOCATE( lcl( xfocus, yfocus ), STAT=sts )
           ALLOCATE( lfc( xfocus, yfocus ), STAT=sts )
 
+          ALLOCATE( prw( xfocus, yfocus ), STAT=sts )
+          ALLOCATE( clwvi( xfocus, yfocus ), STAT=sts )
+          ALLOCATE( clivi( xfocus, yfocus ), STAT=sts )
 
           ALLOCATE( p_in( xfocus, yfocus, 40 ), STAT=sts )
           ALLOCATE( pp_in( xfocus, yfocus, 40 ), STAT=sts )
@@ -1005,6 +1019,10 @@ DO ifrq = 1, 1, 1
           sts = NF90_INQ_VARID(ncidin, "PHB", phb_varid)
           sts = NF90_INQ_VARID(ncidin, "T", theta_varid)
           sts = NF90_INQ_VARID(ncidin, "QVAPOR", qv_varid)
+          sts = NF90_INQ_VARID(ncidin, "QCLOUD", qc_varid)
+          sts = NF90_INQ_VARID(ncidin, "QICE", qi_varid)
+          sts = NF90_INQ_VARID(ncidin, "QRAIN", qr_varid)
+          sts = NF90_INQ_VARID(ncidin, "QSNOW", qs_varid)
           sts = NF90_INQ_VARID(ncidin, "U", u_varid)
           sts = NF90_INQ_VARID(ncidin, "V", v_varid)
 
@@ -1047,12 +1065,26 @@ DO ifrq = 1, 1, 1
 
           !print *,'got qv_in'
 
+          sts = NF90_GET_VAR(ncidin, qc_varid, qc_in(:,:,:), &
+            START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 40, 1 /) )
+
+          sts = NF90_GET_VAR(ncidin, qi_varid, qi_in(:,:,:), &
+            START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 40, 1 /) )
+
+          sts = NF90_GET_VAR(ncidin, qr_varid, qr_in(:,:,:), &
+            START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 40, 1 /) )
+
+          sts = NF90_GET_VAR(ncidin, qs_varid, qs_in(:,:,:), &
+            START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 40, 1 /) )          
+
           sts = NF90_GET_VAR(ncidin, u_varid, u_in(:,:,:), &
             START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus+1, yfocus, 40, 1 /) )
 
           sts = NF90_GET_VAR(ncidin, v_varid, v_in(:,:,:), &
             START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus+1, 40, 1 /) )
           
+          
+
 
 
 
@@ -1098,6 +1130,49 @@ DO ifrq = 1, 1, 1
           sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
 
           sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+
+
+        ELSE IF (var_cmip(ivar) == "evspsbl") THEN
+
+          ALLOCATE( sfcevp_in ( xfocus, yfocus, 2 ), STAT=sts )
+
+          sts = NF90_INQ_VARID(ncidin, "SFCEVP", sfcevp_varid)
+
+          sts = NF90_GET_VAR(ncidin, sfcevp_varid, sfcevp_in(:,:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+
+        ELSE IF (var_cmip(ivar) == "evspsblpot") THEN
+
+          ALLOCATE( potevp_in ( xfocus, yfocus ), STAT=sts )
+
+          sts = NF90_INQ_VARID(ncidin, "POTEVP", potevp_varid)
+
+          sts = NF90_GET_VAR(ncidin, potevp_varid, potevp_in(:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+
+
+        ELSE IF (var_cmip(ivar) == "mrros") THEN
+
+          ALLOCATE( sfroff_in ( xfocus, yfocus, 2 ), STAT=sts )
+
+          sts = NF90_INQ_VARID(ncidin, "SFROFF", sfroff_varid)
+
+          sts = NF90_GET_VAR(ncidin, sfroff_varid, sfroff_in(:,:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+
+        ELSE IF (var_cmip(ivar) == "mrro") THEN
+
+          ALLOCATE( sfroff_in ( xfocus, yfocus, 2 ), STAT=sts )
+          ALLOCATE( udroff_in ( xfocus, yfocus, 2 ), STAT=sts )
+
+          sts = NF90_INQ_VARID(ncidin, "SFROFF", sfroff_varid)
+          sts = NF90_INQ_VARID(ncidin, "UDROFF", udroff_varid)
+
+          sts = NF90_GET_VAR(ncidin, sfroff_varid, sfroff_in(:,:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+
+          sts = NF90_GET_VAR(ncidin, udroff_varid, udroff_in(:,:,:), &
             START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
 
 
@@ -1260,6 +1335,68 @@ DO ifrq = 1, 1, 1
         END IF
 
 
+!       ***prw, clwvi, clivi***
+
+        IF ( (var_cmip(ivar) == "prw") ) THEN     
+
+          t_in(:,:,:) = (theta_in(:,:,:)+300.)*((pp_in(:,:,:)+pb_in(:,:,:))/100000.)**(R/cp)
+          p_in = pp_in+pb_in
+
+          prw(:,:) = 0.
+
+          DO nl = 1,40 - 1
+
+!            print*, nl
+!            print*, p_in(50,50,nl)
+!            print*, t_in(50,50,nl)
+!            print*, ((ph_in(50,50,nl+1)+phb_in(50,50,nl+1)) - (ph_in(50,50,nl)+phb_in(50,50,nl)))/9.81
+!            print*, data_in(50,50)
+
+            prw(:,:) = prw(:,:) + qv_in(:,:,nl) * p_in(:,:,nl)/(R*t_in(:,:,nl)) * ((ph_in(:,:,nl+1)+phb_in(:,:,nl+1)) - (ph_in(:,:,nl)+phb_in(:,:,nl)))/9.81
+
+            data_in(:,:) = prw(:,:)            
+
+          END DO
+
+        END IF
+
+
+        IF ( (var_cmip(ivar) == "clwvi") ) THEN
+
+          t_in(:,:,:) = (theta_in(:,:,:)+300.)*((pp_in(:,:,:)+pb_in(:,:,:))/100000.)**(R/cp)
+          p_in = pp_in+pb_in          
+
+          clwvi(:,:) = 0.
+
+          DO nl = 1,40 - 1
+
+            clwvi(:,:) = clwvi(:,:) + (qc_in(:,:,nl) + qi_in(:,:,nl) + qr_in(:,:,nl) + qs_in(:,:,nl) ) * p_in(:,:,nl)/(R*t_in(:,:,nl)) * ((ph_in(:,:,nl+1)+phb_in(:,:,nl+1)) - (ph_in(:,:,nl)+phb_in(:,:,nl)))/9.81
+            
+          END DO
+
+          data_in(:,:) = clwvi(:,:) 
+
+        END IF
+
+
+        IF ( (var_cmip(ivar) == "clivi")) THEN
+
+          t_in(:,:,:) = (theta_in(:,:,:)+300.)*((pp_in(:,:,:)+pb_in(:,:,:))/100000.)**(R/cp)
+          p_in = pp_in+pb_in
+
+          clivi(:,:) = 0.
+
+          DO nl = 1,40 - 1
+
+            clivi(:,:) = clivi(:,:) + (qi_in(:,:,nl) + qs_in(:,:,nl)) * p_in(:,:,nl)/(R*t_in(:,:,nl)) * ((ph_in(:,:,nl+1)+phb_in(:,:,nl+1)) - (ph_in(:,:,nl)+phb_in(:,:,nl)))/9.81
+            
+          END DO
+
+          data_in(:,:) = clivi(:,:)
+
+        END IF
+
+
 !       ***cape***
 
         IF ( (var_cmip(ivar) == "cape") ) THEN
@@ -1403,6 +1540,34 @@ DO ifrq = 1, 1, 1
         IF (var_cmip(ivar) == "prsn") THEN
 
           data_in(:,:) = (snownc_in(:,:,2) - snownc_in(:,:,1))/(3.*3600.) !unit [mm/3hr] to [kg m-2 s-1]
+
+        END IF
+
+!       ***evspsbl***
+        IF (var_cmip(ivar) == "evspsbl") THEN
+
+          data_in(:,:) = (sfcevp_in(:,:,2) - sfcevp_in(:,:,1))/(3.*3600.) !unit [kg m-2/3hr] to [kg m-2 s-1]
+
+        END IF
+
+!       ***evspblpot**
+        IF (var_cmip(ivar) == "evspsblpot") THEN
+
+          data_in(:,:) = potevp_in(:,:)/L   !unit [W m-2]/[J kg -1] -> [kg m-2 s-1]
+
+        END IF
+
+!       ***mrros***
+        IF (var_cmip(ivar) == "mrros") THEN
+
+          data_in(:,:) = (sfroff_in(:,:,2) - sfroff_in(:,:,1))/(3.*3600.)       !unit [mm/3hr] to [kg m-2 s-1]
+
+        END IF
+
+!       ***mrro***
+        IF (var_cmip(ivar) == "mrro") THEN
+
+          data_in(:,:) = ((sfroff_in(:,:,2) - sfroff_in(:,:,1)) + (udroff_in(:,:,2) - udroff_in(:,:,1)))/(3.*3600.) !unit [mm/3hr] to [kg m-2 s-1]
 
         END IF
 
