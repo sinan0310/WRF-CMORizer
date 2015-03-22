@@ -291,7 +291,7 @@ END INTERFACE
 ! filenames
 
 CHARACTER (len = *), PARAMETER :: fnNMLexp = "runctrl.access13hist.nml"
-CHARACTER (len = *), PARAMETER :: fnNMLvar = "runctrl.vars.nml_vars_on_plevels" !"runctrl.vars.nml"
+CHARACTER (len = *), PARAMETER :: fnNMLvar = "runctrl.vars.nml_pr"  !"runctrl.vars.nml_vars_on_plevels" !"runctrl.vars.nml"
 
 CHARACTER (len = *), PARAMETER :: PathFileNameInTEST = "testWRFin.nc"
 CHARACTER (len = *), PARAMETER :: PathFileNameOutTEST = "testESGout.nc"
@@ -309,7 +309,8 @@ INTEGER :: lvl_dimid, lon_dimid, lat_dimid, rec_dimid, height_dimid, &
   nb2_dimid
 INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, &
   rotated_pole_varid, height_varid, rec_varid, pp_varid, pb_varid, ph_varid, &
-  phb_varid, qv_varid, theta_varid, t2_varid, recbnds_varid
+  phb_varid, qv_varid, theta_varid, t2_varid, recbnds_varid, rainnc_varid, &
+  rainc_varid
 
 ! input data general query
 INTEGER :: ncid_in, ndims_in, nvars_in, ngatts_in, unlimdimid_in !!!, formatp_in
@@ -322,9 +323,9 @@ CHARACTER (len = 19), DIMENSION(:), ALLOCATABLE :: InVarDataRec
 
 ! data
 REAL, DIMENSION(:,:), ALLOCATABLE :: data_in, psl_in, t2_in, TimeRefArraySelYear, &
-  TimeRefArraySelYear_indexbnds
+  Time_bnds, pr_in
 REAL, DIMENSION(:,:,:), ALLOCATABLE :: pp_in, pb_in, ph_in, phb_in, qv_in, &
-  theta_in, t_in, ph_fl, p_in, t_out, GeoInLonLat
+  theta_in, t_in, ph_fl, p_in, t_out, rainnc_in, rainc_in, GeoInLonLat
 REAL, DIMENSION(:), ALLOCATABLE :: GeoInRLat, GeoInRLon, pout
 
 ! time and date handling
@@ -400,7 +401,7 @@ ALLOCATE( data_in( xfocus, yfocus ), STAT=sts )
 IF (sts /= 0) STOP "*** Not enough memory ***"
 
 ALLOCATE( TimeRefArraySelYear(2,2) )
-ALLOCATE( TimeRefArraySelYear_indexbnds(2,2) )  !SKn
+ALLOCATE( Time_bnds(2,2) )  !SKn
 !-------------------------------------------------------------------------------
 ! get the invariant vars which have to be added all the time
 ! lon, lat, rlon, rlat
@@ -527,7 +528,7 @@ DO ifrq = 1, 1, 1
 ! loop over the different variables
 
   !DO ivar = 1, nvars, 1
-  DO ivar = 2, 3, 1
+  DO ivar = 1, 1, 1
 
     PRINT *,"============================================================"
     PRINT *, "*** ", TRIM(var_cmip(ivar)), " ***"
@@ -657,9 +658,9 @@ DO ifrq = 1, 1, 1
 
           print *, "DEALLOCATE( TimeRefArraySelYear )" 
 
-          DEALLOCATE( TimeRefArraySelYear_indexbnds ) !SKn 
+          DEALLOCATE( Time_bnds ) !SKn 
 
-          print *, "DEALLOCATE( TimeRefArraySelYear_indexbnds )"
+          print *, "DEALLOCATE( Time_bnds )"
 
           counter = 0
           PRINT *, SIZE(TimeRefArray, 1)
@@ -677,9 +678,9 @@ DO ifrq = 1, 1, 1
 
           ! find the matching elements of the respecitve year and copy them
 
-          ALLOCATE( TimeRefArraySelYear_indexbnds( counter, 2 ) )
+          ALLOCATE( Time_bnds( 2, counter ) )
 
-          print *, "ALLOCATE( TimeRefArraySelYear_indexbnds( counter, 2 ) )", TimeRefArraySelYear_indexbnds( counter, 2 )
+          print *, "ALLOCATE( Time_bnds( 2, counter ) )", Time_bnds( 2, counter )
 
           counter = 0
           DO i = 1, SIZE(TimeRefArray, 1), 1
@@ -856,22 +857,34 @@ DO ifrq = 1, 1, 1
 
             ! add time, whole year from above
             IF ( cell_methods(ivar) == "point" ) THEN
+              print*, 'cell_methods:', cell_methods(ivar)
               sts = NF90_PUT_VAR(ncid, rec_varid, TimeRefArraySelYear(:,1) )
             END IF
             IF ( cell_methods(ivar) == "mean" ) THEN
               print*, 'cell_methods:', cell_methods(ivar)
               sts = NF90_PUT_VAR(ncid, rec_varid, (TimeRefArraySelYear(:,1)+1.5/24.) )
 
-              TimeRefArraySelYear_indexbnds(:,1) = TimeRefArraySelYear(:,1)
-              TimeRefArraySelYear_indexbnds(:,2) = TimeRefArraySelYear(:,1)+3.0/24.
+              print *, 'sts NF90_PUT_VAR time', sts
 
-              print*, 'TimeRefArraySelYear_indexbnds(1,:)', TimeRefArraySelYear_indexbnds(1,:)
+              !print*, 'TimeRefArraySelYear(:,1)', TimeRefArraySelYear(:,1)
+              !print*, 'TimeRefArraySelYear(:,2)', TimeRefArraySelYear(:,2)
+              !print*, 'TimeRefArraySelYear(:,3)', TimeRefArraySelYear(:,3)
+              !print*, 'TimeRefArraySelYear(:,4)', TimeRefArraySelYear(:,4)
+              !print*, 'TimeRefArraySelYear(:,5)', TimeRefArraySelYear(:,5)
 
-              sts = NF90_PUT_VAR(ncid, recbnds_varid, TimeRefArraySelYear_indexbnds(:,:), START = (/ 1, 1 /), COUNT = (/ 100, 2 /) ) !SKn: check PUT_VAR does not work!!!
+
+              Time_bnds(1,:) = TimeRefArraySelYear(:,1)
+              Time_bnds(2,:) = TimeRefArraySelYear(:,1)+3.0/24.
+
+
+              print*, 'recbnds_varid', recbnds_varid
+
+              !print*, 'Time_bnds(:,:)', Time_bnds(:,:)
+              sts = NF90_PUT_VAR(ncid, recbnds_varid, Time_bnds(:,:), START = (/ 1, 1 /) , COUNT = (/ 2, SIZE(Time_bnds(1,:)) /) ) !SKn: check PUT_VAR does not work!!!
 
               print *, 'sts NF90_PUT_VAR time_bnds', sts
             END IF
-            print *,'TimeRefArraySelYear(:,1)', TimeRefArraySelYear(:,1)
+            !print *,'TimeRefArraySelYear(:,1)', TimeRefArraySelYear(:,1)
              
 
 
@@ -1002,6 +1015,22 @@ DO ifrq = 1, 1, 1
 
           !print *,'got qv_in'
 
+        ELSE IF (var_cmip(ivar) == "pr") THEN 
+
+          ALLOCATE( rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
+          ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+          ALLOCATE( pr_in ( xfocus, yfocus ), STAT=sts )
+
+          sts = NF90_INQ_VARID(ncidin, "RAINNC", rainnc_varid)
+          sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
+
+          sts = NF90_GET_VAR(ncidin, rainnc_varid, rainnc_in(:,:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )   !read two timesteps to calculate 3hr sum
+
+          sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+
+
         ELSE
           sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
 
@@ -1025,7 +1054,7 @@ DO ifrq = 1, 1, 1
 !-------------------------------------------------------------------------------
 ! processing
 
-!       ***psl***        
+!       ***psl***   ***vars on pressure levels***        
         IF ( (var_cmip(ivar) == "psl") .or. (height(ivar) == 850) &
               .or.(height(ivar) == 500) .or. (height(ivar) == 200)) THEN
 
@@ -1052,7 +1081,7 @@ DO ifrq = 1, 1, 1
           p_in = pp_in+pb_in
 
            
-          !DO np = 1,3
+          !DO np = 1,3     !SKn: could loop over heigts per variable or calculate t850, t500, t200 as individual variables 
 
           IF (height(ivar) == 850) THEN
             np = 1
@@ -1086,6 +1115,19 @@ DO ifrq = 1, 1, 1
           data_in(:,:) = t_out(:,:,np)
 
         END IF
+
+
+
+!       ***pr***
+        IF (var_cmip(ivar) == "pr") THEN 
+
+          pr_in(:,:) = ((rainnc_in(:,:,2) + rainc_in(:,:,2)) - (rainnc_in(:,:,1) + rainc_in(:,:,1)))/(3.*3600.) !unit [mm/3hr] to [kg m-2 s-1]
+
+          data_in(:,:) = pr_in(:,:)
+
+        END IF
+
+
 !-------------------------------------------------------------------------------
 ! write data to NetCDF file
 
