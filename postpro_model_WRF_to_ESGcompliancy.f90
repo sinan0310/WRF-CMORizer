@@ -219,7 +219,7 @@ MODULE NameListHandling
   IMPLICIT NONE
   SAVE
 
-  INTEGER, PARAMETER :: nvars = 10 
+  INTEGER, PARAMETER :: nvars = 13 
 
   CHARACTER (len = 200) :: Conventions, contact, experiment_id, experiment, &
     driving_experiment, driving_model_id, driving_model_ensemble_member, &
@@ -290,8 +290,10 @@ END INTERFACE
 !===============================================================================
 ! filenames
 
-CHARACTER (len = *), PARAMETER :: fnNMLexp = "runctrl.access13hist.nml"
-CHARACTER (len = *), PARAMETER :: fnNMLvar = "runctrl.vars.nml" !"runctrl.vars.nml_evp_roff" !"runctrl.vars.nml_water_column" ! "runctrl.vars.nml_vars_on_plevels"  !"runctrl.vars.nml_vars_on_plevels" !"runctrl.vars.nml_pr"
+CHARACTER (len = *), PARAMETER :: fnNMLexp = "runctrl.access13hist.nml" !"runctrl.erainteval_EUR11_MIUB.nml" !"runctrl.access13hist.nml"
+!CHARACTER (len = *), PARAMETER :: fnNMLvar = "runctrl.vars.nml" !"runctrl.vars.nml_evp_roff" !"runctrl.vars.nml_water_column" ! "runctrl.vars.nml_vars_on_plevels"  !"runctrl.vars.nml_vars_on_plevels" !"runctrl.vars.nml_pr"
+
+CHARACTER (len = 100), DIMENSION(:), ALLOCATABLE :: fnNMLvar
 
 CHARACTER (len = *), PARAMETER :: PathFileNameInTEST = "testWRFin.nc"
 CHARACTER (len = *), PARAMETER :: PathFileNameOutTEST = "testESGout.nc"
@@ -305,18 +307,20 @@ CHARACTER (len = 200) :: pn_out, fn_out, iflWRFin
 
 ! new NetCDF file
 INTEGER :: ncid, ncidin
-INTEGER :: lvl_dimid, lon_dimid, lat_dimid, rec_dimid, height_dimid, &
+INTEGER :: lon_dimid, lat_dimid, rec_dimid, height_dimid, &
   nb2_dimid
 INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, &
   rotated_pole_varid, height_varid, rec_varid, pp_varid, pb_varid, ph_varid, &
   phb_varid, qv_varid, qc_varid, qi_varid, qr_varid, qs_varid, &
   theta_varid, t2_varid, recbnds_varid, rainnc_varid, &
   rainc_varid, snownc_varid, u10_varid, v10_varid, u_varid, v_varid, &
-  sfcevp_varid, potevp_varid, sfroff_varid, udroff_varid
+  sfcevp_varid, potevp_varid, sfroff_varid, udroff_varid, acsnom_varid, &
+  sinalpha_varid, cosalpha_varid
 
 ! input data general query
 INTEGER :: ncid_in, ndims_in, nvars_in, ngatts_in, unlimdimid_in !!!, formatp_in
 
+INTEGER :: nvar_nml
 ! record variable in input data
 INTEGER :: InVarIdRec, InDimLenRec !!!, InVarNdimsRec
 CHARACTER (len = NF90_MAX_NAME) :: InDimNameRec !!!, InVarNameRec
@@ -325,12 +329,12 @@ CHARACTER (len = 19), DIMENSION(:), ALLOCATABLE :: InVarDataRec
 
 ! data
 REAL, DIMENSION(:,:), ALLOCATABLE :: data_in, psl_in, t2_in, TimeRefArraySelYear, &
-  cldfra_inv, u10_in, v10_in, cape, cin, lcl, lfc, prw, clwvi, clivi, potevp_in, &
-  Time_bnds 
+  cldfra_inv, u10_in, v10_in, cape, cin, lcl, lfc, prw, clwvi, clivi, &
+  sinalpha_in, cosalpha_in, Time_bnds 
 REAL, DIMENSION(:,:,:), ALLOCATABLE :: pp_in, pb_in, ph_in, phb_in, qv_in, qvs, &
   qc_in, qr_in, qi_in, qs_in,  theta_in, t_in, ph_fl, p_in, cldfra_in, &
-  u_in, v_in, var3d_in, var_pl, &
-  rainnc_in, rainc_in, rad_in, t_p, snownc_in, GeoInLonLat, &
+  u_in, v_in, var3d_in, var_pl, potevp_in, &
+  rainnc_in, rainc_in, rad_in, t_p, snownc_in, acsnom_in, GeoInLonLat, &
   sfcevp_in, sfroff_in, udroff_in
 REAL, DIMENSION(:,:,:,:), ALLOCATABLE :: smois_in
 REAL, DIMENSION(:), ALLOCATABLE :: GeoInRLat, GeoInRLon, pout
@@ -340,7 +344,7 @@ REAL :: t_ii
 REAL, PARAMETER :: cp = 1004 !J kg-1 K-1
 REAL, PARAMETER :: R = 287.05 !J kg-1 K-1
 REAL, PARAMETER :: L = 2501000. !J kg-1
-REAL, PARAMETER :: a = 610.78 !
+REAL, PARAMETER :: a = 610.78 ! Pa
 REAL, PARAMETER :: b = 17.27 !
 REAL, PARAMETER :: c = 273.15 !
 REAL, PARAMETER :: d = 35.86 !
@@ -366,7 +370,7 @@ REAL :: stat_mean, slope
 !-------------------------------------------------------------------------------
 ! general
 
-INTEGER :: i, sts, ivar, ifrq, ifl, it, counter, j, np, nl, ii !!!j
+INTEGER :: i, sts, ivar, ifrq, ifl, it, counter, j, np, nl, ii, varnml !!!j
 !!!INTEGER :: AllocateStatus, DeAllocateStatus
 LOGICAL :: FileExists   !, comb_flags
 REAL :: cpuTs, cpuTe
@@ -407,9 +411,9 @@ OPEN(2,FILE=fnNMLexp)
 READ(UNIT=2,NML=static_fields)
 CLOSE(2)
 
-OPEN(2,FILE=fnNMLvar)
-READ(UNIT=2,NML=vars)
-CLOSE(2)
+!OPEN(2,FILE=fnNMLvar)  !SKn loop over sereval var namelists later
+!READ(UNIT=2,NML=vars)
+!CLOSE(2)
 
 !-------------------------------------------------------------------------------
 ! allocate main data input array outside the loops based on nml entries
@@ -483,13 +487,87 @@ frequency(4) = "mon"
 frequency(5) = "sem"
 frequency(6) = "fx"
 
-!DO ifrq = 1, SIZE(frequency), 1
-DO ifrq = 1, 1, 1
+ALLOCATE ( fnNMLvar(8) )
+fnNMLvar(1) = "runctrl.vars.nml"
+fnNMLvar(2) = "runctrl.vars.nml_evp_roff"
+fnNMLvar(3) = "runctrl.vars.nml_water_column"
+fnNMLvar(4) = "runctrl.vars.nml_vars_on_plevels"
+fnNMLvar(5) = "runctrl.vars.nml_pr_mrso"
+fnNMLvar(6) = "runctrl.vars.nml_snow"
+fnNMLvar(7) = "runctrl.vars.nml_radiation_alternative"
+fnNMLvar(8) = "runctrl.vars.nml_cape"
 
-  PRINT *, "============================================================"
-  PRINT *, "freq = ", frequency(ifrq)
+
+
+!DO ifrq = 1, SIZE(frequency), 1
+!DO ifrq = 1, 1, 1
+ifrq = 1   !SKn: for now just 3hr frequency possible. 
+
+PRINT *, "============================================================"
+PRINT *, "freq = ", frequency(ifrq)
+
+!------------------------------------------------------------------------------
+
+SELECT CASE (frequency(ifrq))
+CASE ('3hr')
+  cell_methods(:) = cm3hr(:)
+CASE ('6hr')
+  cell_methods(:) = cm6hr(:)
+CASE ('day')
+  cell_methods(:) = cmDay(:)
+CASE ('mon')
+  cell_methods(:) = cmMon(:)
+CASE ('sem')
+  cell_methods(:) = cmSea(:)
+CASE DEFAULT
+  PRINT *, "invalid time interval specified"
+  STOP
+END SELECT
+
+!------------------------------------------------------------------------------
+!get a file list of all wrfout and wrfxtrm files
+!use regex to refine the ls output and the filelist
+!non-std, works for gfortran (fct & subroutine) + ifort
+
+PRINT *, "============================================================"
+PRINT *, "*** FILELIST CREATION ***"
+
+tmpfileFL = "tmpfileFL"
+
+PRINT *, "filelist search pattern = ", TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // "*/*wrfout*nc"
+CALL SYSTEM("ls -1 " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfout*{" // ts // ".." // te // "}*nc > " // tmpfileFL)
+ft = 0
+CALL generateFilelist
+
+PRINT *, "filelist search pattern = ", TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // "*/*wrfxtrm*nc"
+CALL SYSTEM("ls -1 " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfxtrm*{" // ts // ".." // te // "}*nc > " // tmpfileFL)
+ft = 1
+CALL generateFilelist
+
+DO i=1,SIZE(fl_wrfout(:)),1
+  PRINT '(100A)', fl_wrfout(i)
+  PRINT '(100A)', fl_wrfxtr(i)
+END DO
+
+!------------------------------------------------------------------------------
+!creation of the main reference array
+
+PRINT *, "============================================================"
+PRINT *, "*** TIME REFERENCE ARRAY ***"
+
+CALL CreateRefTimeArray( frequency(ifrq) )
+
+PRINT *, "size & shape of the TimRefArray = ", SIZE(TimeRefArray), &
+  SHAPE(TimeRefArray)
 
 !-------------------------------------------------------------------------------
+! loop over the different variables
+DO varnml = 1, 1, 1 !loop over different var namelists (not best solution, but one namelist for all vars is to big)
+                    !choose just specific namelists from list above if you want to postprocess just specific variables
+
+  OPEN(2,FILE=TRIM(fnNMLvar(varnml)))
+  READ(UNIT=2,NML=vars)
+  CLOSE(2)
 
   SELECT CASE (frequency(ifrq))
   CASE ('3hr')
@@ -507,47 +585,32 @@ DO ifrq = 1, 1, 1
     STOP
   END SELECT
 
-!-------------------------------------------------------------------------------
-! get a file list of all wrfout and wrfxtrm files
-! use regex to refine the ls output and the filelist
-! non-std, works for gfortran (fct & subroutine) + ifort
 
-  PRINT *, "============================================================"
-  PRINT *, "*** FILELIST CREATION ***"
+  SELECT CASE (TRIM(fnNMLvar(varnml)))
+  CASE ("runctrl.vars.nml")
+    nvar_nml = 9
+  CASE ("runctrl.vars.nml_evp_roff")
+    nvar_nml = 4
+  CASE ("runctrl.vars.nml_water_column")
+    nvar_nml = 3
+  CASE ("runctrl.vars.nml_vars_on_plevels")
+    nvar_nml = 12
+  CASE ("runctrl.vars.nml_pr_mrso")
+    nvar_nml = 4
+  CASE ("runctrl.vars.nml_snow")
+    nvar_nml = 6 
+  CASE ("runctrl.vars.nml_radiation")
+    nvar_nml = 9
+  CASE ("runctrl.vars.nml_radiation_alternative")
+    nvar_nml = 9
+  CASE ("runctrl.vars.nml_cape")
+    nvar_nml = 1
+  END SELECT
 
-  tmpfileFL = "tmpfileFL"
+  print*, "nvar_nml", nvar_nml
 
-  PRINT *, "filelist search pattern = ", TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // "*/wrfout*nc"
-  CALL SYSTEM("ls -1 " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/wrfout*{" // ts // ".." // te // "}*nc > " // tmpfileFL)
-  ft = 0
-  CALL generateFilelist
-
-  PRINT *, "filelist search pattern = ", TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // "*/wrfxtrm*nc"
-  CALL SYSTEM("ls -1 " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/wrfxtrm*{" // ts // ".." // te // "}*nc > " // tmpfileFL)
-  ft = 1
-  CALL generateFilelist
-
-  DO i=1,SIZE(fl_wrfout(:)),1
-    PRINT '(100A)', fl_wrfout(i)
-    PRINT '(100A)', fl_wrfxtr(i)
-  END DO
-
-!-------------------------------------------------------------------------------
-! creation of the main reference array
-
-  PRINT *, "============================================================"
-  PRINT *, "*** TIME REFERENCE ARRAY ***"
-
-  CALL CreateRefTimeArray( frequency(ifrq) )
-
-  PRINT *, "size & shape of the TimRefArray = ", SIZE(TimeRefArray), &
-    SHAPE(TimeRefArray)
-
-!-------------------------------------------------------------------------------
-! loop over the different variables
-
-!  DO ivar = 1, nvars, 1
-  DO ivar = 1, 1, 1
+  !DO ivar = 1, nvar_nml, 1
+  DO ivar = 4, 5, 1    !choose just specific variables from namelist (look up var entry in individual namelist)
 
     PRINT *,"============================================================"
     PRINT *, "*** ", TRIM(var_cmip(ivar)), " ***"
@@ -558,7 +621,7 @@ DO ifrq = 1, 1, 1
 
     !DO ifl = 1, SIZE(fl_wrfout), 1 ! operational: loop over complete filelist
     print *,' SIZE(fl_wrfout', SIZE(fl_wrfout)
-    DO ifl = 1, 1, 1 ! testing: loop over specific entry in filelist
+    DO ifl = 1, 1, 1 ! testing: loop over specific entry in filelist (e.g. just January)
 
       CALL CPU_TIME(cpuTs)
 
@@ -809,8 +872,6 @@ DO ifrq = 1, 1, 1
               sts = nf90_put_att(ncid, height_varid, "axis", "Z")
             END IF
 
-            !missing: time_bnds, depends
-
             !missing: lvl, depends
 
             ! always included
@@ -822,16 +883,17 @@ DO ifrq = 1, 1, 1
             sts = nf90_put_att(ncid, rec_varid, "axis", "T")
 
             ! for mean variables
-            sts = nf90_def_var(ncid, "time_bnds", NF90_DOUBLE, (/ nb2_dimid, rec_dimid /), recbnds_varid)
-            sts = nf90_put_att(ncid, recbnds_varid, "standard_name", "time_bnds")
-            sts = nf90_put_att(ncid, recbnds_varid, "long_name", "time_bnds")
-            sts = nf90_put_att(ncid, recbnds_varid, "units", "days since 1949-12-01 00:00:00")
-            sts = nf90_put_att(ncid, recbnds_varid, "calendar", "standard")
-            sts = nf90_put_att(ncid, recbnds_varid, "axis", "T")
-
-            print *,'rec_varid', rec_varid
-            print *,'recbnds_varid', recbnds_varid
-
+            IF ( cell_methods(ivar) == "mean" ) THEN
+              sts = nf90_def_var(ncid, "time_bnds", NF90_DOUBLE, (/ nb2_dimid, rec_dimid /), recbnds_varid)
+              sts = nf90_put_att(ncid, recbnds_varid, "standard_name", "time_bnds")
+              sts = nf90_put_att(ncid, recbnds_varid, "long_name", "time_bnds")
+              sts = nf90_put_att(ncid, recbnds_varid, "units", "days since 1949-12-01 00:00:00")
+              sts = nf90_put_att(ncid, recbnds_varid, "calendar", "standard")
+              sts = nf90_put_att(ncid, recbnds_varid, "axis", "T")
+            
+              print *,'rec_varid', rec_varid
+              print *,'recbnds_varid', recbnds_varid
+            END IF
 
             ! always included
             sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "Conventions", Conventions)
@@ -872,7 +934,14 @@ DO ifrq = 1, 1, 1
             sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat")
             sts = nf90_put_att(ncid, x_varid, "grid_mapping", "Rotated_Pole")
 
+            IF ( height(ivar) == 850 ) THEN
+              sts = nf90_put_att(ncid, x_varid, "missing_value", 1.e20)
+              sts = nf90_put_att(ncid, x_varid, "_FillValue", 1.e20)
+            END IF
+
             sts = NF90_ENDDEF(ncid)
+
+
 
             ! add time, whole year from above
             IF ( cell_methods(ivar) == "point" ) THEN
@@ -898,10 +967,8 @@ DO ifrq = 1, 1, 1
 
               print*, 'recbnds_varid', recbnds_varid
 
-              !print*, 'Time_bnds(:,:)', Time_bnds(:,:)
-              sts = NF90_PUT_VAR(ncid, recbnds_varid, Time_bnds(:,:), START = (/ 1, 1 /) , COUNT = (/ 2, SIZE(Time_bnds(1,:)) /) ) !SKn: check PUT_VAR does not work!!!
+              sts = NF90_PUT_VAR(ncid, recbnds_varid, Time_bnds(:,:), START = (/ 1, 1 /) , COUNT = (/ 2, SIZE(Time_bnds(1,:)) /) )
 
-              print *, 'sts NF90_PUT_VAR time_bnds', sts
             END IF
             !print *,'TimeRefArraySelYear(:,1)', TimeRefArraySelYear(:,1)
              
@@ -965,13 +1032,15 @@ DO ifrq = 1, 1, 1
 
         sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin)
 
-        !IF ( var_cmip(ivar) == "psl" ) THEN
-
         IF ( (var_cmip(ivar) == "psl") .or. (height(ivar) == 850) &
               .or.(height(ivar) == 500) .or. (height(ivar) == 200) &
               .or. (var_cmip(ivar) == "prw") .or. (var_cmip(ivar) == "clwvi") &
               .or. (var_cmip(ivar) == "clivi") &
               .or. (var_cmip(ivar) == "cape")) THEN
+
+          ! SKn: It is not necessary to read all 3D variables for every single output variable.
+          !      Here it is done to have a more compact structure, but it could be separated 
+          !      in multiple if-blocks for every variable.
 
           ALLOCATE( pp_in( xfocus, yfocus, 40 ), STAT=sts )
           ALLOCATE( pb_in( xfocus, yfocus, 40 ), STAT=sts )
@@ -1010,8 +1079,11 @@ DO ifrq = 1, 1, 1
           ALLOCATE( var_pl( xfocus, yfocus, 3 ), STAT=sts )
           ALLOCATE( pout( 3 ), STAT=sts ) 
 
+          ALLOCATE( sinalpha_in( xfocus, yfocus ), STAT=sts )
+          ALLOCATE( cosalpha_in( xfocus, yfocus ), STAT=sts )
 
-          print *,'read vars for psl calculation'
+
+          print *,'read 3D vars'
 
           sts = NF90_INQ_VARID(ncidin, "P", pp_varid)
           sts = NF90_INQ_VARID(ncidin, "PB", pb_varid)
@@ -1025,6 +1097,8 @@ DO ifrq = 1, 1, 1
           sts = NF90_INQ_VARID(ncidin, "QSNOW", qs_varid)
           sts = NF90_INQ_VARID(ncidin, "U", u_varid)
           sts = NF90_INQ_VARID(ncidin, "V", v_varid)
+          sts = NF90_INQ_VARID(ncidin, "SINALPHA", sinalpha_varid)
+          sts = NF90_INQ_VARID(ncidin, "COSALPHA", cosalpha_varid)
 
 
           sts = NF90_INQ_VARID(ncidin, "T2", t2_varid)
@@ -1035,35 +1109,20 @@ DO ifrq = 1, 1, 1
           sts = NF90_GET_VAR(ncidin, pp_varid, pp_in(:,:,:), &
             START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 40, 1 /) )          
 
-          !print * ,'xoffset', xoffset
-          !print * ,'yoffset', yoffset
-          !print * ,'xfocus', xfocus
-          !print * ,'yfocus', yfocus
-
           sts = NF90_GET_VAR(ncidin, pb_varid, pb_in(:,:,:), &
             START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 40, 1 /) )
-
-          !print *,'got pb_in'
 
           sts = NF90_GET_VAR(ncidin, ph_varid, ph_in(:,:,:), &
             START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 40, 1 /) )
 
-          !print *,'got ph_in'
-
           sts = NF90_GET_VAR(ncidin, phb_varid, phb_in(:,:,:), &
             START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 40, 1 /) )
-
-          !print *,'got phb_in'
 
           sts = NF90_GET_VAR(ncidin, theta_varid, theta_in(:,:,:), &
             START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 40, 1 /) )
 
-          !print *,'got theta_in'
-  
           sts = NF90_GET_VAR(ncidin, qv_varid, qv_in(:,:,:), &
             START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 40, 1 /) )
-
-          !print *,'got qv_in'
 
           sts = NF90_GET_VAR(ncidin, qc_varid, qc_in(:,:,:), &
             START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 40, 1 /) )
@@ -1083,7 +1142,13 @@ DO ifrq = 1, 1, 1
           sts = NF90_GET_VAR(ncidin, v_varid, v_in(:,:,:), &
             START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus+1, 40, 1 /) )
           
+          sts = NF90_GET_VAR(ncidin, sinalpha_varid, sinalpha_in(:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+
+          sts = NF90_GET_VAR(ncidin, cosalpha_varid, cosalpha_in(:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
           
+
 
 
 
@@ -1113,6 +1178,16 @@ DO ifrq = 1, 1, 1
             START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
 
 
+        ELSE IF (var_cmip(ivar) == "prc") THEN
+
+          ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+
+          sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
+
+          sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+
+
         ELSE IF (var_cmip(ivar) == "prsn") THEN
 
           ALLOCATE( snownc_in ( xfocus, yfocus, 2 ), STAT=sts )
@@ -1123,15 +1198,16 @@ DO ifrq = 1, 1, 1
             START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
 
 
-        ELSE IF (var_cmip(ivar) == "prc") THEN
+        ELSE IF (var_cmip(ivar) == "snm") THEN
 
-          ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+          ALLOCATE( acsnom_in ( xfocus, yfocus, 2 ), STAT=sts )
 
-          sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
+          sts = NF90_INQ_VARID(ncidin, "ACSNOM", acsnom_varid)
 
-          sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
+          sts = NF90_GET_VAR(ncidin, acsnom_varid, acsnom_in(:,:,:), &
             START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
 
+          print*, sts
 
         ELSE IF (var_cmip(ivar) == "evspsbl") THEN
 
@@ -1144,12 +1220,12 @@ DO ifrq = 1, 1, 1
 
         ELSE IF (var_cmip(ivar) == "evspsblpot") THEN
 
-          ALLOCATE( potevp_in ( xfocus, yfocus ), STAT=sts )
+          ALLOCATE( potevp_in ( xfocus, yfocus, 2 ), STAT=sts )
 
           sts = NF90_INQ_VARID(ncidin, "POTEVP", potevp_varid)
 
-          sts = NF90_GET_VAR(ncidin, potevp_varid, potevp_in(:,:), &
-            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+          sts = NF90_GET_VAR(ncidin, potevp_varid, potevp_in(:,:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
 
 
         ELSE IF (var_cmip(ivar) == "mrros") THEN
@@ -1192,8 +1268,14 @@ DO ifrq = 1, 1, 1
 
 
           print*, var_cmip(ivar), rad_in(50,50,1), rad_in(50,50,2)
-          print*, (rad_in(50,50,2) - rad_in(50,50,1))
-          print*, (rad_in(50,50,2) - rad_in(50,50,1))/ (3.*3600)
+          print*, 'difference in J m-2', (rad_in(50,50,2) - rad_in(50,50,1))
+          print*, 'in mean W m-2', (rad_in(50,50,2) - rad_in(50,50,1))/ (3.*3600)
+
+          ! alternative: since accumulated values as read above get so large in 
+          ! long term simulations that their differences loose accuracy, use 
+          ! instantaneous values instead and calculate means
+
+
 
 
         ELSE IF (var_cmip(ivar) == "mrso") THEN
@@ -1204,6 +1286,7 @@ DO ifrq = 1, 1, 1
 
           sts = NF90_GET_VAR(ncidin, varid, smois_in(:,:,:,:), &
             START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 4, 2 /) )
+
 
         ELSE IF (var_cmip(ivar) == "sfcWind") THEN
 
@@ -1219,6 +1302,31 @@ DO ifrq = 1, 1, 1
 
           sts = NF90_GET_VAR(ncidin, v10_varid, v10_in(:,:), &
             START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+
+
+        ELSE IF ((var_cmip(ivar) == "uas") .or. (var_cmip(ivar) == "vas")) THEN
+
+          ALLOCATE( u10_in ( xfocus, yfocus ), STAT=sts )
+          ALLOCATE( v10_in ( xfocus, yfocus ), STAT=sts )
+          ALLOCATE( sinalpha_in( xfocus, yfocus ), STAT=sts )
+          ALLOCATE( cosalpha_in( xfocus, yfocus ), STAT=sts )
+
+          sts = NF90_INQ_VARID(ncidin, "U10", u10_varid)
+          sts = NF90_INQ_VARID(ncidin, "V10", v10_varid)
+          sts = NF90_INQ_VARID(ncidin, "SINALPHA", sinalpha_varid)
+          sts = NF90_INQ_VARID(ncidin, "COSALPHA", cosalpha_varid)
+
+          sts = NF90_GET_VAR(ncidin, u10_varid, u10_in(:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+
+          sts = NF90_GET_VAR(ncidin, v10_varid, v10_in(:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+
+          sts = NF90_GET_VAR(ncidin, sinalpha_varid, sinalpha_in(:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+
+          sts = NF90_GET_VAR(ncidin, cosalpha_varid, cosalpha_in(:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )          
 
 
         ELSE
@@ -1246,30 +1354,16 @@ DO ifrq = 1, 1, 1
 
 !       ***psl***   ***vars on pressure levels***     
 
-!       TO DO: missing values for grid points below pressure level         
-   
         IF ( (var_cmip(ivar) == "psl") .or. (height(ivar) == 850) &
               .or.(height(ivar) == 500) .or. (height(ivar) == 200)) THEN
 
           DO nl = 1,40-1
             ph_fl(:,:,nl) = ((ph_in(:,:,nl)+phb_in(:,:,nl))+(ph_in(:,:,nl+1)+phb_in(:,:,nl+1)))/2./9.81
           END DO
-          !print *, 'ph_in(10,20,1)+phb_in(10,20,1)/9.81', (ph_in(10,20,1)+phb_in(10,20,1))/9.81
-          !print *, 'ph_fl(10,20,1)', ph_fl(10,20,1)
-
 
           t_in(:,:,:) = (theta_in(:,:,:)+300.)*((pp_in(:,:,:)+pb_in(:,:,:))/100000.)**(287./1004.)
 
-          !print *, 't_in(10,20,1)', t_in(10,20,1)
-
           psl_in(:,:) = (pp_in(:,:,1)+pb_in(:,:,1))*((t_in(:,:,1)*(1.+0.61*qv_in(:,:,1))+0.0065*ph_fl(:,:,1))/(t_in(:,:,1)*(1+0.61*qv_in(:,:,1))))**(9.81/(287.*0.0065))
-
-          !print *, 'psl_in(10,20)', psl_in(10,20)
-
-          !print *, 'SHAPE(psl_in)', SHAPE(psl_in)
-          !data_in(:,:) = psl_in(:,:)
-
-          !print *, 'data_in(10,20)', data_in(10,20)  
 
           pout = (/ 85000.,50000.,20000. /)
 
@@ -1287,40 +1381,37 @@ DO ifrq = 1, 1, 1
             np = 3
           END IF
 
-          print *,'np', np      
+          !print *,'np', np      
 
           IF ( (var_cmip(ivar) == "ta850") .or. (var_cmip(ivar) == "ta500") .or. (var_cmip(ivar) == "ta200") ) THEN
             var3d_in(:,:,:) = t_in(:,:,:)
-            print*, 'var3d_in(50,50,10)', var3d_in(50,50,10), var_cmip(ivar)
+            !print*, 'var3d_in(50,50,10)', var3d_in(50,50,10), var_cmip(ivar)
           ELSE IF ( (var_cmip(ivar) == "hus850") ) THEN
             var3d_in(:,:,:) = qv_in(:,:,:)
-            print*, 'var3d_in(50,50,10)', var3d_in(50,50,10), var_cmip(ivar)
+            !print*, 'var3d_in(50,50,10)', var3d_in(50,50,10), var_cmip(ivar)
           ELSE IF ( (var_cmip(ivar) == "ua850") .or. (var_cmip(ivar) == "ua500") .or. (var_cmip(ivar) == "ua200") ) THEN
             DO i = 1,xfocus
-            var3d_in(i,:,:) = (u_in(i,:,:)+u_in(i+1,:,:))/2.
+            var3d_in(i,:,:) = (u_in(i,:,:)+u_in(i+1,:,:))/2.*cosalpha_in(:,:) - (v_in(i,:,:)+v_in(i+1,:,:))/2.*sinalpha_in(:,:) !rotate to earth grid
             END DO
-            print*, 'var3d_in(50,50,10)', var3d_in(50,50,10), var_cmip(ivar)
+            !print*, 'var3d_in(50,50,10)', var3d_in(50,50,10), var_cmip(ivar)
           ELSE IF ( (var_cmip(ivar) == "va850") .or. (var_cmip(ivar) == "va500") .or. (var_cmip(ivar) == "va200") ) THEN
             DO j = 1,yfocus
-            var3d_in(:,j,:) = (v_in(:,j,:)+v_in(:,j+1,:))/2.
+            var3d_in(:,j,:) = (v_in(:,j,:)+v_in(:,j+1,:))/2.*cosalpha_in(:,:) + (u_in(i,:,:)+u_in(i+1,:,:))/2.*sinalpha_in(:,:) !rotate to earth grid
             END DO
-            print*, 'var3d_in(50,50,10)', var3d_in(50,50,10), var_cmip(ivar)
+            !print*, 'var3d_in(50,50,10)', var3d_in(50,50,10), var_cmip(ivar)
           ELSE IF ( (var_cmip(ivar) == "zg500") .or. (var_cmip(ivar) == "zg200") ) THEN
             var3d_in(:,:,:) = ph_fl(:,:,:)
-            print*, 'var3d_in(50,50,10)', var3d_in(50,50,10), var_cmip(ivar)
+            !print*, 'var3d_in(50,50,10)', var3d_in(50,50,10), var_cmip(ivar)
           END IF
 
+          var_pl = 1.e20
 
-          DO i = 1,xfocus
+          DO i = 1,xfocus 
             DO j = 1,yfocus
               DO nl = 1,40 - 1
-                !print *, 'i,j,nl', i, j, nl
-                !print *, 'pout(np)', pout(np)
-                !print *, 'p_in(i,j,nl)',p_in(i,j,nl)
                 IF (pout(np).lt.p_in(i,j,nl) .and. pout(np).gt.p_in(i,j,nl+1)) then
-                  !print *,'hello'
+                
                   slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ (p_in(i,j,nl)-p_in(i,j,nl+1))
-                  !print *, 'slope, i,j,nl', slope, i, j, nl
                   var_pl(i,j,np) = var3d_in(i,j,nl+1) + slope* (pout(np)-p_in(i,j,nl+1))
 
                 END IF
@@ -1328,7 +1419,6 @@ DO ifrq = 1, 1, 1
             END DO
           END DO
           !END DO
-          print *,'var_pl(50,50,np)', var_pl(50,50,np), var_cmip(ivar)
 
           data_in(:,:) = var_pl(:,:,np)
 
@@ -1345,12 +1435,6 @@ DO ifrq = 1, 1, 1
           prw(:,:) = 0.
 
           DO nl = 1,40 - 1
-
-!            print*, nl
-!            print*, p_in(50,50,nl)
-!            print*, t_in(50,50,nl)
-!            print*, ((ph_in(50,50,nl+1)+phb_in(50,50,nl+1)) - (ph_in(50,50,nl)+phb_in(50,50,nl)))/9.81
-!            print*, data_in(50,50)
 
             prw(:,:) = prw(:,:) + qv_in(:,:,nl) * p_in(:,:,nl)/(R*t_in(:,:,nl)) * ((ph_in(:,:,nl+1)+phb_in(:,:,nl+1)) - (ph_in(:,:,nl)+phb_in(:,:,nl)))/9.81
 
@@ -1401,8 +1485,6 @@ DO ifrq = 1, 1, 1
 
         IF ( (var_cmip(ivar) == "cape") ) THEN
 
-          !print*, 'qv_in(:,:,1)', qv_in(:,:,1)
-
           t_in(:,:,:) = (theta_in(:,:,:)+300.)*((pp_in(:,:,:)+pb_in(:,:,:))/100000.)**(287./1004.)
 
           p_in = pp_in+pb_in          
@@ -1418,19 +1500,11 @@ DO ifrq = 1, 1, 1
             DO j = 1,yfocus
               DO nl = 1,40-1
 
-                !print*, 'nl, t_p(50,50,nl)', nl, t_p(i,j,nl)
-                !print*, 'nl, p_in(50,50,nl)', nl, p_in(i,j,nl)
-
                 qvs(i,j,nl) = 0.622*a*exp(b*(t_p(i,j,nl)-c)/(t_p(i,j,nl)-d))/p_in(i,j,nl)
-
-                !print*, 'nl, qvs(50,50,nl)', nl, qvs(i,j,nl)
-                !print*, 'nl, qv_in(50,50,1)', nl, qv_in(i,j,1)
 
                 IF (qvs(i,j,nl) .gt. qv_in(i,j,1)) THEN !dry adiabatic ascent
                
                   t_p(i,j,nl+1) = (theta_in(i,j,1)+300.)*(p_in(i,j,nl+1)/100000.)**(R/cp)   
-
-                  !print*, nl, 'dry', t_p(i,j,nl+1), t_in(i,j,nl+1), (t_p(i,j,nl+1)-t_in(i,j,nl+1)) 
 
                 ELSE IF (qvs(i,j,nl) .lt. qv_in(i,j,1)) THEN ! moist adiabatic ascent
 
@@ -1472,7 +1546,7 @@ DO ifrq = 1, 1, 1
 
                   !print*, 'nl, cape(i,j)', nl, cape(i,j)
 
-                ELSE IF ( (t_p(i,j,nl) .lt. t_in(i,j,nl)) .and. (cape(i,j) .eq. 0.) )  THEN 
+                ELSE IF ( (t_p(i,j,nl) .lt. t_in(i,j,nl)) .and. (cape(i,j) .eq. 0.) )  THEN   !convective inhibition 
              
                   cin(i,j) = cin(i,j) + (t_in(i,j,nl) - t_p(i,j,nl)) / t_in(i,j,nl) * ((phb_in(i,j,nl)+ph_in(i,j,nl))-(phb_in(i,j,nl-1)+ph_in(i,j,nl-1))) 
 
@@ -1525,7 +1599,7 @@ DO ifrq = 1, 1, 1
         IF (var_cmip(ivar) == "pr") THEN 
 
           data_in(:,:) = ((rainnc_in(:,:,2) + rainc_in(:,:,2)) - (rainnc_in(:,:,1) + rainc_in(:,:,1)))/(3.*3600.) !unit [mm/3hr] to [kg m-2 s-1]
-
+                                                           !ATTENTION: implement adjustable time intervals that the differences are devided by
         END IF
 
 
@@ -1543,17 +1617,29 @@ DO ifrq = 1, 1, 1
 
         END IF
 
+!       ***snm***
+        IF (var_cmip(ivar) == "snm") THEN
+
+          data_in(:,:) = (acsnom_in(:,:,2) - acsnom_in(:,:,1))/(3.*3600.) !unit [kg m-2 /3hr] to [kg m-2 s-1]
+
+        END IF
+
 !       ***evspsbl***
         IF (var_cmip(ivar) == "evspsbl") THEN
 
-          data_in(:,:) = (sfcevp_in(:,:,2) - sfcevp_in(:,:,1))/(3.*3600.) !unit [kg m-2/3hr] to [kg m-2 s-1]
+          data_in(:,:) = (sfcevp_in(:,:,2) - sfcevp_in(:,:,1))/(3.*3600.) !unit [kg m-2 /3hr] to [kg m-2 s-1]
 
         END IF
 
 !       ***evspblpot**
         IF (var_cmip(ivar) == "evspsblpot") THEN
 
-          data_in(:,:) = potevp_in(:,:)/L   !unit [W m-2]/[J kg -1] -> [kg m-2 s-1]
+          data_in(:,:) = (potevp_in(:,:,2) - (potevp_in(:,:,1)))/L   !unit [W m-2]/[J kg-1] -> [kg m-2 s-1]
+
+        ! THERE IS STH WRONG WITH THE UNITS: WRF's POTEVP is accumulated and declared to be in W m-2. 
+        ! It doesen't make sense to accumulate in W m-2, but even if assume it as J m-2 or derive kg m-2 
+        ! by using latent heat of vaporization you never get values that have a reasonable magnitude...
+
 
         END IF
 
@@ -1585,8 +1671,16 @@ DO ifrq = 1, 1, 1
              .or. (var_cmip(ivar) == "rsus") .or. (var_cmip(ivar) == "rlus") &
              .or. (var_cmip(ivar) == "hfss") .or. (var_cmip(ivar) == "hfls")) THEN
 
-          data_in(:,:) = (rad_in(:,:,2) - rad_in(:,:,1)) /(3.*3600.)
- 
+          IF (TRIM(fnNMLvar(varnml)) == "runctrl.vars.nml_radiation") THEN
+           
+            data_in(:,:) = (rad_in(:,:,2) - rad_in(:,:,1)) /(3.*3600.)       ! take difference of accumulated values
+
+          ELSE IF (TRIM(fnNMLvar(varnml)) == "runctrl.vars.nml_radiation_alternative") THEN
+           
+            data_in(:,:) = (rad_in(:,:,2) + rad_in(:,:,1)) / 2.              ! take mean of instantaneous values
+
+          END IF 
+
         END IF
 
 
@@ -1602,6 +1696,20 @@ DO ifrq = 1, 1, 1
         IF (var_cmip(ivar) == "sfcWind") THEN
 
           data_in(:,:) = (u10_in(:,:)**2 + v10_in(:,:)**2)**0.5 
+
+        END IF
+
+
+!       ***uas***
+        IF (var_cmip(ivar) == "uas") THEN 
+
+          data_in(:,:) = u10_in(:,:)*cosalpha_in(:,:) - v10_in(:,:)*sinalpha_in(:,:) ! rotate to earth grid
+
+        END IF
+
+        IF (var_cmip(ivar) == "vas")  THEN
+
+          data_in(:,:) = v10_in(:,:)*cosalpha_in(:,:) + u10_in(:,:)*sinalpha_in(:,:) ! rotate to earth grid
 
         END IF
 
