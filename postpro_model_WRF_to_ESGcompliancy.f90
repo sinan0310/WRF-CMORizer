@@ -219,7 +219,7 @@ MODULE NameListHandling
   IMPLICIT NONE
   SAVE
 
-  INTEGER, PARAMETER :: nvars = 10 
+  INTEGER, PARAMETER :: nvars = 12 
 
   CHARACTER (len = 200) :: Conventions, contact, experiment_id, experiment, &
     driving_experiment, driving_model_id, driving_model_ensemble_member, &
@@ -291,7 +291,7 @@ END INTERFACE
 ! filenames
 
 CHARACTER (len = *), PARAMETER :: fnNMLexp = "runctrl.access13hist.nml"
-CHARACTER (len = *), PARAMETER :: fnNMLvar = "runctrl.vars.nml_snow"  !"runctrl.vars.nml_vars_on_plevels" !"runctrl.vars.nml_pr"
+CHARACTER (len = *), PARAMETER :: fnNMLvar = "runctrl.vars.nml_vars_on_plevels"  !"runctrl.vars.nml_vars_on_plevels" !"runctrl.vars.nml_pr"
 
 CHARACTER (len = *), PARAMETER :: PathFileNameInTEST = "testWRFin.nc"
 CHARACTER (len = *), PARAMETER :: PathFileNameOutTEST = "testESGout.nc"
@@ -310,7 +310,7 @@ INTEGER :: lvl_dimid, lon_dimid, lat_dimid, rec_dimid, height_dimid, &
 INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, &
   rotated_pole_varid, height_varid, rec_varid, pp_varid, pb_varid, ph_varid, &
   phb_varid, qv_varid, theta_varid, t2_varid, recbnds_varid, rainnc_varid, &
-  rainc_varid, snownc_varid, u10_varid, v10_varid
+  rainc_varid, snownc_varid, u10_varid, v10_varid, u_varid, v_varid
 
 ! input data general query
 INTEGER :: ncid_in, ndims_in, nvars_in, ngatts_in, unlimdimid_in !!!, formatp_in
@@ -325,8 +325,8 @@ CHARACTER (len = 19), DIMENSION(:), ALLOCATABLE :: InVarDataRec
 REAL, DIMENSION(:,:), ALLOCATABLE :: data_in, psl_in, t2_in, TimeRefArraySelYear, &
   cldfra_inv, u10_in, v10_in, cape, cin, lcl, lfc, Time_bnds 
 REAL, DIMENSION(:,:,:), ALLOCATABLE :: pp_in, pb_in, ph_in, phb_in, qv_in, qvs, &
-  theta_in, t_in, ph_fl, p_in, cldfra_in, t_out, rainnc_in, rainc_in, rad_in, &
-  t_p, snownc_in, GeoInLonLat
+  theta_in, t_in, ph_fl, p_in, cldfra_in, u_in, v_in, var3d_in, var_pl, &
+  rainnc_in, rainc_in, rad_in, t_p, snownc_in, GeoInLonLat
 REAL, DIMENSION(:,:,:,:), ALLOCATABLE :: smois_in
 REAL, DIMENSION(:), ALLOCATABLE :: GeoInRLat, GeoInRLon, pout
 
@@ -541,8 +541,8 @@ DO ifrq = 1, 1, 1
 !-------------------------------------------------------------------------------
 ! loop over the different variables
 
-  !DO ivar = 1, nvars, 1
-  DO ivar = 1, 5, 1
+  DO ivar = 1, nvars, 1
+  !DO ivar = 1, 9, 1
 
     PRINT *,"============================================================"
     PRINT *, "*** ", TRIM(var_cmip(ivar)), " ***"
@@ -974,8 +974,14 @@ DO ifrq = 1, 1, 1
           ALLOCATE( qv_in( xfocus, yfocus, 40  ), STAT=sts )
           ALLOCATE( t_in( xfocus, yfocus, 40 ), STAT=sts )
           ALLOCATE( ph_fl( xfocus, yfocus, 40 ), STAT=sts )
+          ALLOCATE( u_in( xfocus+1, yfocus, 40 ), STAT=sts )
+          ALLOCATE( v_in( xfocus, yfocus+1, 40 ), STAT=sts )
+          ALLOCATE( var3d_in( xfocus, yfocus, 40 ), STAT=sts )
+
           ALLOCATE( psl_in ( xfocus, yfocus ), STAT=sts )
           ALLOCATE( t2_in ( xfocus, yfocus ), STAT=sts )          
+          
+
 
           ALLOCATE( t_p( xfocus, yfocus, 40 ), STAT=sts )
           ALLOCATE( qvs( xfocus, yfocus, 40 ), STAT=sts )
@@ -987,7 +993,7 @@ DO ifrq = 1, 1, 1
 
           ALLOCATE( p_in( xfocus, yfocus, 40 ), STAT=sts )
           ALLOCATE( pp_in( xfocus, yfocus, 40 ), STAT=sts )
-          ALLOCATE( t_out( xfocus, yfocus, 3 ), STAT=sts )
+          ALLOCATE( var_pl( xfocus, yfocus, 3 ), STAT=sts )
           ALLOCATE( pout( 3 ), STAT=sts ) 
 
 
@@ -999,6 +1005,9 @@ DO ifrq = 1, 1, 1
           sts = NF90_INQ_VARID(ncidin, "PHB", phb_varid)
           sts = NF90_INQ_VARID(ncidin, "T", theta_varid)
           sts = NF90_INQ_VARID(ncidin, "QVAPOR", qv_varid)
+          sts = NF90_INQ_VARID(ncidin, "U", u_varid)
+          sts = NF90_INQ_VARID(ncidin, "V", v_varid)
+
 
           sts = NF90_INQ_VARID(ncidin, "T2", t2_varid)
 
@@ -1036,7 +1045,15 @@ DO ifrq = 1, 1, 1
           sts = NF90_GET_VAR(ncidin, qv_varid, qv_in(:,:,:), &
             START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 40, 1 /) )
 
-          print *,'got qv_in'
+          !print *,'got qv_in'
+
+          sts = NF90_GET_VAR(ncidin, u_varid, u_in(:,:,:), &
+            START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus+1, yfocus, 40, 1 /) )
+
+          sts = NF90_GET_VAR(ncidin, v_varid, v_in(:,:,:), &
+            START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus+1, 40, 1 /) )
+          
+
 
 
         ELSE IF (var_cmip(ivar) == "clt") THEN
@@ -1087,6 +1104,8 @@ DO ifrq = 1, 1, 1
 
         ELSE IF ((var_cmip(ivar) == "rsds") .or. (var_cmip(ivar) == "rlds")  &
              .or. (var_cmip(ivar) == "rsus") .or. (var_cmip(ivar) == "rlus") &
+             .or. (var_cmip(ivar) == "rlut")                                 &
+             .or. (var_cmip(ivar) == "rsdt") .or. (var_cmip(ivar) == "rsut") &
              .or. (var_cmip(ivar) == "hfss") .or. (var_cmip(ivar) == "hfls")) THEN
 
           ALLOCATE( rad_in ( xfocus, yfocus, 2 ), STAT=sts )
@@ -1150,14 +1169,19 @@ DO ifrq = 1, 1, 1
 !-------------------------------------------------------------------------------
 ! processing
 
-!       ***psl***   ***vars on pressure levels***        
+!       ***psl***   ***vars on pressure levels***     
+
+!       TO DO: missing values for grid points below pressure level         
+   
         IF ( (var_cmip(ivar) == "psl") .or. (height(ivar) == 850) &
               .or.(height(ivar) == 500) .or. (height(ivar) == 200)) THEN
 
-          ph_fl(:,:,1) = ((ph_in(:,:,1)+phb_in(:,:,1))+(ph_in(:,:,2)+phb_in(:,:,2)))/2./9.81
-
+          DO nl = 1,40-1
+            ph_fl(:,:,nl) = ((ph_in(:,:,nl)+phb_in(:,:,nl))+(ph_in(:,:,nl+1)+phb_in(:,:,nl+1)))/2./9.81
+          END DO
           !print *, 'ph_in(10,20,1)+phb_in(10,20,1)/9.81', (ph_in(10,20,1)+phb_in(10,20,1))/9.81
           !print *, 'ph_fl(10,20,1)', ph_fl(10,20,1)
+
 
           t_in(:,:,:) = (theta_in(:,:,:)+300.)*((pp_in(:,:,:)+pb_in(:,:,:))/100000.)**(287./1004.)
 
@@ -1176,6 +1200,7 @@ DO ifrq = 1, 1, 1
 
           p_in = pp_in+pb_in
 
+
            
           !DO np = 1,3     !SKn: could loop over heigts per variable or calculate t850, t500, t200 as individual variables 
 
@@ -1189,6 +1214,28 @@ DO ifrq = 1, 1, 1
 
           print *,'np', np      
 
+          IF ( (var_cmip(ivar) == "ta850") .or. (var_cmip(ivar) == "ta500") .or. (var_cmip(ivar) == "ta200") ) THEN
+            var3d_in(:,:,:) = t_in(:,:,:)
+            print*, 'var3d_in(50,50,10)', var3d_in(50,50,10), var_cmip(ivar)
+          ELSE IF ( (var_cmip(ivar) == "hus850") ) THEN
+            var3d_in(:,:,:) = qv_in(:,:,:)
+            print*, 'var3d_in(50,50,10)', var3d_in(50,50,10), var_cmip(ivar)
+          ELSE IF ( (var_cmip(ivar) == "ua850") .or. (var_cmip(ivar) == "ua500") .or. (var_cmip(ivar) == "ua200") ) THEN
+            DO i = 1,xfocus
+            var3d_in(i,:,:) = (u_in(i,:,:)+u_in(i+1,:,:))/2.
+            END DO
+            print*, 'var3d_in(50,50,10)', var3d_in(50,50,10), var_cmip(ivar)
+          ELSE IF ( (var_cmip(ivar) == "va850") .or. (var_cmip(ivar) == "va500") .or. (var_cmip(ivar) == "va200") ) THEN
+            DO j = 1,yfocus
+            var3d_in(:,j,:) = (v_in(:,j,:)+v_in(:,j+1,:))/2.
+            END DO
+            print*, 'var3d_in(50,50,10)', var3d_in(50,50,10), var_cmip(ivar)
+          ELSE IF ( (var_cmip(ivar) == "zg500") .or. (var_cmip(ivar) == "zg200") ) THEN
+            var3d_in(:,:,:) = ph_fl(:,:,:)
+            print*, 'var3d_in(50,50,10)', var3d_in(50,50,10), var_cmip(ivar)
+          END IF
+
+
           DO i = 1,xfocus
             DO j = 1,yfocus
               DO nl = 1,40 - 1
@@ -1197,18 +1244,18 @@ DO ifrq = 1, 1, 1
                 !print *, 'p_in(i,j,nl)',p_in(i,j,nl)
                 IF (pout(np).lt.p_in(i,j,nl) .and. pout(np).gt.p_in(i,j,nl+1)) then
                   !print *,'hello'
-                  slope = (t_in(i,j,nl)-t_in(i,j,nl+1))/ (p_in(i,j,nl)-p_in(i,j,nl+1))
+                  slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ (p_in(i,j,nl)-p_in(i,j,nl+1))
                   !print *, 'slope, i,j,nl', slope, i, j, nl
-                  t_out(i,j,np) = t_in(i,j,nl+1) + slope* (pout(np)-p_in(i,j,nl+1))
+                  var_pl(i,j,np) = var3d_in(i,j,nl+1) + slope* (pout(np)-p_in(i,j,nl+1))
 
                 END IF
               END DO
             END DO
           END DO
           !END DO
-          !print *,'t_out(10,20,np)', t_out(10,20,np)
-         
-          data_in(:,:) = t_out(:,:,np)
+          print *,'var_pl(50,50,np)', var_pl(50,50,np), var_cmip(ivar)
+
+          data_in(:,:) = var_pl(:,:,np)
 
         END IF
 
