@@ -291,7 +291,7 @@ END INTERFACE
 ! filenames
 
 CHARACTER (len = *), PARAMETER :: fnNMLexp = "runctrl.access13hist.nml"
-CHARACTER (len = *), PARAMETER :: fnNMLvar = "runctrl.vars.nml_cape"  !"runctrl.vars.nml_vars_on_plevels" !"runctrl.vars.nml_pr"
+CHARACTER (len = *), PARAMETER :: fnNMLvar = "runctrl.vars.nml_snow"  !"runctrl.vars.nml_vars_on_plevels" !"runctrl.vars.nml_pr"
 
 CHARACTER (len = *), PARAMETER :: PathFileNameInTEST = "testWRFin.nc"
 CHARACTER (len = *), PARAMETER :: PathFileNameOutTEST = "testESGout.nc"
@@ -310,7 +310,7 @@ INTEGER :: lvl_dimid, lon_dimid, lat_dimid, rec_dimid, height_dimid, &
 INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, &
   rotated_pole_varid, height_varid, rec_varid, pp_varid, pb_varid, ph_varid, &
   phb_varid, qv_varid, theta_varid, t2_varid, recbnds_varid, rainnc_varid, &
-  rainc_varid, u10_varid, v10_varid
+  rainc_varid, snownc_varid, u10_varid, v10_varid
 
 ! input data general query
 INTEGER :: ncid_in, ndims_in, nvars_in, ngatts_in, unlimdimid_in !!!, formatp_in
@@ -326,7 +326,7 @@ REAL, DIMENSION(:,:), ALLOCATABLE :: data_in, psl_in, t2_in, TimeRefArraySelYear
   cldfra_inv, u10_in, v10_in, cape, cin, lcl, lfc, Time_bnds 
 REAL, DIMENSION(:,:,:), ALLOCATABLE :: pp_in, pb_in, ph_in, phb_in, qv_in, qvs, &
   theta_in, t_in, ph_fl, p_in, cldfra_in, t_out, rainnc_in, rainc_in, rad_in, &
-  t_p, GeoInLonLat
+  t_p, snownc_in, GeoInLonLat
 REAL, DIMENSION(:,:,:,:), ALLOCATABLE :: smois_in
 REAL, DIMENSION(:), ALLOCATABLE :: GeoInRLat, GeoInRLon, pout
 
@@ -542,7 +542,7 @@ DO ifrq = 1, 1, 1
 ! loop over the different variables
 
   !DO ivar = 1, nvars, 1
-  DO ivar = 1, 1, 1
+  DO ivar = 1, 5, 1
 
     PRINT *,"============================================================"
     PRINT *, "*** ", TRIM(var_cmip(ivar)), " ***"
@@ -1064,14 +1064,25 @@ DO ifrq = 1, 1, 1
             START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
 
 
+        ELSE IF (var_cmip(ivar) == "prsn") THEN
+
+          ALLOCATE( snownc_in ( xfocus, yfocus, 2 ), STAT=sts )
+          
+          sts = NF90_INQ_VARID(ncidin, "SNOWNC", snownc_varid)
+
+          sts = NF90_GET_VAR(ncidin, snownc_varid, snownc_in(:,:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+
+
         ELSE IF (var_cmip(ivar) == "prc") THEN
 
           ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
-          
+
           sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
 
           sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
             START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+
 
 
         ELSE IF ((var_cmip(ivar) == "rsds") .or. (var_cmip(ivar) == "rlds")  &
@@ -1338,6 +1349,21 @@ DO ifrq = 1, 1, 1
         IF (var_cmip(ivar) == "prc") THEN
 
           data_in(:,:) = (rainc_in(:,:,2) - rainc_in(:,:,1))/(3.*3600.) !unit [mm/3hr] to [kg m-2 s-1]
+
+        END IF
+
+!       ***prsn***
+        IF (var_cmip(ivar) == "prsn") THEN
+
+          data_in(:,:) = (snownc_in(:,:,2) - snownc_in(:,:,1))/(3.*3600.) !unit [mm/3hr] to [kg m-2 s-1]
+
+        END IF
+
+
+!       ***snc,sic***
+        IF ( (var_cmip(ivar) == "snc") .or. (var_cmip(ivar) == "sic") ) THEN
+
+          data_in(:,:) = data_in(:,:)*100. !unit [] to [%]
 
         END IF
 
