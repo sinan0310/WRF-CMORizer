@@ -400,7 +400,7 @@ ALLOCATE( data_in( xfocus, yfocus ), STAT=sts )
 IF (sts /= 0) STOP "*** Not enough memory ***"
 
 ALLOCATE( TimeRefArraySelYear(2,2) )
-
+ALLOCATE( TimeRefArraySelYear_indexbnds(2,2) )  !SKn
 !-------------------------------------------------------------------------------
 ! get the invariant vars which have to be added all the time
 ! lon, lat, rlon, rlat
@@ -526,8 +526,8 @@ DO ifrq = 1, 1, 1
 !-------------------------------------------------------------------------------
 ! loop over the different variables
 
-  DO ivar = 1, nvars, 1
-  !DO ivar = 3, 3, 1
+  !DO ivar = 1, nvars, 1
+  DO ivar = 2, 3, 1
 
     PRINT *,"============================================================"
     PRINT *, "*** ", TRIM(var_cmip(ivar)), " ***"
@@ -654,6 +654,13 @@ DO ifrq = 1, 1, 1
 !        READ( InVarDataRec(i), '(I4,1X,I2,1X,I2,1X,I2)' ) InDateTimeYear(it), InDateTimeMonth(it), InDateTimeDay(it), InDateTimeHour(it)
 
           DEALLOCATE( TimeRefArraySelYear )
+
+          print *, "DEALLOCATE( TimeRefArraySelYear )" 
+
+          DEALLOCATE( TimeRefArraySelYear_indexbnds ) !SKn 
+
+          print *, "DEALLOCATE( TimeRefArraySelYear_indexbnds )"
+
           counter = 0
           PRINT *, SIZE(TimeRefArray, 1)
           PRINT *, SHAPE(TimeRefArray, 1)
@@ -665,9 +672,14 @@ DO ifrq = 1, 1, 1
           ! holds data of exactly 1 year
           PRINT *, "timesteps in the time ref. subset = ", counter
           ALLOCATE( TimeRefArraySelYear( counter, 5 ) ) ! index, y, m, d, h
+
+          print *, "ALLOCATE( TimeRefArraySelYear( counter, 5 ) )", TimeRefArraySelYear( counter, 5 )
+
           ! find the matching elements of the respecitve year and copy them
 
           ALLOCATE( TimeRefArraySelYear_indexbnds( counter, 2 ) )
+
+          print *, "ALLOCATE( TimeRefArraySelYear_indexbnds( counter, 2 ) )", TimeRefArraySelYear_indexbnds( counter, 2 )
 
           counter = 0
           DO i = 1, SIZE(TimeRefArray, 1), 1
