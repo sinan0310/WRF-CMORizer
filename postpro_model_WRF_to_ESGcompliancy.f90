@@ -219,7 +219,7 @@ MODULE NameListHandling
   IMPLICIT NONE
   SAVE
 
-  INTEGER, PARAMETER :: nvars = 3
+  INTEGER, PARAMETER :: nvars = 9 
 
   CHARACTER (len = 200) :: Conventions, contact, experiment_id, experiment, &
     driving_experiment, driving_model_id, driving_model_ensemble_member, &
@@ -323,9 +323,10 @@ CHARACTER (len = 19), DIMENSION(:), ALLOCATABLE :: InVarDataRec
 
 ! data
 REAL, DIMENSION(:,:), ALLOCATABLE :: data_in, psl_in, t2_in, TimeRefArraySelYear, &
-  Time_bnds, pr_in
+  Time_bnds 
 REAL, DIMENSION(:,:,:), ALLOCATABLE :: pp_in, pb_in, ph_in, phb_in, qv_in, &
-  theta_in, t_in, ph_fl, p_in, t_out, rainnc_in, rainc_in, GeoInLonLat
+  theta_in, t_in, ph_fl, p_in, cldfra_in, t_out, rainnc_in, rainc_in, rad_in, &
+  GeoInLonLat
 REAL, DIMENSION(:), ALLOCATABLE :: GeoInRLat, GeoInRLon, pout
 
 ! time and date handling
@@ -527,8 +528,8 @@ DO ifrq = 1, 1, 1
 !-------------------------------------------------------------------------------
 ! loop over the different variables
 
-  !DO ivar = 1, nvars, 1
-  DO ivar = 1, 1, 1
+  DO ivar = 1, nvars, 1
+  !DO ivar = 1, 1, 1
 
     PRINT *,"============================================================"
     PRINT *, "*** ", TRIM(var_cmip(ivar)), " ***"
@@ -1015,11 +1016,21 @@ DO ifrq = 1, 1, 1
 
           !print *,'got qv_in'
 
+
+        ELSE IF (var_cmip(ivar) == "clt") THEN
+
+          ALLOCATE( cldfra_in( xfocus, yfocus, 40 ), STAT=sts )     
+
+          sts = NF90_INQ_VARID(ncidin, "CLDFRA", varid)
+ 
+          sts = NF90_GET_VAR(ncidin, varid, cldfra_in(:,:,:), &
+            START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 40, 1 /) )
+  
+
         ELSE IF (var_cmip(ivar) == "pr") THEN 
 
           ALLOCATE( rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
           ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
-          ALLOCATE( pr_in ( xfocus, yfocus ), STAT=sts )
 
           sts = NF90_INQ_VARID(ncidin, "RAINNC", rainnc_varid)
           sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
@@ -1029,6 +1040,33 @@ DO ifrq = 1, 1, 1
 
           sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
             START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+
+
+        ELSE IF (var_cmip(ivar) == "prc") THEN
+
+          ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+          
+          sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
+
+          sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+
+
+        ELSE IF ((var_cmip(ivar) == "rsds") .or. (var_cmip(ivar) == "rlds")  &
+             .or. (var_cmip(ivar) == "rsus") .or. (var_cmip(ivar) == "rlus") &
+             .or. (var_cmip(ivar) == "hfss") .or. (var_cmip(ivar) == "hfls")) THEN
+
+          ALLOCATE( rad_in ( xfocus, yfocus, 2 ), STAT=sts )
+
+          sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
+
+          sts = NF90_GET_VAR(ncidin, varid, rad_in(:,:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+
+
+          print*, var_cmip(ivar), rad_in(50,50,1), rad_in(50,50,2)
+          print*, (rad_in(50,50,2) - rad_in(50,50,1))
+          print*, (rad_in(50,50,2) - rad_in(50,50,1))/ (3.*3600)
 
 
         ELSE
@@ -1043,13 +1081,13 @@ DO ifrq = 1, 1, 1
 !-------------------------------------------------------------------------------
 ! some analysis of the data
 
-        print *,"shape of array" , SHAPE(data_in)
-        print *,"size of array" , SIZE(data_in)
+        !print *,"shape of array" , SHAPE(data_in)
+        !print *,"size of array" , SIZE(data_in)
 !
 !       stat_mean = SUM(data_in(:,:,5))/(MAX(1,SIZE(data_in(:,:,5))))
 !       PRINT *, stat_mean
         stat_mean = SUM(data_in(:,:))/SIZE(data_in(:,:))
-        PRINT *, stat_mean
+        !PRINT *, stat_mean
 
 !-------------------------------------------------------------------------------
 ! processing
@@ -1116,15 +1154,48 @@ DO ifrq = 1, 1, 1
 
         END IF
 
+!       ***clt***
+
+        IF (var_cmip(ivar) == "clt") THEN
+
+          data_in(:,:) = 0.
+
+          !DO nl = 1,40 - 1
+          DO i = 1,xfocus
+            DO j = 1,yfocus
+              data_in(i,j) = maxval(cldfra_in(i,j,:))*100. !unit [%] 
+            END DO
+          END DO
+          !END DO
+
+
+
+        END IF
 
 
 !       ***pr***
         IF (var_cmip(ivar) == "pr") THEN 
 
-          pr_in(:,:) = ((rainnc_in(:,:,2) + rainc_in(:,:,2)) - (rainnc_in(:,:,1) + rainc_in(:,:,1)))/(3.*3600.) !unit [mm/3hr] to [kg m-2 s-1]
+          data_in(:,:) = ((rainnc_in(:,:,2) + rainc_in(:,:,2)) - (rainnc_in(:,:,1) + rainc_in(:,:,1)))/(3.*3600.) !unit [mm/3hr] to [kg m-2 s-1]
 
-          data_in(:,:) = pr_in(:,:)
+        END IF
 
+
+!       ***prc***
+        IF (var_cmip(ivar) == "prc") THEN
+
+          data_in(:,:) = (rainc_in(:,:,2) - rainc_in(:,:,1))/(3.*3600.) !unit [mm/3hr] to [kg m-2 s-1]
+
+        END IF
+
+
+!       ***rsds, rlds, rsus, rlus***
+        IF ( (var_cmip(ivar) == "rsds") .or. (var_cmip(ivar) == "rlds")      &
+             .or. (var_cmip(ivar) == "rsus") .or. (var_cmip(ivar) == "rlus") &
+             .or. (var_cmip(ivar) == "hfss") .or. (var_cmip(ivar) == "hfls")) THEN
+
+          data_in(:,:) = (rad_in(:,:,2) - rad_in(:,:,1)) /(3.*3600.)
+ 
         END IF
 
 
