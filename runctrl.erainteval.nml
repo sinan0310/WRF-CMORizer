@@ -1,0 +1,40 @@
+&globalvars
+   Conventions = "CF-1.4",
+   contact = "k.goergen@fz-juelich.de",
+   experiment_id = "evaluation",
+   experiment = "Evaluation run with re-analysis forcing",
+   driving_experiment = "ECMWF-ERAINT_evaluation_r1i1p1",
+   driving_model_id = "ECMWF-ERAINT",
+   driving_model_ensemble_member = "r1i1p1",
+   driving_experiment_name = "evaluation",
+   institution = "Centre de Recherche Public - Gabriel Lippmann (CRP-GL), Luxembourg",
+   institute_id = "CRP-GL",
+   model_id = "CRP-GL-WRF331A",
+   rcm_version_id = "v02",
+   project_id = "CORDEX",
+   CORDEX_domain = "EUR-44",
+   product = "output",
+   references = "http://www.lippmann.lu",
+/
+&globalvars_additional
+   comment = "this is the predecessor of the MIUB-WRF331A v03 historical and rcp45 and rcp85 runs",
+   institute_run_id = "rv021r00",
+/
+&filesystem
+   DirInputSimResRoot = "/lustre/jwork/jjsc15/jjsc1500/wrf_data/rv024r00/simres",
+   DirOutputPostProRoot = "/lustre/jhome19/jjsc15/jjsc1500/data/ramod_WRF_SLTS/rv024r00/postpro/test",
+   domain = "d01",
+/
+&model_config
+   ts = '1970',
+   te = '1971',
+   nx = 134,
+   ny = 131,
+   nz = 50,
+   xoffset = 14,
+   yoffset = 14,
+   xfocus = 106,
+   yfocus = 103,
+   tstot = '1949-12-01_00:00:00',
+   tetot = '2100-12-31_21:00:00',
+/

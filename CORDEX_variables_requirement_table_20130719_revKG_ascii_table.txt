@@ -1,0 +1,65 @@
+1   tas                   Near-Surface Air Temperature                  air_temperature                           
+2   tasmax                Daily Maximum Near-Surface Air Temperature    air_temperature                           
+3   tasmin                Daily Minimum Near-Surface Air Temperature    air_temperature                           
+4   pr                    Precipitation                                 precipitation_flux                        
+5   ps                    Surface Air Pressure                          surface_air_pressure                      
+6   psl                   Sea Level Pressure                            air_pressure_at_sea_level                 
+7   huss                  Near-Surface Specific Humidity                specific_humidity                         
+8   sfcWind               Near-Surface Wind Speed                       wind_speed                                
+9   sfcWindmax            Daily Maximum Near-Surface Wind Speed         wind_speed                                
+10  clt                   Total Cloud Fraction                          cloud_area_fraction                       
+11  sund                  Duration of Sunshine                          duration_of_sunshine                      
+12  rsds                  Surface Downwelling Shortwave Radiation       surface_downwelling_shortwave_flux_in_air 
+13  rlds                  Surface Downwelling Longwave Radiation        surface_downwelling_longwave_flux_in_air  
+14  hfls                  Surface Upward Latent Heat Flux               surface_upward_latent_heat_flux           
+15  hfss                  Surface Upward Sensible Heat Flux             surface_upward_sensible_heat_flux         
+16  rsus                  Surface Upwelling Shortwave Radiation         surface_upwelling_shortwave_flux_in_air   
+17  rlus                  Surface Upwelling Longwave Radiation          surface_upwelling_longwave_flux_in_air    
+18  evspsbl               Evaporation                                   water_evaporation_flux                    
+19  evspsblpot            Potential Evapotranspiration                  potential_water_evaporation_flux          
+20  mrfso                 Soil Frozen Water Content                     soil_frozen_water_content                 
+21  mrros                 Surface Runoff                                surface_runoff_flux                       
+22  mrro                  Total Runoff                                  runoff_flux                               
+23  mrso                  Total Soil Moisture Content                   soil_moisture_content                     
+24  snw                   Surface Snow Amount                           surface_snow_amount                       
+25  snm                   Surface Snow Melt                             surface_snow_melt_flux                    
+26  prhmax                Daily Maximum Hourly Precipitation Rate       precipitation_flux                        
+27  prc                   Convective Precipitation                      convective_precipitation_flux             
+28  rlut                  TOA Outgoing Longwave Radiation               toa_outgoing_longwave_flux                
+29  rsdt                  TOA Incident Shortwave Radiation              toa_incoming_shortwave_flux               
+30  rsut                  TOA Outgoing Shortwave Radiation              toa_outgoing_shortwave_flux               
+31  uas                   Eastward Near-Surface Wind Velocity           eastward_wind                             
+32  vas                   Northward Near-Surface Wind Velocity          northward_wind                            
+33  wsgsmax               Daily Maximum Near-Surface Wind Speed of Gust wind_speed_of_gust                        
+34  tauu                  Surface Downward Eastward Wind Stress         surface_downward_eastward_stress          
+35  tauv                  Surface Downward Northward Wind Stress        surface_downward_northward_stress         
+36  ts                    Surface Temperature                           surface_temperature                       
+37  zmla                  Height Of Boundary Layer                      atmosphere_boundary_layer_thickness       
+38  prw                   Water Vapor Path                              atmosphere_water_vapor_content            
+39  clwvi                 Condensed Water Path                          atmosphere_cloud_condensed_water_content  
+40  clivi                 Ice Water Path                                atmosphere_cloud_ice_content              
+41  ua850                 Eastward Wind                                 eastward_wind                             
+42  va850                 Northward Wind                                northward_wind                            
+43  ta850                 Air Temperature                               air_temperature                           
+44  hus850                Specific Humidity                             specific_humidity                         
+45  ua500                 Eastward Wind                                 eastward_wind                             
+46  va500                 Northward Wind                                northward_wind                            
+47  zg500                 Geopotential Height                           geopotential_height                       
+48  ta500                 Air Temperature                               air_temperature                           
+49  ua200                 Eastward Wind                                 eastward_wind                             
+50  va200                 Northward Wind                                northward_wind                            
+51  ta200                 Air Temperature                               air_temperature                           
+52  zg200                 Geopotential Height                           geopotential_height                       
+53  clh                   High Level Cloud Fraction                     cloud_area_fraction_in_atmosphere_layer   
+54  clm                   Mid Level Cloud Fraction                      cloud_area_fraction_in_atmosphere_layer   
+55  cll                   Low Level Cloud Fraction                      cloud_area_fraction_in_atmosphere_layer   
+56  snc                   Snow Area Fraction                            surface_snow_area_fraction                
+57  snd                   Snow Depth                                    surface_snow_thickness                    
+58  sic                   Sea Ice Area Fraction                         sea_ice_area_fraction                     
+59  prsn                  Snowfall Flux                                 snowfall_flux                             
+60  areacella             Atmosphere Grid-Cell Area                     cell_area                                 
+61  orog                  Surface Altitude                              surface_altitude                          
+62  sftlf                 Land Area Fraction                            land_area_fraction                        
+63  sftgif                Fraction of Grid Cell Covered with Glacier    land_ice_area_fraction                    
+64  mrsofc                Capacity of Soil to Store Water               soil_moisture_content_at_field_capacity   
+65  rootd                 Maximum Root Depth                            root_depth                                

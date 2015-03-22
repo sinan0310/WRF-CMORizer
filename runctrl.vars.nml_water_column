@@ -1,0 +1,22 @@
+&vars
+   cordexID =      38                               ,39                                          ,40                             
+   var_wrf =       '-999'                           ,'-999'                                      ,'-999'                         
+   var_cmip =      'prw'                            ,'clwvi'                                     ,'clivi'                        
+   standard_name = 'atmosphere_water_vapor_content' ,'atmosphere_cloud_condensed_water_content'  ,'atmosphere_cloud_ice_content' 
+   long_name =     'Water Vapor Path'               ,'Condensed Water Path'                      ,'Ice Water Path'               
+   units =         'kg m-2'                         ,'kg m-2'                                    ,'kg m-2'                       
+   height =        -999                             ,-999                                        ,-999                           
+   positive =      '-999'                           ,'-999'                                      ,'-999'                         
+   time3hr =       T                                ,T                                           ,T                              
+   cm3hr =         'point'                          ,'point'                                     ,'point'                        
+   time6hr =       F                                ,F                                           ,F                              
+   cm6hr =         'point'                          ,'point'                                     ,'point'                        
+   timeDay =       T                                ,T                                           ,T                              
+   cmDay =         'mean'                           ,'mean'                                      ,'mean'                         
+   timeMon =       T                                ,T                                           ,T                              
+   cmMon =         'mean'                           ,'mean'                                      ,'mean'                         
+   timeSea =       T                                ,T                                           ,T                              
+   cmSea =         'mean'                           ,'mean'                                      ,'mean'                         
+   filetype =      's'                              ,'s'                                         ,'s'                            
+   interpolate =   T                                ,T                                           ,T                             
+/

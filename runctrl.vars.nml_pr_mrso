@@ -1,0 +1,22 @@
+&vars
+   cordexID =      23                           ,10                         ,4                              ,27                             
+   var_wrf =       '-999'                       ,'-999'                     ,'-999'                         ,'RAINC'                        
+   var_cmip =      'mrso'                       ,'clt'                      ,'pr'                           ,'prc'                          
+   standard_name = 'soil_moisture_content'      ,'cloud_area_fraction'      ,'precipitation_flux'           ,'convective_precipitation_flux'
+   long_name =     'Total Soil Moisture Content', 'Total Cloud Fraction'     ,'Precipitaion'                 ,'Convective Precipitation'    
+   units =         'kg m-2'                     ,'%'                        ,'kg m-2 s-1'                   ,'kg m-2 s-1'                   
+   height =        -999                         ,-999                       ,-999                           ,-999                           
+   positive =      '-999'                       ,'-999'                     ,'-999'                         ,'-999'                         
+   time3hr =       T                            ,T                          ,T                              ,T                              
+   cm3hr =         'mean'                       ,'mean'                     ,'mean'                         ,'mean'                         
+   time6hr =       F                            ,F                          ,F                              ,F                              
+   cm6hr =         '-999'                       ,'-999'                     ,'-999'                         ,'-999'                         
+   timeDay =       T                            ,T                          ,T                              ,T                              
+   cmDay =         'mean'                       ,'mean'                     ,'mean'                         ,'mean'                         
+   timeMon =       T                            ,T                          ,T                              ,T                              
+   cmMon =         'mean'                       ,'mean'                     ,'mean'                         ,'mean'                         
+   timeSea =       T                            ,T                          ,T                              ,T                              
+   cmSea =         'mean'                       ,'mean'                     ,'mean'                         ,'mean'                         
+   filetype =      's'                          ,'s'                        ,'s'                            ,'s'                            
+   interpolate =   T                            ,T                          ,T                              ,T                             
+/
