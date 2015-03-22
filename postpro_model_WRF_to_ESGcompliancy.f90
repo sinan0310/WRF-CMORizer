@@ -219,7 +219,7 @@ MODULE NameListHandling
   IMPLICIT NONE
   SAVE
 
-  INTEGER, PARAMETER :: nvars = 9 
+  INTEGER, PARAMETER :: nvars = 10 
 
   CHARACTER (len = 200) :: Conventions, contact, experiment_id, experiment, &
     driving_experiment, driving_model_id, driving_model_ensemble_member, &
@@ -291,7 +291,7 @@ END INTERFACE
 ! filenames
 
 CHARACTER (len = *), PARAMETER :: fnNMLexp = "runctrl.access13hist.nml"
-CHARACTER (len = *), PARAMETER :: fnNMLvar = "runctrl.vars.nml_pr"  !"runctrl.vars.nml_vars_on_plevels" !"runctrl.vars.nml"
+CHARACTER (len = *), PARAMETER :: fnNMLvar = "runctrl.vars.nml_cape"  !"runctrl.vars.nml_vars_on_plevels" !"runctrl.vars.nml_pr"
 
 CHARACTER (len = *), PARAMETER :: PathFileNameInTEST = "testWRFin.nc"
 CHARACTER (len = *), PARAMETER :: PathFileNameOutTEST = "testESGout.nc"
@@ -310,7 +310,7 @@ INTEGER :: lvl_dimid, lon_dimid, lat_dimid, rec_dimid, height_dimid, &
 INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, &
   rotated_pole_varid, height_varid, rec_varid, pp_varid, pb_varid, ph_varid, &
   phb_varid, qv_varid, theta_varid, t2_varid, recbnds_varid, rainnc_varid, &
-  rainc_varid
+  rainc_varid, u10_varid, v10_varid
 
 ! input data general query
 INTEGER :: ncid_in, ndims_in, nvars_in, ngatts_in, unlimdimid_in !!!, formatp_in
@@ -323,11 +323,24 @@ CHARACTER (len = 19), DIMENSION(:), ALLOCATABLE :: InVarDataRec
 
 ! data
 REAL, DIMENSION(:,:), ALLOCATABLE :: data_in, psl_in, t2_in, TimeRefArraySelYear, &
-  Time_bnds 
-REAL, DIMENSION(:,:,:), ALLOCATABLE :: pp_in, pb_in, ph_in, phb_in, qv_in, &
+  cldfra_inv, u10_in, v10_in, cape, cin, lcl, lfc, Time_bnds 
+REAL, DIMENSION(:,:,:), ALLOCATABLE :: pp_in, pb_in, ph_in, phb_in, qv_in, qvs, &
   theta_in, t_in, ph_fl, p_in, cldfra_in, t_out, rainnc_in, rainc_in, rad_in, &
-  GeoInLonLat
+  t_p, GeoInLonLat
+REAL, DIMENSION(:,:,:,:), ALLOCATABLE :: smois_in
 REAL, DIMENSION(:), ALLOCATABLE :: GeoInRLat, GeoInRLon, pout
+
+REAL :: t_ii
+
+REAL, PARAMETER :: cp = 1004 !J kg-1 K-1
+REAL, PARAMETER :: R = 287.05 !J kg-1 K-1
+REAL, PARAMETER :: L = 2501000. !J kg-1 K-1
+REAL, PARAMETER :: a = 610.78 !
+REAL, PARAMETER :: b = 17.27 !
+REAL, PARAMETER :: c = 273.15 !
+REAL, PARAMETER :: d = 35.86 !
+REAL, PARAMETER :: n = L*0.622*a/cp !
+
 
 ! time and date handling
 CHARACTER (len = 3), DIMENSION(:), ALLOCATABLE :: frequency
@@ -348,7 +361,7 @@ REAL :: stat_mean, slope
 !-------------------------------------------------------------------------------
 ! general
 
-INTEGER :: i, sts, ivar, ifrq, ifl, it, counter, j, np, nl !!!j
+INTEGER :: i, sts, ivar, ifrq, ifl, it, counter, j, np, nl, ii !!!j
 !!!INTEGER :: AllocateStatus, DeAllocateStatus
 LOGICAL :: FileExists   !, comb_flags
 REAL :: cpuTs, cpuTe
@@ -528,8 +541,8 @@ DO ifrq = 1, 1, 1
 !-------------------------------------------------------------------------------
 ! loop over the different variables
 
-  DO ivar = 1, nvars, 1
-  !DO ivar = 1, 1, 1
+  !DO ivar = 1, nvars, 1
+  DO ivar = 1, 1, 1
 
     PRINT *,"============================================================"
     PRINT *, "*** ", TRIM(var_cmip(ivar)), " ***"
@@ -950,7 +963,8 @@ DO ifrq = 1, 1, 1
         !IF ( var_cmip(ivar) == "psl" ) THEN
 
         IF ( (var_cmip(ivar) == "psl") .or. (height(ivar) == 850) &
-              .or.(height(ivar) == 500) .or. (height(ivar) == 200)) THEN
+              .or.(height(ivar) == 500) .or. (height(ivar) == 200) &
+              .or. (var_cmip(ivar) == "cape")) THEN
 
           ALLOCATE( pp_in( xfocus, yfocus, 40 ), STAT=sts )
           ALLOCATE( pb_in( xfocus, yfocus, 40 ), STAT=sts )
@@ -962,6 +976,14 @@ DO ifrq = 1, 1, 1
           ALLOCATE( ph_fl( xfocus, yfocus, 40 ), STAT=sts )
           ALLOCATE( psl_in ( xfocus, yfocus ), STAT=sts )
           ALLOCATE( t2_in ( xfocus, yfocus ), STAT=sts )          
+
+          ALLOCATE( t_p( xfocus, yfocus, 40 ), STAT=sts )
+          ALLOCATE( qvs( xfocus, yfocus, 40 ), STAT=sts )
+          ALLOCATE( cape( xfocus, yfocus ), STAT=sts )
+          ALLOCATE( cin( xfocus, yfocus ), STAT=sts )
+          ALLOCATE( lcl( xfocus, yfocus ), STAT=sts )
+          ALLOCATE( lfc( xfocus, yfocus ), STAT=sts )
+
 
           ALLOCATE( p_in( xfocus, yfocus, 40 ), STAT=sts )
           ALLOCATE( pp_in( xfocus, yfocus, 40 ), STAT=sts )
@@ -976,7 +998,7 @@ DO ifrq = 1, 1, 1
           sts = NF90_INQ_VARID(ncidin, "PH", ph_varid)
           sts = NF90_INQ_VARID(ncidin, "PHB", phb_varid)
           sts = NF90_INQ_VARID(ncidin, "T", theta_varid)
-          sts = NF90_INQ_VARID(ncidin, "QV", qv_varid)
+          sts = NF90_INQ_VARID(ncidin, "QVAPOR", qv_varid)
 
           sts = NF90_INQ_VARID(ncidin, "T2", t2_varid)
 
@@ -1014,7 +1036,7 @@ DO ifrq = 1, 1, 1
           sts = NF90_GET_VAR(ncidin, qv_varid, qv_in(:,:,:), &
             START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 40, 1 /) )
 
-          !print *,'got qv_in'
+          print *,'got qv_in'
 
 
         ELSE IF (var_cmip(ivar) == "clt") THEN
@@ -1067,6 +1089,31 @@ DO ifrq = 1, 1, 1
           print*, var_cmip(ivar), rad_in(50,50,1), rad_in(50,50,2)
           print*, (rad_in(50,50,2) - rad_in(50,50,1))
           print*, (rad_in(50,50,2) - rad_in(50,50,1))/ (3.*3600)
+
+
+        ELSE IF (var_cmip(ivar) == "mrso") THEN
+
+          ALLOCATE( smois_in( xfocus, yfocus, 4, 2 ), STAT=sts )
+
+          sts = NF90_INQ_VARID(ncidin, "SMOIS", varid)
+
+          sts = NF90_GET_VAR(ncidin, varid, smois_in(:,:,:,:), &
+            START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 4, 2 /) )
+
+        ELSE IF (var_cmip(ivar) == "sfcWind") THEN
+
+          ALLOCATE( u10_in ( xfocus, yfocus ), STAT=sts ) 
+          ALLOCATE( v10_in ( xfocus, yfocus ), STAT=sts )
+
+          sts = NF90_INQ_VARID(ncidin, "U10", u10_varid)
+
+          sts = NF90_INQ_VARID(ncidin, "V10", v10_varid)
+
+          sts = NF90_GET_VAR(ncidin, u10_varid, u10_in(:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+
+          sts = NF90_GET_VAR(ncidin, v10_varid, v10_in(:,:), &
+            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
 
 
         ELSE
@@ -1154,20 +1201,126 @@ DO ifrq = 1, 1, 1
 
         END IF
 
+
+!       ***cape***
+
+        IF ( (var_cmip(ivar) == "cape") ) THEN
+
+          !print*, 'qv_in(:,:,1)', qv_in(:,:,1)
+
+          t_in(:,:,:) = (theta_in(:,:,:)+300.)*((pp_in(:,:,:)+pb_in(:,:,:))/100000.)**(287./1004.)
+
+          p_in = pp_in+pb_in          
+
+          t_p(:,:,1) = t_in(:,:,1)
+
+          cape(:,:) = 0.
+          cin(:,:) = 0.
+          lcl(:,:) = -999.
+          lfc(:,:) = -999.
+
+          DO i = 1,xfocus
+            DO j = 1,yfocus
+              DO nl = 1,40-1
+
+                !print*, 'nl, t_p(50,50,nl)', nl, t_p(i,j,nl)
+                !print*, 'nl, p_in(50,50,nl)', nl, p_in(i,j,nl)
+
+                qvs(i,j,nl) = 0.622*a*exp(b*(t_p(i,j,nl)-c)/(t_p(i,j,nl)-d))/p_in(i,j,nl)
+
+                !print*, 'nl, qvs(50,50,nl)', nl, qvs(i,j,nl)
+                !print*, 'nl, qv_in(50,50,1)', nl, qv_in(i,j,1)
+
+                IF (qvs(i,j,nl) .gt. qv_in(i,j,1)) THEN !dry adiabatic ascent
+               
+                  t_p(i,j,nl+1) = (theta_in(i,j,1)+300.)*(p_in(i,j,nl+1)/100000.)**(R/cp)   
+
+                  !print*, nl, 'dry', t_p(i,j,nl+1), t_in(i,j,nl+1), (t_p(i,j,nl+1)-t_in(i,j,nl+1)) 
+
+                ELSE IF (qvs(i,j,nl) .lt. qv_in(i,j,1)) THEN ! moist adiabatic ascent
+
+                  IF (lcl(i,j) .eq. -999) THEN    ! lifting condensation level
+                    lcl(i,j) = p_in(i,j,nl)
+                  END IF
+
+                  t_ii = t_p(i,j,nl)
+
+                  DO ii = 1,10  !solve iteratively
+
+                    qvs(i,j,nl+1) = 0.622*a*exp(b*(t_ii-c)/(t_ii-d))/p_in(i,j,nl+1)
+
+                    t_ii = t_ii - (t_ii*(100000./p_in(i,j,nl+1))**(R/cp)*exp(L*qvs(i,j,nl+1)/(cp*t_ii)) &
+                           - (t_p(i,j,nl)*(100000./p_in(i,j,nl))**(R/cp)*exp(L*qvs(i,j,nl)/(cp*t_p(i,j,nl))))) &
+                           / ( (100000./p_in(i,j,nl+1))**(R/cp)*exp(n/(p_in(i,j,nl+1)*t_ii)*exp(b*(t_ii-c)/(t_ii-d))) * &
+                               (1 - (n/p_in(i,j,nl+1)*exp(b*(t_ii-c)/(t_ii-d))*(t_ii*(t_ii-b*c)+(b-2)*d*t_ii+d**2))/(t_ii*(d-t_ii)**2)) )
+
+                  END DO
+
+                    !print*, 'thetae(i,j,nl)',(t_p(i,j,nl)*(100000./p_in(i,j,nl))**(R/cp)*exp(L*qvs(i,j,nl)/(cp*t_p(i,j,nl))))
+                    !print*,'thetae(i.j.nl+1)',(t_ii*(100000./p_in(i,j,nl+1))**(R/cp)*exp(L*qvs(i,j,nl+1)/(cp*t_ii))) 
+
+                  
+                  t_p(i,j,nl+1) = t_ii
+
+                  !print*, nl, 'moist', t_p(i,j,nl+1), t_in(i,j,nl+1), (t_p(i,j,nl+1)-t_in(i,j,nl+1))
+
+                END IF                 
+       
+
+                IF (t_p(i,j,nl) .gt. t_in(i,j,nl)) THEN
+               
+                  IF (lfc(i,j) .eq. -999) THEN   ! level of free convection
+                    lfc(i,j) = p_in(i,j,nl)
+                  END IF
+
+                  cape(i,j) = cape(i,j) + (t_p(i,j,nl) - t_in(i,j,nl)) / t_in(i,j,nl) * ((phb_in(i,j,nl)+ph_in(i,j,nl))-(phb_in(i,j,nl-1)+ph_in(i,j,nl-1)))
+
+                  !print*, 'nl, cape(i,j)', nl, cape(i,j)
+
+                ELSE IF ( (t_p(i,j,nl) .lt. t_in(i,j,nl)) .and. (cape(i,j) .eq. 0.) )  THEN 
+             
+                  cin(i,j) = cin(i,j) + (t_in(i,j,nl) - t_p(i,j,nl)) / t_in(i,j,nl) * ((phb_in(i,j,nl)+ph_in(i,j,nl))-(phb_in(i,j,nl-1)+ph_in(i,j,nl-1))) 
+
+                  !print*, 'nl, cin(i,j)', nl, cin(i,j)
+
+                END IF
+
+
+              END DO
+            END DO
+          END DO
+
+          data_in(:,:) = cape(:,:)
+
+        END IF
+
 !       ***clt***
 
         IF (var_cmip(ivar) == "clt") THEN
 
-          data_in(:,:) = 0.
+          ALLOCATE( cldfra_inv( xfocus, yfocus ), STAT=sts )
+
+          cldfra_inv(:,:) = 1.
 
           !DO nl = 1,40 - 1
           DO i = 1,xfocus
             DO j = 1,yfocus
-              data_in(i,j) = maxval(cldfra_in(i,j,:))*100. !unit [%] 
+              IF (maxval(cldfra_in(i,j,:)) .lt. 0.99) THEN
+                cldfra_inv(i,j) = 1.
+                DO nl = 2,40
+                  cldfra_inv(i,j) = cldfra_inv(i,j)*(1- max(cldfra_in(i,j,nl),cldfra_in(i,j,nl-1))/(1-cldfra_in(i,j,nl-1))) !unit [%] 
+                END DO
+              ELSE 
+                cldfra_inv(i,j) = 0.  
+              END IF
             END DO
           END DO
           !END DO
 
+          data_in(:,:) = (1 - cldfra_inv(:,:))*100.
+
+          WHERE (data_in .gt. 100.) data_in = 100.
+          WHERE (data_in .lt. 0.) data_in = 0.
 
 
         END IF
@@ -1198,6 +1351,21 @@ DO ifrq = 1, 1, 1
  
         END IF
 
+
+!       ***mrso***
+        IF (var_cmip(ivar) == "mrso") THEN
+
+          data_in(:,:) = ((smois_in(:,:,1,1)*0.1 + smois_in(:,:,2,1)*0.3 + smois_in(:,:,3,1)*0.6 + smois_in(:,:,4,1)*1.0 ) + &
+                         (smois_in(:,:,1,2)*0.1 + smois_in(:,:,2,2)*0.3 + smois_in(:,:,3,2)*0.6 + smois_in(:,:,4,2)*1.0 ))/2.*1000. 
+
+        END IF
+
+!       ***sfcWind***
+        IF (var_cmip(ivar) == "sfcWind") THEN
+
+          data_in(:,:) = (u10_in(:,:)**2 + v10_in(:,:)**2)**0.5 
+
+        END IF
 
 !-------------------------------------------------------------------------------
 ! write data to NetCDF file
