@@ -32,15 +32,15 @@
 #
 # ==============================================================================
 
-FC = /usr/local/intel/Compiler/11.1/072/bin/intel64/ifort
+FC = /usr/local/software/juropatest/Stage1/software/Core/ifort/2015.0.090/bin/ifort
 #FCFLAGS = -g
 FCFLAGS = -O3
 #FCFLAGS += -std95 -warn all
 FCFLAGS += -warn all
 #####FCFLAGS += -I/usr/local/netcdf/v4.1.1_classic/include
 #####LDFLAGS = -L/usr/local/netcdf/v4.1.1_classic/lib -lnetcdf
-FCFLAGS += -I/usr/local/netcdf/v4.2.1.1/include
-LDFLAGS = -L/usr/local/netcdf/v4.2.1.1/lib -lnetcdff -lnetcdf
+FCFLAGS += -I/usr/local/software/juropatest/Stage1/software/MPI/intel/2015.0.090/impi/5.0.1.035/netCDF-Fortran/4.2/include
+LDFLAGS = -L/usr/local/software/juropatest/Stage1/software/MPI/intel/2015.0.090/impi/5.0.1.035/netCDF-Fortran/4.2/lib -lnetcdff -lnetcdf
 
 #FC = /usr/bin/gfortran-4.6
 #FCFLAGS = -O3
