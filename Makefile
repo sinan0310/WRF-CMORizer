@@ -48,7 +48,7 @@ LDFLAGS = -L/usr/local/software/juropatest/Stage1/software/MPI/intel/2015.0.090/
 #FCFLAGS += -I/usr/include
 #LDFLAGS = -L/usr/lib -lnetcdff -lnetcdf
 
-PROGRAMS = postpro_model_WRF_to_ESGcompliancy.exe
+PROGRAMS = postpro_model_WRF_to_ESGcompliancy
 
 all: $(PROGRAMS)
 
@@ -61,7 +61,7 @@ all: $(PROGRAMS)
 .PHONY: clean veryclean
 
 clean:
-	rm -f *.o *.mod *.MOD
+	rm -f *.o *.mod *.MOD *_genmod.f90
 
 veryclean: clean
 	rm -f *~ $(PROGRAMS)
