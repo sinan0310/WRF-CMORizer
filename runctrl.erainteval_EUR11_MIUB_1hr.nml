@@ -1,0 +1,44 @@
+&globalvars
+   Conventions = "CF-1.4",
+   contact = "k.goergen@fz-juelich.de",
+   experiment_id = "evaluation",
+   experiment = "Evaluation run with re-analysis forcing",
+   driving_experiment = "ECMWF-ERAINT_evaluation_r1i1p1",
+   driving_model_id = "ECMWF-ERAINT",
+   driving_model_ensemble_member = "r1i1p1",
+   driving_experiment_name = "evaluation",
+   institution = "Meteorological Institute, University of Bonn (MIUB), GERMANY",
+   institute_id = "MIUB",
+   model_id = "MIUB-WRF331A",
+   rcm_version_id = "v02",
+   project_id = "CORDEX",
+   CORDEX_domain = "EUR-11",
+   product = "output",
+   references = "http://www.meteo.uni-bonn.de",
+/
+&globalvars_additional
+   comment = "",
+   institute_run_id = "rv030r00",
+/
+&filesystem
+   DirInputSimResRoot = "/lustre/jwork/jjsc15/jjsc1500/wrf_data/rv030r00_jur2_val_normal_cs2003060100/simres/",
+   DirOutputPostProRoot = "/lustre/jhome19/jjsc15/jjsc1500/data/ramod_WRF_SLTS/rv030r00_jur2_val_normal_cs2003060100/postpro/",
+   domain = "d01",
+/
+&model_config
+   ts = '2003',
+   te = '2003',
+   nx = 448,
+   ny = 436,
+   nz = 50,
+   xoffset = 12,
+   yoffset = 12,
+   xfocus = 424,
+   yfocus = 412,
+   tstot = '1949-12-01_00:00:00',
+   tetot = '2003-12-01_00:00:00',
+/
+&static_fields
+   PnFnGeo = '/lustre/jhome19/jjsc15/jjsc1500/data/ramod_WRF_SLTS/rv030r00_jur2_val_test00/geo/geo_em.d01.nc'
+/
+

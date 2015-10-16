@@ -1,0 +1,24 @@
+&vars
+   cordexID =      1                             ,4                              ,27                             
+   var_wrf =       'T2'                          ,'-999'                         ,'RAINC'                        
+   var_cmip =      'tas'                         ,'pr'                           ,'prc'                          
+   standard_name = 'air_temperature'             ,'precipitation_flux'           ,'convective_precipitation_flux'
+   long_name =     'Near-Surface Air Temperature','Precipitaion'                 ,'Convective Precipitation'    
+   units =         'K'                           ,'kg m-2 s-1'                   ,'kg m-2 s-1'                   
+   height =        2                             ,-999                           ,-999                           
+   positive =      '-999'                        ,'-999'                         ,'-999'                         
+   time1hr =       T                             ,T                              ,T
+   cm1hr =         'point'                        ,'mean'                         ,'mean'
+   time3hr =       T                             ,T                              ,T                              
+   cm3hr =         'point'                        ,'mean'                         ,'mean'                         
+   time6hr =       F                             ,F                              ,F                              
+   cm6hr =         '-999'                        ,'-999'                         ,'-999'                         
+   timeDay =       T                             ,T                              ,T                              
+   cmDay =         'mean'                        ,'mean'                         ,'mean'                         
+   timeMon =       T                             ,T                              ,T                              
+   cmMon =         'mean'                        ,'mean'                         ,'mean'                         
+   timeSea =       T                             ,T                              ,T                              
+   cmSea =         'mean'                        ,'mean'                         ,'mean'                         
+   filetype =      's'                           ,'s'                            ,'s'                            
+   interpolate =   T                             ,T                              ,T                             
+/
