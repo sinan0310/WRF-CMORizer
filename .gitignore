@@ -3,3 +3,7 @@
 *.exe
 *.mod
 *genmod.f90
+postpro_model_WRF_to_ESGcompliancy
+postpro_model_WRF_to_ESGcompliancy.f90_to_merge
+tmpfileFL
+
