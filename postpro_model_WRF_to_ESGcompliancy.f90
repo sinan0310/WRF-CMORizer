@@ -5,7 +5,7 @@
 !   postpro_model_WRF_to_ESGcompliancy.f90
 !   See license information at the end of the preamble.
 !
-! VERSION (minimum):
+! VERSION:
 !   v2013-08-09
 !   see git log for revision details and history
 !
@@ -13,7 +13,8 @@
 !   under development
 !
 ! CURRENT / (FORMER) CODE OWNER(S):
-!   Klaus Goergen | k.goergen@gmx.net | KGo | MIUB/JSC
+!   Klaus GOERGEN | k.goergen@gmx.net | KGo | MIUB/JSC
+!   Sebastian KNIST | sebastian.knist@gmx.de | SKn | MIUB/JSC
 !
 ! PURPOSE / DESCRIPTION:
 !   This application postprocesses (standard) raw WRF simulation results into
@@ -24,6 +25,10 @@
 !   distribute RCM simulation results via the Earth System Grid infrastructure
 !   adopted by CORDEX from CMIP5. Files which do not adhere to this are
 !   rejected.
+!   Other, similar tool-sets are e.g.: (i) CMOR, (ii) XXXX wrf spain [...]
+!   This tool has be seen in conjunction with 
+!   (1) [...]
+!   (2)
 !
 ! CONVENTION:
 !   crpgl_ucc_v01
@@ -123,6 +128,12 @@
 !   - Currently only one input root directory is possible. If data is stored at
 !     different locations symbolic links might have to be done beforehand.
 !   - The static fields are treated independently by the tool.
+!   - Currently the namelists are split into several parts but they may also 
+!     be combined. 
+!   - The tool is also intended to reduce WRF model output data volume. This
+!     means that original raw model outputs are likely to be erased afterwards.
+!     Therefore the tool generates slightly more variables than required by the
+!     CORDEX data protocol: e.g. CAPE, ....
 !
 ! EXAMPLE:
 !   ./postpro_model_WRF_to_ESGcompliancy > log
@@ -131,7 +142,7 @@
 !   See either git log or NEWS for details.
 !   2013-08-09_KGo v0.1
 !
-! TODO / PLANNED EXTENSIONS:
+! TODO / PLANNED EXTENSIONS:      ------    outdated
 !   - Temporal aggregations, i.e. 6hr, day, mon, seas; all based on orginal
 !     outputs
 !   - Static fields processing
@@ -143,8 +154,8 @@
 !   - Not yet tested with EUR-11, i.e. large model outputs
 !   - Additional variable in runctrl.vars.nml to control additional 3hr outputs
 !     to have all vars in that format and have more vertical levels
-!   - (OpenMP parallelism for the processing section)
-!   - (Parallel NetCDF I/O where possible)
+!   - (OpenMP parallelism for the processing section), via pre-processor flags
+!   - (Parallel NetCDF I/O where possible), via pre-processor flags
 !
 ! REFERENCES (some reference tool format):
 !   - CORDEX WRF group model identification and naming:
@@ -154,12 +165,12 @@
 !     ... CMIP5, CORDEX, txt files
 !
 ! CALLED PROCEDURES:
-!   No external calls.
+!   No external calls. -- System calls are needed.
 !
 ! PERFORMANCE:
 !   EUR-44: 1min/yr > 3hr/150yr OR 1h/1yr65vars... + averaging, after each run
 !
-! LICENSE / COPYING:
+! LICENSE / COPYING:    ------ replace by MIT license, see github
 !
 !   Copyright (C) 2013 Klaus GOERGEN
 !
@@ -290,7 +301,7 @@ END INTERFACE
 !===============================================================================
 ! filenames
 
-CHARACTER (len = *), PARAMETER :: fnNMLexp = "runctrl.access13hist.nml" !"runctrl.erainteval_EUR11_MIUB.nml" !"runctrl.access13hist.nml"
+CHARACTER (len = *), PARAMETER :: fnNMLexp = "runctrl.erainteval.nml" !"runctrl.erainteval_EUR11_MIUB.nml" !"runctrl.access13hist.nml"
 !CHARACTER (len = *), PARAMETER :: fnNMLvar = "runctrl.vars.nml" !"runctrl.vars.nml_evp_roff" !"runctrl.vars.nml_water_column" ! "runctrl.vars.nml_vars_on_plevels"  !"runctrl.vars.nml_vars_on_plevels" !"runctrl.vars.nml_pr"
 
 CHARACTER (len = 100), DIMENSION(:), ALLOCATABLE :: fnNMLvar
@@ -497,8 +508,6 @@ fnNMLvar(6) = "runctrl.vars.nml_snow"
 fnNMLvar(7) = "runctrl.vars.nml_radiation_alternative"
 fnNMLvar(8) = "runctrl.vars.nml_cape"
 
-
-
 !DO ifrq = 1, SIZE(frequency), 1
 !DO ifrq = 1, 1, 1
 ifrq = 1   !SKn: for now just 3hr frequency possible. 
@@ -562,7 +571,7 @@ PRINT *, "size & shape of the TimRefArray = ", SIZE(TimeRefArray), &
 
 !-------------------------------------------------------------------------------
 ! loop over the different variables
-DO varnml = 1, 1, 1 !loop over different var namelists (not best solution, but one namelist for all vars is to big)
+DO varnml = 6, 6, 1 !loop over different var namelists (not best solution, but one namelist for all vars is too big)
                     !choose just specific namelists from list above if you want to postprocess just specific variables
 
   OPEN(2,FILE=TRIM(fnNMLvar(varnml)))
@@ -584,7 +593,6 @@ DO varnml = 1, 1, 1 !loop over different var namelists (not best solution, but o
     PRINT *, "invalid time interval specified"
     STOP
   END SELECT
-
 
   SELECT CASE (TRIM(fnNMLvar(varnml)))
   CASE ("runctrl.vars.nml")
@@ -609,8 +617,8 @@ DO varnml = 1, 1, 1 !loop over different var namelists (not best solution, but o
 
   print*, "nvar_nml", nvar_nml
 
-  !DO ivar = 1, nvar_nml, 1
-  DO ivar = 4, 5, 1    !choose just specific variables from namelist (look up var entry in individual namelist)
+  DO ivar = 1, nvar_nml, 1
+  !DO ivar = 4, 5, 1    !choose just specific variables from namelist (look up var entry in individual namelist)
 
     PRINT *,"============================================================"
     PRINT *, "*** ", TRIM(var_cmip(ivar)), " ***"
@@ -619,9 +627,9 @@ DO varnml = 1, 1, 1 !loop over different var namelists (not best solution, but o
 ! loop over the filelist per variable
 ! content of filelist is defined by filename patterns in system call
 
-    !DO ifl = 1, SIZE(fl_wrfout), 1 ! operational: loop over complete filelist
+    DO ifl = 1, SIZE(fl_wrfout), 1 ! operational: loop over complete filelist
     print *,' SIZE(fl_wrfout', SIZE(fl_wrfout)
-    DO ifl = 1, 1, 1 ! testing: loop over specific entry in filelist (e.g. just January)
+    !DO ifl = 1, 1, 1 ! testing: loop over specific entry in filelist (e.g. just January)
 
       CALL CPU_TIME(cpuTs)
 
@@ -819,7 +827,10 @@ DO varnml = 1, 1, 1 !loop over different var namelists (not best solution, but o
 ! sts = NF90_CREATE(PathFileNameOutTEST, NF90_HDF5, ncid)
 
             !comb_flags = IOR(NF90_HDF5, NF90_CLASSIC_MODEL)
-            sts = NF90_CREATE(TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) // "/" // TRIM(fn_out), IOR(NF90_HDF5, NF90_CLASSIC_MODEL), ncid)
+            !https://www.unidata.ucar.edu/software/netcdf/docs/netcdf-f90/NF90_005fCREATE.html
+            !sts = NF90_CREATE(TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) // "/" // TRIM(fn_out), IOR(NF90_HDF5, NF90_CLASSIC_MODEL), ncid)   !not sure whether this is the right data format spec. I guess it may be right using compression but not the other fancy stuff from NetCDF4
+            !sts = NF90_CREATE(TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) // "/" // TRIM(fn_out), IOR(NF90_NETCDF4, NF90_CLASSIC_MODEL), ncid)   !if anything, then use this here
+            sts = NF90_CREATE(TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) // "/" // TRIM(fn_out), NF90_NETCDF4, ncid)
 
             ! always included
             sts = NF90_DEF_DIM(ncid, "rlon", xfocus, lon_dimid)

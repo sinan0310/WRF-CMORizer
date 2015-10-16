@@ -3,3 +3,4 @@
 *.exe
 *.mod
 *genmod.f90
+tmp*
