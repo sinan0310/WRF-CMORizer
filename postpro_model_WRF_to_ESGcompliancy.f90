@@ -240,9 +240,9 @@ MODULE NameListHandling
   CHARACTER (len = 200) :: comment, institute_run_id
 
   CHARACTER (LEN = 100), DIMENSION(nvars):: var_wrf, var_cmip, standard_name, &
-    long_name, units, filetype, cm3hr, cm6hr, cmDay, cmMon, cmSea, positive
+    long_name, units, filetype, cm1hr, cm3hr, cm6hr, cmDay, cmMon, cmSea, positive
   INTEGER, DIMENSION(nvars):: height, cordexID
-  LOGICAL, DIMENSION(nvars):: time3hr, time6hr, timeDay, timeMon, timeSea, &
+  LOGICAL, DIMENSION(nvars):: time1hr, time3hr, time6hr, timeDay, timeMon, timeSea, &
      interpolate
 
   CHARACTER (len = 200) :: DirInputSimResRoot, DirOutputPostProRoot, domain
@@ -260,8 +260,8 @@ MODULE NameListHandling
   NAMELIST / globalvars_additional / comment, institute_run_id
 
   NAMELIST / vars / var_wrf, var_cmip, standard_name, long_name, units, &
-    height, time3hr, time6hr, timeDay, timeMon, timeSea, filetype, &
-    cm3hr, cm6hr, cmDay, cmMon, cmSea, interpolate, cordexID, positive
+    height, time1hr, time3hr, time6hr, timeDay, timeMon, timeSea, filetype, &
+    cm1hr, cm3hr, cm6hr, cmDay, cmMon, cmSea, interpolate, cordexID, positive
 
   NAMELIST / filesystem / DirInputSimResRoot, DirOutputPostProRoot, domain
 
@@ -301,7 +301,7 @@ END INTERFACE
 !===============================================================================
 ! filenames
 
-CHARACTER (len = *), PARAMETER :: fnNMLexp = "runctrl.erainteval.nml" !"runctrl.erainteval_EUR11_MIUB.nml" !"runctrl.access13hist.nml"
+CHARACTER (len = *), PARAMETER :: fnNMLexp = "runctrl.erainteval_EUR11_MIUB_1hr.nml" !"runctrl.access13hist.nml" !"runctrl.erainteval_EUR11_MIUB.nml" !"runctrl.access13hist.nml"
 !CHARACTER (len = *), PARAMETER :: fnNMLvar = "runctrl.vars.nml" !"runctrl.vars.nml_evp_roff" !"runctrl.vars.nml_water_column" ! "runctrl.vars.nml_vars_on_plevels"  !"runctrl.vars.nml_vars_on_plevels" !"runctrl.vars.nml_pr"
 
 CHARACTER (len = 100), DIMENSION(:), ALLOCATABLE :: fnNMLvar
@@ -350,7 +350,7 @@ REAL, DIMENSION(:,:,:), ALLOCATABLE :: pp_in, pb_in, ph_in, phb_in, qv_in, qvs, 
 REAL, DIMENSION(:,:,:,:), ALLOCATABLE :: smois_in
 REAL, DIMENSION(:), ALLOCATABLE :: GeoInRLat, GeoInRLon, pout
 
-REAL :: t_ii
+REAL :: t_ii, dtHours
 
 REAL, PARAMETER :: cp = 1004 !J kg-1 K-1
 REAL, PARAMETER :: R = 287.05 !J kg-1 K-1
@@ -477,11 +477,11 @@ sts = NF90_CLOSE(ncidin)
 !PRINT *, "rlon = "
 !PRINT *, SHAPE(GeoInRLon)
 !PRINT *, GeoInRLon
-!
+
 !PRINT *, "rlat = "
 !PRINT *, SHAPE(GeoInRLat)
 !PRINT *, GeoInRLat
-!
+
 !PRINT *, "GeoInLonLat = "
 !PRINT *, SHAPE(GeoInLonLat)
 !PRINT *, "lon = ", GeoInLonLat(:,:,1)
@@ -490,15 +490,17 @@ sts = NF90_CLOSE(ncidin)
 !-------------------------------------------------------------------------------
 ! main loop over the different variables, namelist controlled
 
-ALLOCATE ( frequency(6) )
+ALLOCATE ( frequency(7) )
 frequency(1) = "3hr"
 frequency(2) = "6hr"
 frequency(3) = "day"
 frequency(4) = "mon"
 frequency(5) = "sem"
 frequency(6) = "fx"
+frequency(7) = "1hr"
 
-ALLOCATE ( fnNMLvar(8) )
+
+ALLOCATE ( fnNMLvar(9) )
 fnNMLvar(1) = "runctrl.vars.nml"
 fnNMLvar(2) = "runctrl.vars.nml_evp_roff"
 fnNMLvar(3) = "runctrl.vars.nml_water_column"
@@ -507,10 +509,12 @@ fnNMLvar(5) = "runctrl.vars.nml_pr_mrso"
 fnNMLvar(6) = "runctrl.vars.nml_snow"
 fnNMLvar(7) = "runctrl.vars.nml_radiation_alternative"
 fnNMLvar(8) = "runctrl.vars.nml_cape"
+fnNMLvar(9) = "runctrl.vars.nml_pr_tas_1hr_test"
+
 
 !DO ifrq = 1, SIZE(frequency), 1
 !DO ifrq = 1, 1, 1
-ifrq = 1   !SKn: for now just 3hr frequency possible. 
+ifrq = 7   !SKn: for now just 3hr frequency possible. 
 
 PRINT *, "============================================================"
 PRINT *, "freq = ", frequency(ifrq)
@@ -518,8 +522,12 @@ PRINT *, "freq = ", frequency(ifrq)
 !------------------------------------------------------------------------------
 
 SELECT CASE (frequency(ifrq))
+CASE ('1hr')
+  cell_methods(:) = cm1hr(:)
+  dtHours = 1.
 CASE ('3hr')
   cell_methods(:) = cm3hr(:)
+  dtHours = 3.
 CASE ('6hr')
   cell_methods(:) = cm6hr(:)
 CASE ('day')
@@ -548,14 +556,14 @@ CALL SYSTEM("ls -1 " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*
 ft = 0
 CALL generateFilelist
 
-PRINT *, "filelist search pattern = ", TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // "*/*wrfxtrm*nc"
-CALL SYSTEM("ls -1 " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfxtrm*{" // ts // ".." // te // "}*nc > " // tmpfileFL)
-ft = 1
-CALL generateFilelist
+!PRINT *, "filelist search pattern = ", TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // "*/*wrfxtrm*nc"
+!CALL SYSTEM("ls -1 " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfxtrm*{" // ts // ".." // te // "}*nc > " // tmpfileFL)
+!ft = 1
+!CALL generateFilelist
 
 DO i=1,SIZE(fl_wrfout(:)),1
   PRINT '(100A)', fl_wrfout(i)
-  PRINT '(100A)', fl_wrfxtr(i)
+!  PRINT '(100A)', fl_wrfxtr(i)
 END DO
 
 !------------------------------------------------------------------------------
@@ -568,10 +576,11 @@ CALL CreateRefTimeArray( frequency(ifrq) )
 
 PRINT *, "size & shape of the TimRefArray = ", SIZE(TimeRefArray), &
   SHAPE(TimeRefArray)
-
+PRINT *, "SIZE(TimeRefArray,1)",SIZE(TimeRefArray,1) 
+PRINT *, "SHAPE(TimeRefArray,1)",  SHAPE(TimeRefArray,1)
 !-------------------------------------------------------------------------------
 ! loop over the different variables
-DO varnml = 6, 6, 1 !loop over different var namelists (not best solution, but one namelist for all vars is too big)
+DO varnml = 9, 9, 1 !loop over different var namelists (not best solution, but one namelist for all vars is to big)
                     !choose just specific namelists from list above if you want to postprocess just specific variables
 
   OPEN(2,FILE=TRIM(fnNMLvar(varnml)))
@@ -579,6 +588,8 @@ DO varnml = 6, 6, 1 !loop over different var namelists (not best solution, but o
   CLOSE(2)
 
   SELECT CASE (frequency(ifrq))
+  CASE ('1hr')
+    cell_methods(:) = cm1hr(:)
   CASE ('3hr')
     cell_methods(:) = cm3hr(:)
   CASE ('6hr')
@@ -593,6 +604,7 @@ DO varnml = 6, 6, 1 !loop over different var namelists (not best solution, but o
     PRINT *, "invalid time interval specified"
     STOP
   END SELECT
+
 
   SELECT CASE (TRIM(fnNMLvar(varnml)))
   CASE ("runctrl.vars.nml")
@@ -613,12 +625,14 @@ DO varnml = 6, 6, 1 !loop over different var namelists (not best solution, but o
     nvar_nml = 9
   CASE ("runctrl.vars.nml_cape")
     nvar_nml = 1
+  CASE ("runctrl.vars.nml_pr_tas_1hr_test")
+    nvar_nml = 3
   END SELECT
 
   print*, "nvar_nml", nvar_nml
 
   DO ivar = 1, nvar_nml, 1
-  !DO ivar = 4, 5, 1    !choose just specific variables from namelist (look up var entry in individual namelist)
+  !DO ivar = 1, 1, 1    !choose just specific variables from namelist (look up var entry in individual namelist)
 
     PRINT *,"============================================================"
     PRINT *, "*** ", TRIM(var_cmip(ivar)), " ***"
@@ -713,6 +727,9 @@ DO varnml = 6, 6, 1 !loop over different var namelists (not best solution, but o
           !WRITE (InDateTimeMonthStr,'(I2.2)') InDateTimeMonth(it)
           !PRINT *, InDateTimeYearStr, InDateTimeMonthStr
 
+          PRINT *, "size & shape of the TimRefArray = ", SIZE(TimeRefArray), &
+                     SHAPE(TimeRefArray)
+
           pn_out = TRIM(CORDEX_domain)                 // "/" // &
                    TRIM(institute_id)                  // "/" // &
                    TRIM(driving_model_id)              // "/" // &
@@ -744,6 +761,9 @@ DO varnml = 6, 6, 1 !loop over different var namelists (not best solution, but o
             ! this file exists already
 !        READ( InVarDataRec(i), '(I4,1X,I2,1X,I2,1X,I2)' ) InDateTimeYear(it), InDateTimeMonth(it), InDateTimeDay(it), InDateTimeHour(it)
 
+          PRINT *, "size & shape of the TimRefArray = ", SIZE(TimeRefArray), &
+                    SHAPE(TimeRefArray)
+
           DEALLOCATE( TimeRefArraySelYear )
 
           print *, "DEALLOCATE( TimeRefArraySelYear )" 
@@ -753,8 +773,11 @@ DO varnml = 6, 6, 1 !loop over different var namelists (not best solution, but o
           print *, "DEALLOCATE( Time_bnds )"
 
           counter = 0
-          PRINT *, SIZE(TimeRefArray, 1)
-          PRINT *, SHAPE(TimeRefArray, 1)
+          PRINT *,'SIZE(TimeRefArray, 1)', SIZE(TimeRefArray, 1)
+          PRINT *,'SHAPE(TimeRefArray, 1)',  SHAPE(TimeRefArray, 1)
+          PRINT *,'TimeRefArray(1,2)', TimeRefArray(1,2)
+          PRINT *,'TimeRefArray(744,2)', TimeRefArray(744,2)
+          PRINT *,'InDateTimeYear(it)', InDateTimeYear(it)
           DO i = 1, SIZE(TimeRefArray, 1), 1
             IF ( TimeRefArray(i,2) == InDateTimeYear(it)) THEN
               counter = counter + 1
@@ -764,7 +787,13 @@ DO varnml = 6, 6, 1 !loop over different var namelists (not best solution, but o
           PRINT *, "timesteps in the time ref. subset = ", counter
           ALLOCATE( TimeRefArraySelYear( counter, 5 ) ) ! index, y, m, d, h
 
-          print *, "ALLOCATE( TimeRefArraySelYear( counter, 5 ) )", TimeRefArraySelYear( counter, 5 )
+          print *, "ALLOCATE( TimeRefArraySelYear( counter, 5 ) )"
+
+          print *, "TimeRefArraySelYear( counter, 1 )", TimeRefArraySelYear( counter, 1 )
+          print *, "TimeRefArraySelYear( counter, 2 )", TimeRefArraySelYear( counter, 2 )
+          print *, "TimeRefArraySelYear( counter, 3 )", TimeRefArraySelYear( counter, 3 )
+          print *, "TimeRefArraySelYear( counter, 4 )", TimeRefArraySelYear( counter, 4 )
+          print *, "TimeRefArraySelYear( counter, 5 )", TimeRefArraySelYear( counter, 5 )
 
           ! find the matching elements of the respecitve year and copy them
 
@@ -958,22 +987,29 @@ DO varnml = 6, 6, 1 !loop over different var namelists (not best solution, but o
             IF ( cell_methods(ivar) == "point" ) THEN
               print*, 'cell_methods:', cell_methods(ivar)
               sts = NF90_PUT_VAR(ncid, rec_varid, TimeRefArraySelYear(:,1) )
+             
+              print*, 'TimeRefArraySelYear(:,1)', TimeRefArraySelYear(:,1)
+              print*, 'TimeRefArraySelYear(:,2)', TimeRefArraySelYear(:,2)
+              print*, 'TimeRefArraySelYear(:,3)', TimeRefArraySelYear(:,3)
+              print*, 'TimeRefArraySelYear(:,4)', TimeRefArraySelYear(:,4)
+              print*, 'TimeRefArraySelYear(:,5)', TimeRefArraySelYear(:,5)
+
             END IF
             IF ( cell_methods(ivar) == "mean" ) THEN
               print*, 'cell_methods:', cell_methods(ivar)
-              sts = NF90_PUT_VAR(ncid, rec_varid, (TimeRefArraySelYear(:,1)+1.5/24.) )
+              sts = NF90_PUT_VAR(ncid, rec_varid, (TimeRefArraySelYear(:,1)+(dtHours/2.)/24.) )
 
               print *, 'sts NF90_PUT_VAR time', sts
 
-              !print*, 'TimeRefArraySelYear(:,1)', TimeRefArraySelYear(:,1)
-              !print*, 'TimeRefArraySelYear(:,2)', TimeRefArraySelYear(:,2)
-              !print*, 'TimeRefArraySelYear(:,3)', TimeRefArraySelYear(:,3)
-              !print*, 'TimeRefArraySelYear(:,4)', TimeRefArraySelYear(:,4)
-              !print*, 'TimeRefArraySelYear(:,5)', TimeRefArraySelYear(:,5)
+              print*, 'TimeRefArraySelYear(:,1)', TimeRefArraySelYear(:,1)
+              print*, 'TimeRefArraySelYear(:,2)', TimeRefArraySelYear(:,2)
+              print*, 'TimeRefArraySelYear(:,3)', TimeRefArraySelYear(:,3)
+              print*, 'TimeRefArraySelYear(:,4)', TimeRefArraySelYear(:,4)
+              print*, 'TimeRefArraySelYear(:,5)', TimeRefArraySelYear(:,5)
 
 
               Time_bnds(1,:) = TimeRefArraySelYear(:,1)
-              Time_bnds(2,:) = TimeRefArraySelYear(:,1)+3.0/24.
+              Time_bnds(2,:) = TimeRefArraySelYear(:,1)+dtHours/24.
 
 
               print*, 'recbnds_varid', recbnds_varid
@@ -1280,7 +1316,7 @@ DO varnml = 6, 6, 1 !loop over different var namelists (not best solution, but o
 
           print*, var_cmip(ivar), rad_in(50,50,1), rad_in(50,50,2)
           print*, 'difference in J m-2', (rad_in(50,50,2) - rad_in(50,50,1))
-          print*, 'in mean W m-2', (rad_in(50,50,2) - rad_in(50,50,1))/ (3.*3600)
+          print*, 'in mean W m-2', (rad_in(50,50,2) - rad_in(50,50,1))/ (dtHours*3600.)
 
           ! alternative: since accumulated values as read above get so large in 
           ! long term simulations that their differences loose accuracy, use 
@@ -1352,13 +1388,13 @@ DO varnml = 6, 6, 1 !loop over different var namelists (not best solution, but o
 !-------------------------------------------------------------------------------
 ! some analysis of the data
 
-        !print *,"shape of array" , SHAPE(data_in)
-        !print *,"size of array" , SIZE(data_in)
+        print *,"shape of array" , SHAPE(data_in)
+        print *,"size of array" , SIZE(data_in)
 !
 !       stat_mean = SUM(data_in(:,:,5))/(MAX(1,SIZE(data_in(:,:,5))))
 !       PRINT *, stat_mean
         stat_mean = SUM(data_in(:,:))/SIZE(data_in(:,:))
-        !PRINT *, stat_mean
+        PRINT *, stat_mean
 
 !-------------------------------------------------------------------------------
 ! processing
@@ -1609,7 +1645,7 @@ DO varnml = 6, 6, 1 !loop over different var namelists (not best solution, but o
 !       ***pr***
         IF (var_cmip(ivar) == "pr") THEN 
 
-          data_in(:,:) = ((rainnc_in(:,:,2) + rainc_in(:,:,2)) - (rainnc_in(:,:,1) + rainc_in(:,:,1)))/(3.*3600.) !unit [mm/3hr] to [kg m-2 s-1]
+          data_in(:,:) = ((rainnc_in(:,:,2) + rainc_in(:,:,2)) - (rainnc_in(:,:,1) + rainc_in(:,:,1)))/(dtHours*3600.) !unit [mm/3hr] to [kg m-2 s-1]
                                                            !ATTENTION: implement adjustable time intervals that the differences are devided by
         END IF
 
@@ -1617,28 +1653,28 @@ DO varnml = 6, 6, 1 !loop over different var namelists (not best solution, but o
 !       ***prc***
         IF (var_cmip(ivar) == "prc") THEN
 
-          data_in(:,:) = (rainc_in(:,:,2) - rainc_in(:,:,1))/(3.*3600.) !unit [mm/3hr] to [kg m-2 s-1]
+          data_in(:,:) = (rainc_in(:,:,2) - rainc_in(:,:,1))/(dtHours*3600.) !unit [mm/3hr] to [kg m-2 s-1]
 
         END IF
 
 !       ***prsn***
         IF (var_cmip(ivar) == "prsn") THEN
 
-          data_in(:,:) = (snownc_in(:,:,2) - snownc_in(:,:,1))/(3.*3600.) !unit [mm/3hr] to [kg m-2 s-1]
+          data_in(:,:) = (snownc_in(:,:,2) - snownc_in(:,:,1))/(dtHours*3600.) !unit [mm/3hr] to [kg m-2 s-1]
 
         END IF
 
 !       ***snm***
         IF (var_cmip(ivar) == "snm") THEN
 
-          data_in(:,:) = (acsnom_in(:,:,2) - acsnom_in(:,:,1))/(3.*3600.) !unit [kg m-2 /3hr] to [kg m-2 s-1]
+          data_in(:,:) = (acsnom_in(:,:,2) - acsnom_in(:,:,1))/(dtHours*3600.) !unit [kg m-2 /3hr] to [kg m-2 s-1]
 
         END IF
 
 !       ***evspsbl***
         IF (var_cmip(ivar) == "evspsbl") THEN
 
-          data_in(:,:) = (sfcevp_in(:,:,2) - sfcevp_in(:,:,1))/(3.*3600.) !unit [kg m-2 /3hr] to [kg m-2 s-1]
+          data_in(:,:) = (sfcevp_in(:,:,2) - sfcevp_in(:,:,1))/(dtHours*3600.) !unit [kg m-2 /3hr] to [kg m-2 s-1]
 
         END IF
 
@@ -1657,14 +1693,14 @@ DO varnml = 6, 6, 1 !loop over different var namelists (not best solution, but o
 !       ***mrros***
         IF (var_cmip(ivar) == "mrros") THEN
 
-          data_in(:,:) = (sfroff_in(:,:,2) - sfroff_in(:,:,1))/(3.*3600.)       !unit [mm/3hr] to [kg m-2 s-1]
+          data_in(:,:) = (sfroff_in(:,:,2) - sfroff_in(:,:,1))/(dtHours*3600.)       !unit [mm/3hr] to [kg m-2 s-1]
 
         END IF
 
 !       ***mrro***
         IF (var_cmip(ivar) == "mrro") THEN
 
-          data_in(:,:) = ((sfroff_in(:,:,2) - sfroff_in(:,:,1)) + (udroff_in(:,:,2) - udroff_in(:,:,1)))/(3.*3600.) !unit [mm/3hr] to [kg m-2 s-1]
+          data_in(:,:) = ((sfroff_in(:,:,2) - sfroff_in(:,:,1)) + (udroff_in(:,:,2) - udroff_in(:,:,1)))/(dtHours*3600.) !unit [mm/3hr] to [kg m-2 s-1]
 
         END IF
 
@@ -1684,7 +1720,7 @@ DO varnml = 6, 6, 1 !loop over different var namelists (not best solution, but o
 
           IF (TRIM(fnNMLvar(varnml)) == "runctrl.vars.nml_radiation") THEN
            
-            data_in(:,:) = (rad_in(:,:,2) - rad_in(:,:,1)) /(3.*3600.)       ! take difference of accumulated values
+            data_in(:,:) = (rad_in(:,:,2) - rad_in(:,:,1)) /(dtHours*3600.)       ! take difference of accumulated values
 
           ELSE IF (TRIM(fnNMLvar(varnml)) == "runctrl.vars.nml_radiation_alternative") THEN
            
@@ -1731,11 +1767,14 @@ DO varnml = 6, 6, 1 !loop over different var namelists (not best solution, but o
         print *,'fn_out',fn_out
         sts = NF90_OPEN( TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) // "/" // TRIM(fn_out), NF90_WRITE, ncid )
         IF (sts/=0) EXIT
-        !print *, 'NF90_OPEN',  sts
+        print *, 'NF90_OPEN',  sts
         sts = NF90_INQ_VARID(ncid, TRIM(var_cmip(ivar)), x_varid)
-        !print *, 'NF90_INQ_VARID', ncid
-        !print *, 'var_cmip(ivar)', var_cmip(ivar)
-        !print *, 'x_varid', x_varid
+        print *, 'NF90_INQ_VARID', ncid
+        print *, 'var_cmip(ivar)', var_cmip(ivar)
+        print *, 'x_varid', x_varid
+        print *, 'counter', counter
+        print *, 'xfocus', xfocus
+        print *, 'yfocus', yfocus
         IF ( height(ivar) /= -999 ) THEN
           sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
             START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1, 1 /) )
@@ -1744,10 +1783,10 @@ DO varnml = 6, 6, 1 !loop over different var namelists (not best solution, but o
             START=(/ 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1 /) )
         END IF
 
-        !print *,'NF90_PUT_VAR', sts
-        !print *, 'ncid', ncid
-        !print *, 'x_varid', x_varid
-        !print *, 'data_in(50:52,50:52)', data_in(50:52,50:52)
+        print *,'NF90_PUT_VAR', sts
+        print *, 'ncid', ncid
+        print *, 'x_varid', x_varid
+        print *, 'data_in(50:52,50:52)', data_in(50:52,50:52)
         sts = NF90_CLOSE(ncid)
 
         print *, pn_out//"/"//fn_out
@@ -1850,11 +1889,14 @@ INTEGER :: ndOverall = 31 ! these are the 31 days of Dec 1949
 INTEGER :: ntspd ! number of timesteps per time-interval
 
 PRINT *, "CreateRefTimeArray"
-!PRINT *, dt
+PRINT *, dt
 
 SELECT CASE (dt)
 CASE ('3hr')
   dtDecDay = 0.125
+  ntspd = 1.0 / dtDecDay
+CASE ('1hr')
+  dtDecDay = 1.0 / 24.0
   ntspd = 1.0 / dtDecDay
 CASE DEFAULT
   PRINT *, "invalid time interval specified"
@@ -1882,13 +1924,15 @@ END DO
 
 ! handle the Dec 1949, too complicated to have this in the upcoming loop
 ! overall start is at 1949-12-01_00:00:00
-TimeRefArray( 1:31*8, 2 ) = 1949.
-TimeRefArray( 1:31*8, 3 ) = 12.
-DO i=1,31,1
-  TimeRefArray( i*8-7:i*8, 4 ) = i
-  TimeRefArray( i*8-7:i*8, 5 ) = (/(j, j=0, 21, 3)/) !00  03 06 09 12 15 18 21
-END DO
+TimeRefArray( 1:31*ntspd, 2 ) = 1949.
+TimeRefArray( 1:31*ntspd, 3 ) = 12.
 
+
+DO i=1,31,1
+  TimeRefArray( i*ntspd-(ntspd-1):i*ntspd, 4 ) = i
+  TimeRefArray( i*ntspd-(ntspd-1):i*ntspd, 5 ) = (/ (j, j=0, 24-24/ntspd , 24/ntspd) /) !00  03 06 09 12 15 18 21
+END DO
+print*, "(/ (j, j=0, 24-24/ntspd , 24/ntspd) /)", (/ (j, j=0, 24-24/ntspd , 24/ntspd) /)
 ! add the rest of the Y M D H information
 counter = 1
 DO i=tstotYYYY+1,tetotYYYY,1
@@ -1901,10 +1945,10 @@ DO i=tstotYYYY+1,tetotYYYY,1
     ! sort in on daily basis
     DO k=1,ndpm(j)
 
-      TimeRefArray( 31*8 + counter*ntspd-7 : 31*8 + counter*ntspd , 2) = i
-      TimeRefArray( 31*8 + counter*ntspd-7 : 31*8 + counter*ntspd , 3) = j
-      TimeRefArray( 31*8 + counter*ntspd-7 : 31*8 + counter*ntspd , 4) = k
-      TimeRefArray( 31*8 + counter*ntspd-7 : 31*8 + counter*ntspd , 5) = (/(l, l=0, 21, 3)/)
+      TimeRefArray( 31*24/ntspd + counter*ntspd-(ntspd-1) : 31*24/ntspd + counter*ntspd , 2) = i
+      TimeRefArray( 31*24/ntspd + counter*ntspd-(ntspd-1) : 31*24/ntspd + counter*ntspd , 3) = j
+      TimeRefArray( 31*24/ntspd + counter*ntspd-(ntspd-1) : 31*24/ntspd + counter*ntspd , 4) = k
+      TimeRefArray( 31*24/ntspd + counter*ntspd-(ntspd-1) : 31*24/ntspd + counter*ntspd , 5) = (/(l, l=0, 24-24/ntspd , 24/ntspd) /)
 
       counter = counter + 1
 
