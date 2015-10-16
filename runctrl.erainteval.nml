@@ -17,17 +17,17 @@
    references = "http://www.lippmann.lu",
 /
 &globalvars_additional
-   comment = "this is the predecessor of the MIUB-WRF331A v03 historical and rcp45 and rcp85 runs",
+   comment = "this is the predecessor of the MIUB-WRF331A v03 historical, rcp45 and rcp85 runs",
    institute_run_id = "rv021r00",
 /
 &filesystem
-   DirInputSimResRoot = "/lustre/jwork/jjsc15/jjsc1500/wrf_data/rv024r00/simres",
-   DirOutputPostProRoot = "/lustre/jhome19/jjsc15/jjsc1500/data/ramod_WRF_SLTS/rv024r00/postpro/test",
+   DirInputSimResRoot = "/work/slts/slts00/tmp",
+   DirOutputPostProRoot = "/work/slts/slts00/tmp/postpro",
    domain = "d01",
 /
 &model_config
-   ts = '1970',
-   te = '1971',
+   ts = '1989',
+   te = '1989',
    nx = 134,
    ny = 131,
    nz = 50,
@@ -35,6 +35,9 @@
    yoffset = 14,
    xfocus = 106,
    yfocus = 103,
-   tstot = '1949-12-01_00:00:00',
-   tetot = '2100-12-31_21:00:00',
+   tstot = '1989-12-01_00:00:00',
+   tetot = '2010-12-31_21:00:00',
+/
+&static_fields
+   PnFnGeo = '/work/slts/slts00/tmp/postpro/geo_em.d01.nc'
 /
