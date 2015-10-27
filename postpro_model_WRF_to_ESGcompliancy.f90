@@ -301,9 +301,9 @@ END INTERFACE
 !===============================================================================
 ! filenames
 
-CHARACTER (len = *), PARAMETER :: fnNMLexp = "runctrl.erainteval_EUR11_MIUB_1hr.nml" !"runctrl.access13hist.nml" !"runctrl.erainteval_EUR11_MIUB.nml" !"runctrl.access13hist.nml"
-!CHARACTER (len = *), PARAMETER :: fnNMLvar = "runctrl.vars.nml" !"runctrl.vars.nml_evp_roff" !"runctrl.vars.nml_water_column" ! "runctrl.vars.nml_vars_on_plevels"  !"runctrl.vars.nml_vars_on_plevels" !"runctrl.vars.nml_pr"
+CHARACTER (len = *), PARAMETER :: fnNMLexp = "runctrl.mpiesmlrhist.nml" !"runctrl.erainteval.nml" !"runctrl.access13hist.nml"
 
+!CHARACTER (len = *), PARAMETER :: fnNMLvar = "runctrl.vars.nml" !"runctrl.vars.nml_evp_roff" !"runctrl.vars.nml_water_column" ! "runctrl.vars.nml_vars_on_plevels"  !"runctrl.vars.nml_vars_on_plevels" !"runctrl.vars.nml_pr"
 CHARACTER (len = 100), DIMENSION(:), ALLOCATABLE :: fnNMLvar
 
 CHARACTER (len = *), PARAMETER :: PathFileNameInTEST = "testWRFin.nc"
@@ -514,7 +514,7 @@ fnNMLvar(9) = "runctrl.vars.nml_pr_tas_1hr_test"
 
 !DO ifrq = 1, SIZE(frequency), 1
 !DO ifrq = 1, 1, 1
-ifrq = 7   !SKn: for now just 3hr frequency possible. 
+ifrq = 1   !SKn: for now just 3hr frequency possible. 
 
 PRINT *, "============================================================"
 PRINT *, "freq = ", frequency(ifrq)
@@ -580,7 +580,7 @@ PRINT *, "SIZE(TimeRefArray,1)",SIZE(TimeRefArray,1)
 PRINT *, "SHAPE(TimeRefArray,1)",  SHAPE(TimeRefArray,1)
 !-------------------------------------------------------------------------------
 ! loop over the different variables
-DO varnml = 9, 9, 1 !loop over different var namelists (not best solution, but one namelist for all vars is to big)
+DO varnml = 1, 9, 1 !loop over different var namelists (not best solution, but one namelist for all vars is to big)
                     !choose just specific namelists from list above if you want to postprocess just specific variables
 
   OPEN(2,FILE=TRIM(fnNMLvar(varnml)))
@@ -625,8 +625,8 @@ DO varnml = 9, 9, 1 !loop over different var namelists (not best solution, but o
     nvar_nml = 9
   CASE ("runctrl.vars.nml_cape")
     nvar_nml = 1
-  CASE ("runctrl.vars.nml_pr_tas_1hr_test")
-    nvar_nml = 3
+!  CASE ("runctrl.vars.nml_pr_tas_1hr_test")
+!    nvar_nml = 3
   END SELECT
 
   print*, "nvar_nml", nvar_nml
