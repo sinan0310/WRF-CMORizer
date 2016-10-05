@@ -1,5 +1,3 @@
-QSNOW
-
-also: filelist generation more flexible, recursively find
-
-add boolean variable to the individual variables in the nml file to activate the processing, this might also be done by setting the timing information to F, but this way it is more intuitive
+TODO: QSNOW
+TODO: also: filelist generation more flexible, recursively find
+TODO: add boolean variable to the individual variables in the nml file to activate the processing, this might also be done by setting the timing information to F, but this way it is more intuitive

@@ -18,16 +18,16 @@
 /
 &globalvars_additional
    comment = "this is the successor of the CRP-GL-WRF331A v02 evaluation runs",
-   institute_run_id = "rv024r01",
+   institute_run_id = "rv034r01_jure_rcp45_tt2050-2100",
 /
 &filesystem
-   DirInputSimResRoot = "/lustre/jwork/jjsc15/jjsc1500/wrf_data/rv024r00/simres",
-   DirOutputPostProRoot = "/lustre/jhome19/jjsc15/jjsc1500/data/ramod_WRF_SLTS/rv024r00/postpro/test",
+   DirInputSimResRoot = "/work/jjsc15/jjsc1500/wrf_data/rv034r00_jur2_mpiesm_c20_cs1950010100/simres",
+   DirOutputPostProRoot = "/homea/jjsc15/jjsc1500/data/ramod_WRF_SLTS/rv034r00_jur2_mpiesm_c20_cs1950010100/postpro/",
    domain = "d01",
 /
 &model_config
    ts = '1970',
-   te = '1971',
+   te = '1970',
    nx = 134,
    ny = 131,
    nz = 50,

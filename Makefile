@@ -32,15 +32,17 @@
 #
 # ==============================================================================
 
-FC = /usr/local/software/juropatest/Stage1/software/Core/ifort/2015.0.090/bin/ifort
+FC = /usr/local/software/jureca/Stage3/software/Core/ifort/2015.3.187-GCC-bare-4.9.3/bin/ifort
 #FCFLAGS = -g
 FCFLAGS = -O3
 #FCFLAGS += -std95 -warn all
 FCFLAGS += -warn all
 #####FCFLAGS += -I/usr/local/netcdf/v4.1.1_classic/include
 #####LDFLAGS = -L/usr/local/netcdf/v4.1.1_classic/lib -lnetcdf
-FCFLAGS += -I/usr/local/software/juropatest/Stage1/software/MPI/intel/2015.0.090/impi/5.0.1.035/netCDF-Fortran/4.2/include
-LDFLAGS = -L/usr/local/software/juropatest/Stage1/software/MPI/intel/2015.0.090/impi/5.0.1.035/netCDF-Fortran/4.2/lib -lnetcdff -lnetcdf
+#FCFLAGS += -I/usr/local/software/juropatest/Stage1/software/MPI/intel/2015.0.090/impi/5.0.1.035/netCDF-Fortran/4.2/include
+#LDFLAGS = -L/usr/local/software/juropatest/Stage1/software/MPI/intel/2015.0.090/impi/5.0.1.035/netCDF-Fortran/4.2/lib -lnetcdff -lnetcdf
+FCFLAGS += -I/usr/local/software/jureca/Stage3/software/Toolchain/intel-para/2015.07/netCDF-Fortran/4.4.2/include
+LDFLAGS = -L/usr/local/software/jureca/Stage3/software/Toolchain/intel-para/2015.07/netCDF-Fortran/4.4.2/lib -lnetcdff -lnetcdf
 
 #FC = /usr/bin/gfortran-4.6
 #FCFLAGS = -O3

@@ -9,7 +9,7 @@
    driving_experiment_name = "evaluation",
    institution = "Meteorological Institute, University of Bonn (MIUB), GERMANY",
    institute_id = "MIUB",
-   model_id = "MIUB-WRF331A",
+   model_id = "MIUB-WRF361N",
    rcm_version_id = "v02",
    project_id = "CORDEX",
    CORDEX_domain = "EUR-11",
@@ -21,8 +21,8 @@
    institute_run_id = "rv030r00",
 /
 &filesystem
-   DirInputSimResRoot = "/lustre/jwork/jjsc15/jjsc1500/wrf_data/rv030r00_jur2_val_normal_cs2003060100/simres/",
-   DirOutputPostProRoot = "/lustre/jhome19/jjsc15/jjsc1500/data/ramod_WRF_SLTS/rv030r00_jur2_val_normal_cs2003060100/postpro/",
+   DirInputSimResRoot = "/work/jjsc15/jjsc1500/wrf_data/rv030r00_jur2_val_normal_cs2003060100/simres/",
+   DirOutputPostProRoot = "/homea/jjsc15/jjsc1500/data/ramod_WRF_SLTS/rv030r00_jur2_val_normal_cs2003060100/postpro/",
    domain = "d01",
 /
 &model_config
@@ -36,9 +36,9 @@
    xfocus = 424,
    yfocus = 412,
    tstot = '1949-12-01_00:00:00',
-   tetot = '2003-12-01_00:00:00',
+   tetot = '2003-12-31_23:00:00',
 /
 &static_fields
-   PnFnGeo = '/lustre/jhome19/jjsc15/jjsc1500/data/ramod_WRF_SLTS/rv030r00_jur2_val_test00/geo/geo_em.d01.nc'
+   PnFnGeo = '/homea/jjsc15/jjsc1500/data/ramod_WRF_SLTS/rv030r00_jur2_val_test00/geo/geo_em.d01.nc'
 /
 

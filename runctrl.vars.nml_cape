@@ -7,6 +7,8 @@
    units =         'J kg-1'                               ,
    height =        -999                                   ,
    positive =      '-999'                                 ,
+   time1hr =       T                                      ,
+   cm1hr =         'point'                                ,
    time3hr =       T                                      ,
    cm3hr =         'point'                                ,
    time6hr =       F                                      ,

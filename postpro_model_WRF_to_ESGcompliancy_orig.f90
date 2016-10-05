@@ -460,8 +460,6 @@ sts = NF90_INQ_VARID(ncidin, "XLONG_M", varid)
 sts = NF90_GET_VAR(ncidin, varid, GeoInLonLat(:, :, 1), &
   START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /)) !normal order: x y z t
 
-PRINT *, "GeoInLonLat(1, 1, 1)", GeoInLonLat(1, 1, 1)
-
 sts = NF90_INQ_VARID(ncidin, "XLAT_M", varid)
 sts = NF90_GET_VAR(ncidin, varid, GeoInLonLat(:, :, 2), &
   START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /))
