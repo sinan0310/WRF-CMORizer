@@ -217,7 +217,7 @@ MODULE RefTimeVecs
   IMPLICIT NONE
   SAVE
 
-  REAL, DIMENSION(:,:), ALLOCATABLE :: TimeRefArray
+  REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: TimeRefArray
   !INTEGER :: Tyear_start, Tyear_end
 
 END MODULE RefTimeVecs
@@ -301,7 +301,7 @@ END INTERFACE
 !===============================================================================
 ! filenames
 
-CHARACTER (len = *), PARAMETER :: fnNMLexp = "runctrl.mpiesmlrrcp45.nml" !"runctrl.erainteval_EUR11_MIUB_1hr.nml" !"runctrl.erainteval_EUR11_MIUB_1hr.nml" !"runctrl.mpiesmlrhist.nml" !"runctrl.erainteval.nml" !"runctrl.access13hist.nml"
+CHARACTER (len = *), PARAMETER :: fnNMLexp = "runctrl.test.nml" !"runctrl.mpiesmlrrcp45_3km-ME.nml" !"runctrl.mpiesmlrrcp45.nml" !"runctrl.erainteval_EUR11_MIUB_1hr.nml" !"runctrl.erainteval_EUR11_MIUB_1hr.nml" !"runctrl.mpiesmlrhist.nml" !"runctrl.erainteval.nml" !"runctrl.access13hist.nml"
 
 !CHARACTER (len = *), PARAMETER :: fnNMLvar = "runctrl.vars.nml" !"runctrl.vars.nml_evp_roff" !"runctrl.vars.nml_water_column" ! "runctrl.vars.nml_vars_on_plevels"  !"runctrl.vars.nml_vars_on_plevels" !"runctrl.vars.nml_pr"
 CHARACTER (len = 100), DIMENSION(:), ALLOCATABLE :: fnNMLvar
@@ -317,7 +317,7 @@ CHARACTER (len = 200) :: pn_out, fn_out, iflWRFin
 ! INTEGER, PARAMETER :: nt = 8
 
 ! new NetCDF file
-INTEGER :: ncid, ncidin
+INTEGER :: ncid, ncidin, ncidin0
 INTEGER :: lon_dimid, lat_dimid, rec_dimid, height_dimid, &
   nb2_dimid
 INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, &
@@ -339,9 +339,10 @@ CHARACTER (len = NF90_MAX_NAME) :: InDimNameRec !!!, InVarNameRec
 CHARACTER (len = 19), DIMENSION(:), ALLOCATABLE :: InVarDataRec
 
 ! data
-REAL, DIMENSION(:,:), ALLOCATABLE :: data_in, psl_in, t2_in, TimeRefArraySelYear, &
+REAL, DIMENSION(:,:), ALLOCATABLE :: data_in, psl_in, t2_in, &
   cldfra_inv, u10_in, v10_in, cape, cin, lcl, lfc, prw, clwvi, clivi, &
-  sinalpha_in, cosalpha_in, Time_bnds 
+  sinalpha_in, cosalpha_in
+REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: TimeRefArraySelYear, Time_bnds 
 REAL, DIMENSION(:,:,:), ALLOCATABLE :: pp_in, pb_in, ph_in, phb_in, qv_in, qvs, &
   qc_in, qr_in, qi_in, qs_in,  theta_in, t_in, ph_fl, p_in, cldfra_in, &
   u_in, v_in, var3d_in, var_pl, potevp_in, &
@@ -516,7 +517,7 @@ fnNMLvar(9) = "runctrl.vars.nml_pr_tas_1hr_test"
 
 !DO ifrq = 1, SIZE(frequency), 1
 !DO ifrq = 1, 1, 1
-ifrq = 1   !SKn: for now just 3hr frequency possible, test 1hr frequency 
+ifrq = 7   !SKn: for now just 3hr frequency possible, test 1hr frequency 
 
 PRINT *, "============================================================"
 PRINT *, "freq = ", frequency(ifrq)
@@ -634,7 +635,7 @@ DO varnml = 9, 9, 1 !loop over different var namelists (not best solution, but o
   print*, "nvar_nml", nvar_nml
 
   !DO ivar = 1, nvar_nml, 1
-  DO ivar = 1, 1, 1    !choose just specific variables from namelist (look up var entry in individual namelist)
+  DO ivar = 1, 2, 1    !choose just specific variables from namelist (look up var entry in individual namelist)
 
     PRINT *,"============================================================"
     PRINT *, "*** ", TRIM(var_cmip(ivar)), " ***"
@@ -810,6 +811,7 @@ DO varnml = 9, 9, 1 !loop over different var namelists (not best solution, but o
               TimeRefArraySelYear(counter,1:5) = TimeRefArray(i,1:5)
               !print *, 'counter', counter
               !print *, 'i', i
+              !print *, 'TimeRefArray(i,1:5)', TimeRefArray(i,1:5)
               !print *, 'TimeRefArraySelYear(counter,1:5)', TimeRefArraySelYear(counter,1:5)
               
             END IF
@@ -1003,7 +1005,7 @@ DO varnml = 9, 9, 1 !loop over different var namelists (not best solution, but o
             END IF
             IF ( cell_methods(ivar) == "mean" ) THEN
               print*, 'cell_methods:', cell_methods(ivar)
-              sts = NF90_PUT_VAR(ncid, rec_varid, (TimeRefArraySelYear(:,1)+(dtHours/2.)/24.) )
+              sts = NF90_PUT_VAR(ncid, rec_varid, (TimeRefArraySelYear(:,1)+(dtHours/2.)/24._8) )
 
               print *, 'sts NF90_PUT_VAR time', sts
 
@@ -1015,7 +1017,7 @@ DO varnml = 9, 9, 1 !loop over different var namelists (not best solution, but o
 
 
               Time_bnds(1,:) = TimeRefArraySelYear(:,1)
-              Time_bnds(2,:) = TimeRefArraySelYear(:,1)+dtHours/24.
+              Time_bnds(2,:) = TimeRefArraySelYear(:,1)+dtHours/24._8
 
 
               print*, 'recbnds_varid', recbnds_varid
@@ -1217,94 +1219,371 @@ DO varnml = 9, 9, 1 !loop over different var namelists (not best solution, but o
   
 
         ELSE IF (var_cmip(ivar) == "pr") THEN 
+           
+          !print*, 'read iflWRFin ' , iflWRFin
+          !print*, 'read pr, it =',it
 
-          ALLOCATE( rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
-          ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+          IF (it /= InDimLenRec) THEN
 
-          sts = NF90_INQ_VARID(ncidin, "RAINNC", rainnc_varid)
-          sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
+            ALLOCATE( rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
+            ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
 
-          sts = NF90_GET_VAR(ncidin, rainnc_varid, rainnc_in(:,:,:), &
-            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )   !read two timesteps to calculate 3hr sum
+            sts = NF90_INQ_VARID(ncidin, "RAINNC", rainnc_varid)
+            sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
 
-          sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
-            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+            sts = NF90_GET_VAR(ncidin, rainnc_varid, rainnc_in(:,:,:), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus, yfocus, 2 /) )   !read two timesteps to calculate difference
+
+            sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus, yfocus, 2 /) )
+
+          ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+
+            ALLOCATE( rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )        
+            ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+
+            sts = NF90_INQ_VARID(ncidin, "RAINNC", rainnc_varid)
+            sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
+
+            sts = NF90_GET_VAR(ncidin, rainnc_varid, rainnc_in(:,:,1), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus,yfocus, 1 /) )
+
+            sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,1), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus, yfocus, 1 /) )
+
+            iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfout file 
+                                        ! if it is not the first
+
+            sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
+
+            sts = NF90_INQ_VARID(ncidin0, "RAINNC", rainnc_varid)
+            sts = NF90_INQ_VARID(ncidin0, "RAINC", rainc_varid)
+
+            sts = NF90_GET_VAR(ncidin0, rainnc_varid, rainnc_in(:,:,2), &
+              START = (/ xoffset, yoffset, 1 /), &
+              COUNT = (/ xfocus, yfocus,1 /) )   !read last timestep of previous wrfout file
+
+            sts = NF90_GET_VAR(ncidin0, rainc_varid, rainc_in(:,:,2), &
+              START = (/ xoffset, yoffset, 1 /), &
+              COUNT = (/ xfocus, yfocus,1 /) )
+ 
+            sts = NF90_CLOSE(ncidin0)
+
+
+            iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+
+
+          END IF
 
 
         ELSE IF (var_cmip(ivar) == "prc") THEN
 
-          ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
 
-          sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
+          IF (it /= InDimLenRec) THEN
 
-          sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
-            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+            ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+
+            sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
+
+            sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus, yfocus, 2/) ) 
+
+          ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN 
+
+            ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+
+            sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
+
+            sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,1), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus, yfocus, 1/))
+
+            
+            iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfout file 
+                                        ! if it is not the first
+
+            sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
+
+            sts = NF90_INQ_VARID(ncidin0, "RAINC", rainc_varid)
+
+            sts = NF90_GET_VAR(ncidin0, rainc_varid, rainc_in(:,:,2), &
+              START = (/ xoffset, yoffset, 1 /), &
+              COUNT = (/ xfocus,yfocus,1 /) ) 
+ 
+            sts = NF90_CLOSE(ncidin0)
+
+            iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+
+          END IF
+
+
+
 
 
         ELSE IF (var_cmip(ivar) == "prsn") THEN
 
-          ALLOCATE( snownc_in ( xfocus, yfocus, 2 ), STAT=sts )
-          
-          sts = NF90_INQ_VARID(ncidin, "SNOWNC", snownc_varid)
+          IF (it /= InDimLenRec) THEN
 
-          sts = NF90_GET_VAR(ncidin, snownc_varid, snownc_in(:,:,:), &
-            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+            ALLOCATE( snownc_in ( xfocus, yfocus, 2 ), STAT=sts )
+            
+            sts = NF90_INQ_VARID(ncidin, "SNOWNC", snownc_varid)
+
+            sts = NF90_GET_VAR(ncidin, snownc_varid, snownc_in(:,:,:), &
+              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+         
+          ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+
+            ALLOCATE( snownc_in ( xfocus, yfocus, 2 ), STAT=sts )
+
+            sts = NF90_INQ_VARID(ncidin, "SNOWNC", snownc_varid)
+
+            sts = NF90_GET_VAR(ncidin, snownc_varid, snownc_in(:,:,1), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus, yfocus, 1/))
 
 
+            iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfoutfile 
+                                        ! if it is not the first
+
+            sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
+
+            sts = NF90_INQ_VARID(ncidin0, "SNOWNC", snownc_varid)
+
+            sts = NF90_GET_VAR(ncidin0, snownc_varid, snownc_in(:,:,2), &
+              START = (/ xoffset, yoffset, 1 /), &
+              COUNT = (/xfocus,yfocus,1 /) )
+
+            sts = NF90_CLOSE(ncidin0)
+
+
+            iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+
+
+          END IF
+ 
+  
         ELSE IF (var_cmip(ivar) == "snm") THEN
 
-          ALLOCATE( acsnom_in ( xfocus, yfocus, 2 ), STAT=sts )
+          IF (it /= InDimLenRec) THEN
 
-          sts = NF90_INQ_VARID(ncidin, "ACSNOM", acsnom_varid)
+            ALLOCATE( acsnom_in ( xfocus, yfocus, 2 ), STAT=sts )
 
-          sts = NF90_GET_VAR(ncidin, acsnom_varid, acsnom_in(:,:,:), &
-            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+            sts = NF90_INQ_VARID(ncidin, "ACSNOM", acsnom_varid)
 
-          print*, sts
+            sts = NF90_GET_VAR(ncidin, acsnom_varid, acsnom_in(:,:,:), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus, yfocus, 2 /) )
+
+            print*, sts
+
+          ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+
+            ALLOCATE( acsnom_in ( xfocus, yfocus, 2 ), STAT=sts )
+
+            sts = NF90_INQ_VARID(ncidin, "ACSNOM", acsnom_varid)
+
+            sts = NF90_GET_VAR(ncidin, acsnom_varid, acsnom_in(:,:,1), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus, yfocus,1/))
+
+            iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfoutfile 
+                                        ! if it is not the first
+
+            sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
+            
+            sts = NF90_INQ_VARID(ncidin0, "ACSNOM", acsnom_varid)
+          
+            sts = NF90_GET_VAR(ncidin0, acsnom_varid, acsnom_in(:,:,2), &
+              START = (/ xoffset, yoffset, 1 /), &
+              COUNT =(/xfocus,yfocus,1 /) )
+          
+            sts = NF90_CLOSE(ncidin0)
+          
+            iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+            
+          END IF
 
         ELSE IF (var_cmip(ivar) == "evspsbl") THEN
 
-          ALLOCATE( sfcevp_in ( xfocus, yfocus, 2 ), STAT=sts )
+          IF (it /= InDimLenRec) THEN
 
-          sts = NF90_INQ_VARID(ncidin, "SFCEVP", sfcevp_varid)
+            ALLOCATE( sfcevp_in ( xfocus, yfocus, 2 ), STAT=sts )
 
-          sts = NF90_GET_VAR(ncidin, sfcevp_varid, sfcevp_in(:,:,:), &
-            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+            sts = NF90_INQ_VARID(ncidin, "SFCEVP", sfcevp_varid)
+
+            sts = NF90_GET_VAR(ncidin, sfcevp_varid, sfcevp_in(:,:,:), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus, yfocus, 2 /) )
+          
+          ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+
+            ALLOCATE( sfcevp_in ( xfocus, yfocus, 2 ), STAT=sts )
+
+            sts = NF90_INQ_VARID(ncidin, "SFCEVP", sfcevp_varid)
+
+            sts = NF90_GET_VAR(ncidin, sfcevp_varid, sfcevp_in(:,:,1), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus, yfocus,1/))
+
+            iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfoutfile 
+                                        ! if it is not the first 
+
+            sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
+
+            sts = NF90_INQ_VARID(ncidin0, "SFCEVP", sfcevp_varid)
+
+            sts = NF90_GET_VAR(ncidin0, sfcevp_varid, sfcevp_in(:,:,2), &
+              START = (/ xoffset, yoffset, 1 /), &
+              COUNT =(/xfocus,yfocus,1 /) )
+
+            sts = NF90_CLOSE(ncidin0)
+
+            iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+
+          END IF 
+
 
         ELSE IF (var_cmip(ivar) == "evspsblpot") THEN
 
-          ALLOCATE( potevp_in ( xfocus, yfocus, 2 ), STAT=sts )
+          IF (it /= InDimLenRec) THEN         
 
-          sts = NF90_INQ_VARID(ncidin, "POTEVP", potevp_varid)
+            ALLOCATE( potevp_in ( xfocus, yfocus, 2 ), STAT=sts )
 
-          sts = NF90_GET_VAR(ncidin, potevp_varid, potevp_in(:,:,:), &
-            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+            sts = NF90_INQ_VARID(ncidin, "POTEVP", potevp_varid)
+
+            sts = NF90_GET_VAR(ncidin, potevp_varid, potevp_in(:,:,:), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus, yfocus, 2 /) )
+
+          ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+
+            ALLOCATE( potevp_in ( xfocus, yfocus, 2 ), STAT=sts )
+
+            sts = NF90_INQ_VARID(ncidin, "POTEVP", potevp_varid)
+
+            sts = NF90_GET_VAR(ncidin, potevp_varid, potevp_in(:,:,1), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus, yfocus,1/))
+
+            iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfoutfile 
+                                        ! if it is not the first
+
+            sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
+
+            sts = NF90_INQ_VARID(ncidin0, "POTEVP", potevp_varid)
+
+            sts = NF90_GET_VAR(ncidin0, potevp_varid, potevp_in(:,:,2), &
+              START = (/ xoffset, yoffset, 1 /), &
+              COUNT =(/xfocus,yfocus,1 /) )
+
+            sts = NF90_CLOSE(ncidin0)
+
+
+            iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+
+          END IF 
 
 
         ELSE IF (var_cmip(ivar) == "mrros") THEN
 
-          ALLOCATE( sfroff_in ( xfocus, yfocus, 2 ), STAT=sts )
+          IF (it /= InDimLenRec) THEN
 
-          sts = NF90_INQ_VARID(ncidin, "SFROFF", sfroff_varid)
+            ALLOCATE( sfroff_in ( xfocus, yfocus, 2 ), STAT=sts )
 
-          sts = NF90_GET_VAR(ncidin, sfroff_varid, sfroff_in(:,:,:), &
-            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+            sts = NF90_INQ_VARID(ncidin, "SFROFF", sfroff_varid)
+
+            sts = NF90_GET_VAR(ncidin, sfroff_varid, sfroff_in(:,:,:), &
+              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+
+          ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+
+            ALLOCATE( sfroff_in ( xfocus, yfocus, 2 ), STAT=sts )
+
+            sts = NF90_INQ_VARID(ncidin, "SFROFF", sfroff_varid)
+
+            sts = NF90_GET_VAR(ncidin, sfroff_varid, sfroff_in(:,:,1), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus, yfocus,1/))
+
+            iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfoutfile 
+                                        ! if it is not the first
+
+            sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
+            
+            sts = NF90_INQ_VARID(ncidin0, "SFROFF", sfroff_varid)
+
+            sts = NF90_GET_VAR(ncidin0, sfroff_varid, sfroff_in(:,:,2), &
+              START = (/ xoffset, yoffset, 1 /), &
+              COUNT =(/xfocus,yfocus,1 /) )
+
+            sts = NF90_CLOSE(ncidin0)
+
+
+            iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+
+          END IF
 
         ELSE IF (var_cmip(ivar) == "mrro") THEN
 
-          ALLOCATE( sfroff_in ( xfocus, yfocus, 2 ), STAT=sts )
-          ALLOCATE( udroff_in ( xfocus, yfocus, 2 ), STAT=sts )
+          IF (it /= InDimLenRec) THEN
 
-          sts = NF90_INQ_VARID(ncidin, "SFROFF", sfroff_varid)
-          sts = NF90_INQ_VARID(ncidin, "UDROFF", udroff_varid)
+            ALLOCATE( sfroff_in ( xfocus, yfocus, 2 ), STAT=sts )
+            ALLOCATE( udroff_in ( xfocus, yfocus, 2 ), STAT=sts )
 
-          sts = NF90_GET_VAR(ncidin, sfroff_varid, sfroff_in(:,:,:), &
-            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+            sts = NF90_INQ_VARID(ncidin, "SFROFF", sfroff_varid)
+            sts = NF90_INQ_VARID(ncidin, "UDROFF", udroff_varid)
 
-          sts = NF90_GET_VAR(ncidin, udroff_varid, udroff_in(:,:,:), &
-            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+            sts = NF90_GET_VAR(ncidin, sfroff_varid, sfroff_in(:,:,:), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus, yfocus, 2 /) )
+
+            sts = NF90_GET_VAR(ncidin, udroff_varid, udroff_in(:,:,:), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus, yfocus, 2 /) )
+
+          ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+
+            ALLOCATE( sfroff_in ( xfocus, yfocus, 2 ), STAT=sts )
+            ALLOCATE( udroff_in ( xfocus, yfocus, 2 ), STAT=sts )
+
+            sts = NF90_INQ_VARID(ncidin, "SFROFF", sfroff_varid)
+            sts = NF90_INQ_VARID(ncidin, "UDROFF", udroff_varid)
+
+            sts = NF90_GET_VAR(ncidin, sfroff_varid, sfroff_in(:,:,1), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus, yfocus,1/))
+
+            sts = NF90_GET_VAR(ncidin, udroff_varid, udroff_in(:,:,1), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT =(/xfocus,yfocus,1 /) )
 
 
+            iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfoutfile 
+                                        ! if it is not the first
+
+            sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
+
+            sts = NF90_INQ_VARID(ncidin0, "SFROFF", sfroff_varid)
+            sts = NF90_INQ_VARID(ncidin, "UDROFF", udroff_varid)
+
+            sts = NF90_GET_VAR(ncidin0, sfroff_varid, sfroff_in(:,:,2), &
+              START = (/ xoffset, yoffset, 1 /), &
+              COUNT =(/xfocus,yfocus,1 /) )
+
+            sts = NF90_GET_VAR(ncidin0, udroff_varid, udroff_in(:,:,2), &
+              START = (/ xoffset, yoffset, 1 /), &
+              COUNT =(/xfocus,yfocus,1 /) )
+
+            sts = NF90_CLOSE(ncidin0)
+
+            iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+
+          END IF
 
         ELSE IF ((var_cmip(ivar) == "rsds") .or. (var_cmip(ivar) == "rlds")  &
              .or. (var_cmip(ivar) == "rsus") .or. (var_cmip(ivar) == "rlus") &
@@ -1312,12 +1591,43 @@ DO varnml = 9, 9, 1 !loop over different var namelists (not best solution, but o
              .or. (var_cmip(ivar) == "rsdt") .or. (var_cmip(ivar) == "rsut") &
              .or. (var_cmip(ivar) == "hfss") .or. (var_cmip(ivar) == "hfls")) THEN
 
-          ALLOCATE( rad_in ( xfocus, yfocus, 2 ), STAT=sts )
+          IF (it /= InDimLenRec) THEN
 
-          sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
+            ALLOCATE( rad_in ( xfocus, yfocus, 2 ), STAT=sts )
 
-          sts = NF90_GET_VAR(ncidin, varid, rad_in(:,:,:), &
-            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+            sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
+
+            sts = NF90_GET_VAR(ncidin, varid, rad_in(:,:,:), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus, yfocus, 2 /) )
+
+          ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+
+            ALLOCATE( rad_in ( xfocus, yfocus, 2 ), STAT=sts )
+
+            sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
+
+            sts = NF90_GET_VAR(ncidin, varid, rad_in(:,:,1), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus, yfocus,1/))
+
+            iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfoutfile 
+                                        ! if it is not the first
+
+            sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
+
+            sts = NF90_INQ_VARID(ncidin0, TRIM(var_wrf(ivar)), varid)
+
+            sts = NF90_GET_VAR(ncidin0, varid, rad_in(:,:,2), &
+              START = (/ xoffset, yoffset, 1 /), &
+              COUNT =(/xfocus,yfocus,1 /) )
+
+            sts = NF90_CLOSE(ncidin0)
+
+            iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+
+          END IF
+
 
 
           print*, var_cmip(ivar), rad_in(50,50,1), rad_in(50,50,2)
@@ -1333,12 +1643,44 @@ DO varnml = 9, 9, 1 !loop over different var namelists (not best solution, but o
 
         ELSE IF (var_cmip(ivar) == "mrso") THEN
 
-          ALLOCATE( smois_in( xfocus, yfocus, 4, 2 ), STAT=sts )
+          IF (it /= InDimLenRec) THEN
 
-          sts = NF90_INQ_VARID(ncidin, "SMOIS", varid)
+            ALLOCATE( smois_in( xfocus, yfocus, 4, 2 ), STAT=sts )
 
-          sts = NF90_GET_VAR(ncidin, varid, smois_in(:,:,:,:), &
-            START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 4, 2 /) )
+            sts = NF90_INQ_VARID(ncidin, "SMOIS", varid)
+
+            sts = NF90_GET_VAR(ncidin, varid, smois_in(:,:,:,:), &
+              START = (/ xoffset, yoffset, 1, it /), &
+              COUNT = (/ xfocus, yfocus, 4, 2 /) )
+
+          ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+
+            ALLOCATE( smois_in ( xfocus, yfocus, 4, 2 ), STAT=sts )
+
+            sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
+            
+            sts = NF90_GET_VAR(ncidin, varid, smois_in(:,:,:,1), &
+              START = (/ xoffset, yoffset, it /), &
+              COUNT = (/ xfocus, yfocus,1/))
+
+
+            iflWRFin = fl_wrfout(ifl) ! set to the previous wrfoutfile 
+                                      ! if it is not the first 
+
+            sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
+
+            sts = NF90_INQ_VARID(ncidin0, TRIM(var_wrf(ivar)), varid)
+
+            sts = NF90_GET_VAR(ncidin0, varid, smois_in(:,:,:,2), &
+              START = (/ xoffset, yoffset, 1 /), &
+              COUNT =(/xfocus,yfocus,1 /) )
+
+            sts = NF90_CLOSE(ncidin0)
+
+            iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+
+
+          END IF
 
 
         ELSE IF (var_cmip(ivar) == "sfcWind") THEN
@@ -1459,21 +1801,27 @@ DO varnml = 9, 9, 1 !loop over different var namelists (not best solution, but o
 
           var_pl = 1.e20
 
-          DO i = 1,xfocus 
-            DO j = 1,yfocus
-              DO nl = 1,40 - 1
-                IF (pout(np).lt.p_in(i,j,nl) .and. pout(np).gt.p_in(i,j,nl+1)) then
-                
-                  slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ (p_in(i,j,nl)-p_in(i,j,nl+1))
-                  var_pl(i,j,np) = var3d_in(i,j,nl+1) + slope* (pout(np)-p_in(i,j,nl+1))
 
-                END IF
+          IF (var_cmip(ivar) == "psl") THEN
+            data_in(:,:) = psl_in(:,:)
+
+          ELSE
+            DO i = 1,xfocus 
+              DO j = 1,yfocus
+                DO nl = 1,40 - 1
+                  IF (pout(np).lt.p_in(i,j,nl) .and. pout(np).gt.p_in(i,j,nl+1)) then
+                  
+                    !slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ (p_in(i,j,nl)-p_in(i,j,nl+1))
+                    !var_pl(i,j,np) = var3d_in(i,j,nl+1) + slope* (pout(np)-p_in(i,j,nl+1))
+                    slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/(LOG(p_in(i,j,nl))-LOG(p_in(i,j,nl+1)))
+                    var_pl(i,j,np) = var3d_in(i,j,nl+1) + slope*(LOG(pout(np))-LOG(p_in(i,j,nl+1)))
+                  END IF
+                END DO
               END DO
             END DO
-          END DO
-          !END DO
-
-          data_in(:,:) = var_pl(:,:,np)
+            !END DO
+            data_in(:,:) = var_pl(:,:,np)
+          END IF 
 
         END IF
 
@@ -1652,7 +2000,7 @@ DO varnml = 9, 9, 1 !loop over different var namelists (not best solution, but o
         IF (var_cmip(ivar) == "pr") THEN 
 
           data_in(:,:) = ((rainnc_in(:,:,2) + rainc_in(:,:,2)) - (rainnc_in(:,:,1) + rainc_in(:,:,1)))/(dtHours*3600.) !unit [mm/3hr] to [kg m-2 s-1]
-                                                           !ATTENTION: implement adjustable time intervals that the differences are devided by
+                                                         !ATTENTION: implement adjustable time intervals that the differences are devided by
         END IF
 
 
@@ -1693,7 +2041,6 @@ DO varnml = 9, 9, 1 !loop over different var namelists (not best solution, but o
         ! It doesen't make sense to accumulate in W m-2, but even if assume it as J m-2 or derive kg m-2 
         ! by using latent heat of vaporization you never get values that have a reasonable magnitude...
 
-
         END IF
 
 !       ***mrros***
@@ -1711,19 +2058,11 @@ DO varnml = 9, 9, 1 !loop over different var namelists (not best solution, but o
         END IF
 
 
-!       ***snc,sic***
-        IF ( (var_cmip(ivar) == "snc") .or. (var_cmip(ivar) == "sic") ) THEN
-
-          data_in(:,:) = data_in(:,:)*100. !unit [] to [%]
-
-        END IF
-
-
 !       ***rsds, rlds, rsus, rlus***
         IF ( (var_cmip(ivar) == "rsds") .or. (var_cmip(ivar) == "rlds")      &
              .or. (var_cmip(ivar) == "rsus") .or. (var_cmip(ivar) == "rlus") &
              .or. (var_cmip(ivar) == "hfss") .or. (var_cmip(ivar) == "hfls")) THEN
-
+  
           IF (TRIM(fnNMLvar(varnml)) == "runctrl.vars.nml_radiation") THEN
            
             data_in(:,:) = (rad_in(:,:,2) - rad_in(:,:,1)) /(dtHours*3600.)       ! take difference of accumulated values
@@ -1739,11 +2078,22 @@ DO varnml = 9, 9, 1 !loop over different var namelists (not best solution, but o
 
 !       ***mrso***
         IF (var_cmip(ivar) == "mrso") THEN
-
+  
           data_in(:,:) = ((smois_in(:,:,1,1)*0.1 + smois_in(:,:,2,1)*0.3 + smois_in(:,:,3,1)*0.6 + smois_in(:,:,4,1)*1.0 ) + &
                          (smois_in(:,:,1,2)*0.1 + smois_in(:,:,2,2)*0.3 + smois_in(:,:,3,2)*0.6 + smois_in(:,:,4,2)*1.0 ))/2.*1000. 
 
         END IF
+
+
+
+
+!       ***snc,sic***
+        IF ( (var_cmip(ivar) == "snc") .or. (var_cmip(ivar) == "sic") ) THEN
+
+          data_in(:,:) = data_in(:,:)*100. !unit [] to [%]
+
+        END IF
+
 
 !       ***sfcWind***
         IF (var_cmip(ivar) == "sfcWind") THEN
@@ -1886,7 +2236,7 @@ IMPLICIT NONE
 CHARACTER (LEN = 3), INTENT(IN) :: dt
 
 INTEGER :: i, j, k, l, counter
-REAL :: dtDecDay
+REAL(KIND=8) :: dtDecDay
 INTEGER :: tstotYYYY, tstotMM, tstotDD, tstotHH
 INTEGER :: tetotYYYY, tetotMM, tetotDD, tetotHH
 !!!INTEGER :: ndpy
@@ -1902,7 +2252,7 @@ CASE ('3hr')
   dtDecDay = 0.125
   ntspd = 1.0 / dtDecDay
 CASE ('1hr')
-  dtDecDay = 1.0 / 24.0
+  dtDecDay = 1.0 / 24.0_8
   ntspd = 1.0 / dtDecDay
 CASE DEFAULT
   PRINT *, "invalid time interval specified"
@@ -1925,7 +2275,8 @@ ALLOCATE( TimeRefArray( ndOverall*ntspd, 5 ) ) ! index, y, m, d, h         y,x
 
 ! fill up the decimal days
 DO i=0,ndOverall*ntspd-1,1
-  TimeRefArray( i+1, 1 ) = i * dtDecDay
+  !TimeRefArray( i+1, 1 ) = i * dtDecDay
+  TimeRefArray( i+1, 1 ) = i / ntspd + mod(i,ntspd) * dtDecDay
 END DO
 
 ! handle the Dec 1949, too complicated to have this in the upcoming loop
