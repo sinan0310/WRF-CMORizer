@@ -35,8 +35,8 @@
    yoffset = 10,
    xfocus = 424,
    yfocus = 412,
-   tstot = '1949-12-01_00:00:00',
-   tetot = '2100-12-31_21:00:00',
+   tstot = '2009-06-20_00:00:00',
+   tetot = '2009-06-27_00:00:00',
 /
 &static_fields
    PnFnGeo = '/work/slts/slts00/tmp/geo_em.d01.nc'
