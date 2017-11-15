@@ -21,23 +21,23 @@
    institute_run_id = "rv031r01",
 /
 &filesystem
-   DirInputSimResRoot = "/work/jjsc15/jjsc1500/wrf_data/rv031r01_jur2_val_with_bdy_bugfix/simres",
-   DirOutputPostProRoot = "/homea/jjsc15/jjsc1500/data/ramod_WRF_SLTS/rv031r01_jur2_val_with_bdy_bugfix/postpro",
+   DirInputSimResRoot = "/work/slts/slts00/wrf/rv054r10_JURECAcpu_val_CdxFpsCpcmHiResNWPtestCb/simres.INITWL",
+   DirOutputPostProRoot = "/work/slts/slts00/tmp",
    domain = "d01",
 /
 &model_config
-   ts = '1989',
-   te = '1989',
-   nx = 134,
-   ny = 131,
+   ts = '2009',
+   te = '2009',
+   nx = 444,
+   ny = 432,
    nz = 50,
-   xoffset = 14,
-   yoffset = 14,
-   xfocus = 106,
-   yfocus = 103,
+   xoffset = 10,
+   yoffset = 10,
+   xfocus = 424,
+   yfocus = 412,
    tstot = '1949-12-01_00:00:00',
    tetot = '2100-12-31_21:00:00',
 /
 &static_fields
-   PnFnGeo = '/homea/jjsc15/jjsc1500/data/ramod_WRF_SLTS/rv034r00_jur2_mpiesm_c20_cs1950010100/geo/geo_em.d01.nc'
+   PnFnGeo = '/work/slts/slts00/tmp/geo_em.d01.nc'
 /

@@ -301,7 +301,7 @@ END INTERFACE
 !===============================================================================
 ! filenames
 
-CHARACTER (len = *), PARAMETER :: fnNMLexp = "runctrl.test.nml" !"runctrl.mpiesmlrrcp45_3km-ME.nml" !"runctrl.mpiesmlrrcp45.nml" !"runctrl.erainteval_EUR11_MIUB_1hr.nml" !"runctrl.erainteval_EUR11_MIUB_1hr.nml" !"runctrl.mpiesmlrhist.nml" !"runctrl.erainteval.nml" !"runctrl.access13hist.nml"
+CHARACTER (len = *), PARAMETER :: fnNMLexp = "runctrl.erainteval.nml" ! "runctrl.test.nml" !"runctrl.mpiesmlrrcp45_3km-ME.nml" !"runctrl.mpiesmlrrcp45.nml" !"runctrl.erainteval_EUR11_MIUB_1hr.nml" !"runctrl.erainteval_EUR11_MIUB_1hr.nml" !"runctrl.mpiesmlrhist.nml" !"runctrl.erainteval.nml" !"runctrl.access13hist.nml"
 
 !CHARACTER (len = *), PARAMETER :: fnNMLvar = "runctrl.vars.nml" !"runctrl.vars.nml_evp_roff" !"runctrl.vars.nml_water_column" ! "runctrl.vars.nml_vars_on_plevels"  !"runctrl.vars.nml_vars_on_plevels" !"runctrl.vars.nml_pr"
 CHARACTER (len = 100), DIMENSION(:), ALLOCATABLE :: fnNMLvar
