@@ -1,0 +1,48 @@
+&globalvars
+   Conventions = "CF-1.4",
+   contact = "k.goergen@fz-juelich.de",
+   experiment_id = "evaluation",
+   experiment = "Evaluation run with re-analysis forcing",
+   driving_experiment = "ECMWF-ERAINT_evaluation_r1i1p1",
+   driving_model_id = "ECMWF-ERAINT",
+   driving_model_ensemble_member = "r1i1p1",
+   driving_experiment_name = "evaluation",
+   institution = "Institute of Bio- and Geosciences (IBG-3, Agrosphere), Research Centre Juelich (FZJ), GERMANY",
+   institute_id = "FZJ-IBG3",
+   model_id = "MIUB-WRF361N",
+   rcm_version_id = "v02",
+   project_id = "CORDEX",
+   CORDEX_domain = "EUR-44",
+   product = "output",
+   references = "http://www.fz-juelich.de",
+/
+&globalvars_additional
+   comment = "Simulations in cooperation with the Meteorological Institute (MIUB), Bonn University, Germany; this is the predecessor of the MIUB-WRF361N v03 historical, rcp45 and rcp85 runs",
+   institute_run_id = "rv031r01",
+/
+&filesystem
+   DirInputSimResRoot = "/home/kgo/Documents/sandbox/cmorization_testing/simres.INITWL"
+   DirOutputPostProRoot = "/home/kgo/Documents/sandbox/cmorization_testing"
+   domain = "d01",
+/
+&model_config
+   ts = '2009',
+   te = '2009',
+   nx = 444,
+   ny = 432,
+   nz = 50,
+   xoffset = 10,
+   yoffset = 10,
+   xfocus = 424,
+   yfocus = 412,
+   tstot = '1949-12-01_00:00:00',
+   tetot = '2100-12-31_21:00:00',
+   tsact = '2009-06-20_00:00:00',
+   teact = '2009-06-22_00:00:00',
+/
+&static_fields
+   PnFnGeo = '/home/kgo/Documents/sandbox/cmorization_testing/geo_em.d01.nc'
+/
+&tool_config
+   noCMOR = .TRUE. ! if noCMOR=T
+/

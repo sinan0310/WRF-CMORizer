@@ -6,10 +6,10 @@
 # Description : Makefile for postpro_model_WRF_to_ESGcompliancy.f90
 # Source      : http://www.webalice.it/o.drofa/davide/makefile-fortran/
 #               makefile-fortran.html
-# Alternative : gfortran -I/usr/include t006.f90 -L/usr/lib -lnetcdff -lnetcdf
-# Requirements: - NetCDF Fortran90 library, > v4, used: v4.1.1 and v4.2.1.1, all
+# Alternative : gfortran -I/usr/include <prgname>.f90 -L/usr/lib -lnetcdff -lnetcdf
+# Requirements: - NetCDF Fortran library, > v4, used: v4.1.1 and v4.2.1.1, all
 #                 including HDF5 > write NetCDF v4
-#               - F90 compiler, used: gfortran
+#               - F95 compiler, used: gfortran, ifort
 #
 #
 #    Copyright (C) 2013 Klaus GOERGEN
@@ -32,25 +32,22 @@
 #
 # ==============================================================================
 
-FC = $(EBROOTIFORT)/bin/ifort
-#FCFLAGS = -g
-FCFLAGS = -O3
-#FCFLAGS += -std95 -warn all
-FCFLAGS += -warn all
-#####FCFLAGS += -I/usr/local/netcdf/v4.1.1_classic/include
-#####LDFLAGS = -L/usr/local/netcdf/v4.1.1_classic/lib -lnetcdf
-#FCFLAGS += -I/usr/local/software/juropatest/Stage1/software/MPI/intel/2015.0.090/impi/5.0.1.035/netCDF-Fortran/4.2/include
-#LDFLAGS = -L/usr/local/software/juropatest/Stage1/software/MPI/intel/2015.0.090/impi/5.0.1.035/netCDF-Fortran/4.2/lib -lnetcdff -lnetcdf
-#FCFLAGS += -I/usr/local/software/jureca/Stage3/software/Toolchain/intel-para/2015.07/netCDF-Fortran/4.4.2/include
-#LDFLAGS = -L/usr/local/software/jureca/Stage3/software/Toolchain/intel-para/2015.07/netCDF-Fortran/4.4.2/lib -lnetcdff -lnetcdf
-FCFLAGS += -I$(EBROOTNETCDFMINFORTRAN)/include
-LDFLAGS = -L$(EBROOTNETCDFMINFORTRAN)/lib -lnetcdff -lnetcdf
-
-#FC = /usr/bin/gfortran-4.6
+# JSC/JURECA HPC system (easybuild + modules software environment)
+# load environment first, compatible with multiple stages and toolchains
+#FC = $(EBROOTIFORT)/bin/ifort
 #FCFLAGS = -O3
-#FCFLAGS += -std=f95 -Wall -pedantic # if this is on, SYSTEM does not work
-#FCFLAGS += -I/usr/include
-#LDFLAGS = -L/usr/lib -lnetcdff -lnetcdf
+#FCFLAGS += -warn all
+#FCFLAGS += -I$(EBROOTNETCDFMINFORTRAN)/include
+#LDFLAGS = -L$(EBROOTNETCDFMINFORTRAN)/lib -lnetcdff -lnetcdf
+
+# Ubuntu Desktop
+FC = /usr/bin/gfortran
+FCFLAGS = -O3
+FCFLAGS += -Wall
+FCFLAGS += -ffree-line-length-none 
+FCFLAGS += -Wno-tabs
+FCFLAGS += -I/usr/include
+LDFLAGS = -L/usr/lib -lnetcdff -lnetcdf
 
 PROGRAMS = postpro_model_WRF_to_ESGcompliancy
 
@@ -65,7 +62,7 @@ all: $(PROGRAMS)
 .PHONY: clean veryclean
 
 clean:
-	rm -f *.o *.mod *.MOD *_genmod.f90
+	rm -f *.o *.mod *.MOD *_genmod.f90 tmpfile* log
 
 veryclean: clean
-	rm -f *~ $(PROGRAMS)
+	rm -rf *~ $(PROGRAMS) /home/kgo/Documents/sandbox/cmorization_testing/CORDEX/EUR-44
