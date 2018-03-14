@@ -16,7 +16,7 @@
 !   take the latest heads from the branches and merge old-school locally without git
 !   - master is totally out of date > Knist+Truhetz+Kartsios worked from that version, nobody merged
 !   - start with Knist version as new base, trust him most
-!   - Truhetz ********* ongoing merge, 2 versions form heimo, merge first version first
+!   - Truhetz ********* ongoing merge, 2 versions form heimo, merge first version first // fix and check and implement the time span ajustment
 !   - Kartsios
 !
 ! CURRENT / (FORMER) CODE OWNER(S):
@@ -94,6 +94,11 @@
 !
 ! RESTRICTIONS:
 !   - No restrictions. No side effects.
+!
+!
+! one experiment at a time
+! one resolution at a time
+! no relationship between different domains during processing
 !
 ! BUGS:
 !   - None.
@@ -201,6 +206,9 @@
 ! CALLED PROCEDURES:
 !   No external calls. -- System calls are needed.
 !
+! RELATED TOOLS:
+! Lluis, complimentary, his is in-situ, this one is standalone postprocessing
+!
 ! PERFORMANCE:
 !   EUR-44: 1min/yr > 3hr/150yr OR 1h/1yr65vars... + averaging, after each run
 !
@@ -230,7 +238,7 @@
 !-------------------------------------------------------------------------------
 ! passing allocatable arrays between main program and external subroutine
 
-MODULE flhandling
+MODULE FilelistHandling
 
   IMPLICIT NONE
   SAVE
@@ -240,7 +248,7 @@ MODULE flhandling
   CHARACTER (len = 200), DIMENSION(:), ALLOCATABLE :: fl_wrfxtr
   INTEGER :: ft
 
-END MODULE flHandling
+END MODULE FilelistHandling
 
 !-------------------------------------------------------------------------------
 ! index, Y, M, D, H, depending on the "frequency" of the dataset, i.e. time
@@ -259,7 +267,7 @@ END MODULE RefTimeVecs
 !-------------------------------------------------------------------------------
 ! namelist handling
 
-MODULE NameListHandling
+MODULE NamelistHandling
 
   IMPLICIT NONE
   SAVE
@@ -283,11 +291,12 @@ MODULE NameListHandling
 
   INTEGER ::  nx, ny, nz, xoffset, yoffset, xfocus, yfocus
   CHARACTER (len = 4) :: ts, te
-  CHARACTER (len = 19) :: tstot, tetot, tsact, teact
+  CHARACTER (len = 19) :: tstot, tetot
 
   CHARACTER (len = 200) :: PnFnGeo
 
-  LOGICAL :: noCMOR
+  LOGICAL :: aggregation_yearly, aggregation_monthly, aggregation_individually
+  CHARACTER (len = 19) :: tsact, teact
 
   NAMELIST / globalvars / Conventions, contact, experiment_id, experiment, &
     driving_experiment, driving_model_id, driving_model_ensemble_member, &
@@ -303,21 +312,22 @@ MODULE NameListHandling
   NAMELIST / filesystem / DirInputSimResRoot, DirOutputPostProRoot, domain
 
   NAMELIST / model_config / ts, te, nx, ny, nz, xoffset, yoffset, xfocus, &
-    yfocus, tstot, tetot, tsact, teact
+    yfocus, tstot, tetot
 
   NAMELIST / static_fields / PnFnGeo
 
-  NAMELIST / tool_config / noCMOR
+  NAMELIST / tool_config / aggregation_yearly, aggregation_monthly, &
+    aggregation_individually, tsact, teact
 
-END MODULE NameListHandling
+END MODULE NamelistHandling
 
 !===============================================================================
 
 PROGRAM ppWRFCMIP
 
-USE flhandling
+USE FilelistHandling
 USE RefTimeVecs
-USE NameListHandling
+USE NamelistHandling
 
 USE netcdf
 
@@ -327,8 +337,8 @@ IMPLICIT NONE
 
 INTERFACE
 
-  SUBROUTINE generateFilelist
-  END SUBROUTINE generateFilelist
+  SUBROUTINE GenerateFilelist
+  END SUBROUTINE GenerateFilelist
 
   SUBROUTINE CreateRefTimeArray( dt )
     IMPLICIT NONE
@@ -468,9 +478,9 @@ CHARACTER (len = 21) :: creationDate
 !===============================================================================
 
 PRINT *, "============================================================"
-PRINT *, "*** NML READING ***"
+PRINT *, "*** CENTRAL NAMELIST READING ***"
 PRINT *, fnNMLexp
-PRINT *, fnNMLvar
+!PRINT *, fnNMLvar
 
 OPEN(2,FILE=fnNMLexp)
 READ(UNIT=2,NML=globalvars)
@@ -502,16 +512,15 @@ CLOSE(2)
 ! several looping constructs and is de-allocated before the initial allocation
 
 ALLOCATE( data_in( xfocus, yfocus ), STAT=sts )
-IF (sts /= 0) STOP "*** Not enough memory ***"
+IF (sts /= 0) STOP "*** Not enough memory on this device, stopping***"
 
 ALLOCATE( TimeRefArraySelYear(2,2) )
 ALLOCATE( Time_bnds(2,2) )
 
 !-------------------------------------------------------------------------------
-! get the invariant vars which have to be added all the time
-! lon, lat, rlon, rlat
-! mass grid
-! seperate file
+! get the invariant vars which have to be added all the time from seperate file
+! lon, lat, rlon, rlat, mass grid, etc.
+
 ! subset is double checked with orig geo_em file and previously postprocessed
 ! data; match up to the 5th digit
 ! geo files match
@@ -576,8 +585,6 @@ frequency(5) = "sem"
 frequency(6) = "fx"
 frequency(7) = "1hr"
 
-! xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-
 ALLOCATE ( fnNMLvar(9) )
 fnNMLvar(1) = "runctrl.vars.nml"
 fnNMLvar(2) = "runctrl.vars.nml_evp_roff"
@@ -592,8 +599,7 @@ fnNMLvar(9) = "runctrl.vars.nml_pr_tas_1hr_test"
 !fnNMLvar(X) = "runctrl.vars.nml_psl" ! new from HTr
 
 !DO ifrq = 1, SIZE(frequency), 1
-!DO ifrq = 1, 1, 1
-ifrq = 7   !SKn: testing 1hr frequency 
+DO ifrq = 7, 7, 1
 
 PRINT *, "============================================================"
 PRINT *, "freq = ", frequency(ifrq)
@@ -637,12 +643,12 @@ tmpfileFL = "tmpfileFL"
 PRINT *, "filelist search pattern = ", TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // "*/*wrfout*nc"
 CALL SYSTEM("ls -1 " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfout*nc > " // tmpfileFL)
 ft = 0
-CALL generateFilelist
+CALL GenerateFilelist
 
 !PRINT *, "filelist search pattern = ", TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // "*/*wrfxtrm*nc"
 !CALL SYSTEM("ls -1 " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfxtrm*{" // ts // ".." // te // "}*nc > " // tmpfileFL)
 !ft = 1
-!CALL generateFilelist
+!CALL GenerateFilelist
 
 DO i=1,SIZE(fl_wrfout(:)),1
   PRINT '(100A)', fl_wrfout(i)
@@ -733,9 +739,9 @@ DO varnml = 9, 9, 1
 ! loop over the filelist per variable
 ! content of filelist is defined by filename patterns in system call
 
+    !DO ifl = 1, 1, 1 ! testing: loop over specific entry in filelist (e.g. just January)
     DO ifl = 1, SIZE(fl_wrfout), 1 ! operational: loop over complete filelist
     print *,' SIZE(fl_wrfout', SIZE(fl_wrfout)
-    !DO ifl = 1, 1, 1 ! testing: loop over specific entry in filelist (e.g. just January)
 
       PRINT *, "number of files to process = ", ' SIZE(fl_wrfout', SIZE(fl_wrfout)
 
@@ -798,6 +804,10 @@ DO varnml = 9, 9, 1
         PRINT *, "---"
 
 !-------------------------------------------------------------------------------
+! check whether file exists or whether the same time span has been dealt with in
+! a previous pass of the tool
+! this is where the code is very stiff between a more versatile use and the 
+! hardcoded way the CORDEX archive design uses years only 
 ! generate path and filename, in line with the ESGF Data Reference Syntax (DRS)
 ! e.g.:
 ! /hpc/shared/int/eva/ramod_WRF_CRPGL/WRFrv021rXXrcc3CpCdx/postpro/EUR-44/CRPGL/
@@ -811,6 +821,9 @@ DO varnml = 9, 9, 1
         ! structure
         IF ( InDateTimeYearPrev /= InDateTimeYear(it) ) THEN !.AND. &
           !( InDateTimeMonthPrev /= InDateTimeMonth(it) ) ) THEN
+
+
+! add here the month and year and timespan checking
 
           InDateTimeYearPrev = InDateTimeYear(it)
 
@@ -862,19 +875,17 @@ DO varnml = 9, 9, 1
                     SHAPE(TimeRefArray)
 
           DEALLOCATE( TimeRefArraySelYear )
-
           PRINT *, "DEALLOCATE( TimeRefArraySelYear )" 
 
-          DEALLOCATE( Time_bnds ) !SKn 
-
+          DEALLOCATE( Time_bnds )
           PRINT *, "DEALLOCATE( Time_bnds )"
-
           counter = 0
           PRINT *,'SIZE(TimeRefArray, 1)', SIZE(TimeRefArray, 1)
           PRINT *,'SHAPE(TimeRefArray, 1)',  SHAPE(TimeRefArray, 1)
           PRINT *,'TimeRefArray(1,2)', TimeRefArray(1,2)
           PRINT *,'TimeRefArray(744,2)', TimeRefArray(744,2)
           PRINT *,'InDateTimeYear(it)', InDateTimeYear(it)
+          ! number of date/time steps in the ref array which match the current year
           DO i = 1, SIZE(TimeRefArray, 1), 1
             IF ( TimeRefArray(i,2) == InDateTimeYear(it)) THEN
               counter = counter + 1
@@ -883,7 +894,6 @@ DO varnml = 9, 9, 1
           ! holds data of exactly 1 year
           PRINT *, "timesteps in the time ref. subset = ", counter
           ALLOCATE( TimeRefArraySelYear( counter, 5 ) ) ! index, y, m, d, h
-
           PRINT *, "ALLOCATE( TimeRefArraySelYear( counter, 5 ) )"
 
           !print *, "TimeRefArraySelYear( counter, 1 )", TimeRefArraySelYear( counter, 1 )
@@ -895,7 +905,6 @@ DO varnml = 9, 9, 1
           ! find the matching elements of the respecitve year and copy them
 
           ALLOCATE( Time_bnds( 2, counter ) )
-
           PRINT *, "ALLOCATE( Time_bnds( 2, counter ) )", Time_bnds( 2, counter )
 
           counter = 0
@@ -1183,7 +1192,7 @@ DO varnml = 9, 9, 1
 
         sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin)
 
-! (het): read actual value of base state temperature T00
+! HTr: read actual value of base state temperature T00
         sts = NF90_INQ_VARID(ncidin, "T00", t00_varid)
         IF ( sts /= NF90_NOERR ) THEN
           T00(1) = 300.0
@@ -1192,7 +1201,7 @@ DO varnml = 9, 9, 1
             START = (/ it /), COUNT = (/ 1 /) )
         END IF
 
-! (het): use actual value of base state pressure P00, if possible
+! HTr: use actual value of base state pressure P00, if possible
         sts = NF90_INQ_VARID(ncidin, "P00", p00_varid)
         IF ( sts /= NF90_NOERR ) THEN
           P00(1) = 100000.
@@ -1201,21 +1210,23 @@ DO varnml = 9, 9, 1
             START = (/ it /), COUNT = (/ 1 /) )
         END IF
 
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! SKn: It is not necessary to read all 3D variables for every single output variable.
+!      Here it is done to have a more compact structure, but it could be separated 
+!      in multiple if-blocks for every variable.
+! HTr: I've changed the hard coded '40' levels to nz levels given by the nml-file
 
-        IF ( (var_cmip(ivar) == "psl") .or. (height(ivar) == 850) &
-              .or.(height(ivar) == 500) .or. (height(ivar) == 200) &
+        IF ( (var_cmip(ivar) == "psl") &
+              .or. (height(ivar) == 850) &
               .or. (height(ivar) == 700) &
-              .or. (var_cmip(ivar) == "prw") .or. (var_cmip(ivar) == "clwvi") &
+              .or. (height(ivar) == 500) &
+              .or. (height(ivar) == 200) &
+              .or. (var_cmip(ivar) == "prw") &
+              .or. (var_cmip(ivar) == "clwvi") &
               .or. (var_cmip(ivar) == "clivi") &
               .or. (var_cmip(ivar) == "cape")) THEN
 
-! XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-
-          ! SKn: It is not necessary to read all 3D variables for every single output variable.
-          !      Here it is done to have a more compact structure, but it could be separated 
-          !      in multiple if-blocks for every variable.
-				
-          ! (het): I've changed the hard coded '40' levels to nz levels given by the nml-file
+          PRINT *,'read 3D vars'
 
 ! (het) PH and PHB have "bottom_top_stag" levels, which are nz+1 
 !          ALLOCATE( ph_in( xfocus, yfocus, nz ), STAT=sts )
@@ -1264,9 +1275,6 @@ DO varnml = 9, 9, 1
           IF (.not. ALLOCATED(sinalpha_in)) ALLOCATE( sinalpha_in( xfocus, yfocus ), STAT=sts )
           IF (.not. ALLOCATED(cosalpha_in)) ALLOCATE( cosalpha_in( xfocus, yfocus ), STAT=sts )
 
-
-          print *,'read 3D vars'
-
           sts = NF90_INQ_VARID(ncidin, "P", pp_varid)
           sts = NF90_INQ_VARID(ncidin, "PB", pb_varid)
           sts = NF90_INQ_VARID(ncidin, "PH", ph_varid)
@@ -1282,7 +1290,7 @@ DO varnml = 9, 9, 1
           sts = NF90_INQ_VARID(ncidin, "SINALPHA", sinalpha_varid)
           sts = NF90_INQ_VARID(ncidin, "COSALPHA", cosalpha_varid)
 
-          sts = NF90_INQ_VARID(ncidin, "T2", t2_varid)
+          sts = NF90_INQ_VARID(ncidin, "T2", t2_varid)  ! ?????????????????????????????????????????????????????????????????????????????????????
 
           sts = NF90_GET_VAR(ncidin, t2_varid, t2_in(:,:), &
             START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
@@ -1328,16 +1336,23 @@ DO varnml = 9, 9, 1
 
           sts = NF90_GET_VAR(ncidin, cosalpha_varid, cosalpha_in(:,:), &
             START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-          
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! Total Cloud Fraction [%] 
+
         ELSE IF (var_cmip(ivar) == "clt") THEN
-! XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
           IF (.not. ALLOCATED(cldfra_in)) ALLOCATE( cldfra_in( xfocus, yfocus, nz ), STAT=sts )     
 
           sts = NF90_INQ_VARID(ncidin, "CLDFRA", varid)
  
           sts = NF90_GET_VAR(ncidin, varid, cldfra_in(:,:,:), &
             START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
-  
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! Precipitation [kg m-2 s-1]
+! EURO-CORDEX Jan/2018 meeting, conv+incl. snow graupel, hail, etc. ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
         ELSE IF (var_cmip(ivar) == "pr") THEN 
            
           !print*, 'read iflWRFin ' , iflWRFin
@@ -1393,10 +1408,12 @@ DO varnml = 9, 9, 1
  
             sts = NF90_CLOSE(ncidin0)
 
-
             iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
 
           END IF
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! Convective Precipitation [kg m-2 s-1]
 
         ELSE IF (var_cmip(ivar) == "prc") THEN
 
@@ -1438,6 +1455,9 @@ DO varnml = 9, 9, 1
 
           END IF
 
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! Snowfall Flux [kg m-2 s-1]
+
         ELSE IF (var_cmip(ivar) == "prsn") THEN
 
           IF (it /= InDimLenRec) THEN
@@ -1475,7 +1495,10 @@ DO varnml = 9, 9, 1
             iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
 
           END IF
-  
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! Surface Snow Melt [kg m-2 s-1]
+
         ELSE IF (var_cmip(ivar) == "snm") THEN
 
           IF (it /= InDimLenRec) THEN
@@ -1517,6 +1540,8 @@ DO varnml = 9, 9, 1
             
           END IF
 
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
         ELSE IF (var_cmip(ivar) == "evspsbl") THEN
 
           IF (it /= InDimLenRec) THEN
@@ -1556,6 +1581,7 @@ DO varnml = 9, 9, 1
 
           END IF 
 
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
         ELSE IF (var_cmip(ivar) == "evspsblpot") THEN
 
@@ -1597,6 +1623,7 @@ DO varnml = 9, 9, 1
 
           END IF 
 
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
         ELSE IF (var_cmip(ivar) == "mrros") THEN
 
@@ -1636,6 +1663,8 @@ DO varnml = 9, 9, 1
             iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
 
           END IF
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
         ELSE IF (var_cmip(ivar) == "mrro") THEN
 
@@ -1693,11 +1722,17 @@ DO varnml = 9, 9, 1
 
           END IF
 
-        ELSE IF ((var_cmip(ivar) == "rsds") .or. (var_cmip(ivar) == "rlds")  &
-             .or. (var_cmip(ivar) == "rsus") .or. (var_cmip(ivar) == "rlus") &
-             .or. (var_cmip(ivar) == "rlut")                                 &
-             .or. (var_cmip(ivar) == "rsdt") .or. (var_cmip(ivar) == "rsut") &
-             .or. (var_cmip(ivar) == "hfss") .or. (var_cmip(ivar) == "hfls")) THEN
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+        ELSE IF ((var_cmip(ivar) == "rsds") &
+            .or. (var_cmip(ivar) == "rlds") &
+            .or. (var_cmip(ivar) == "rsus") &
+            .or. (var_cmip(ivar) == "rlus") &
+            .or. (var_cmip(ivar) == "rlut") &
+            .or. (var_cmip(ivar) == "rsdt") &
+            .or. (var_cmip(ivar) == "rsut") &
+            .or. (var_cmip(ivar) == "hfss") &
+            .or. (var_cmip(ivar) == "hfls")) THEN
 
           IF (it /= InDimLenRec) THEN
 
@@ -1744,6 +1779,8 @@ DO varnml = 9, 9, 1
           ! long term simulations that their differences loose accuracy, use 
           ! instantaneous values instead and calculate means
 
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
         ELSE IF (var_cmip(ivar) == "mrso") THEN
 
           IF (it /= InDimLenRec) THEN
@@ -1784,6 +1821,8 @@ DO varnml = 9, 9, 1
 
           END IF
 
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
         ELSE IF (var_cmip(ivar) == "sfcWind") THEN
 
           IF (.not. ALLOCATED(u10_in)) ALLOCATE( u10_in ( xfocus, yfocus ), STAT=sts ) 
@@ -1798,6 +1837,8 @@ DO varnml = 9, 9, 1
 
           sts = NF90_GET_VAR(ncidin, v10_varid, v10_in(:,:), &
             START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
         ELSE IF ((var_cmip(ivar) == "uas") .or. (var_cmip(ivar) == "vas")) THEN
 
@@ -1845,7 +1886,6 @@ DO varnml = 9, 9, 1
 
 !-------------------------------------------------------------------------------
 ! processing
-
 !       ***psl***   ***vars on pressure levels***     
 
         IF ( (var_cmip(ivar) == "psl") .or. (height(ivar) == 850) &
@@ -2285,7 +2325,9 @@ DO varnml = 9, 9, 1
 
     InDateTimeYearPrev = 0
 
-  END DO !nvars - variable loop
+  END DO !ivar - variable loop
+  
+END DO !varnml - namelist loop
 
 END DO !ifrq - different temporal aggregations
 
@@ -2295,9 +2337,9 @@ END PROGRAM ppWRFCMIP
 
 !===============================================================================
 
-SUBROUTINE generateFilelist
+SUBROUTINE GenerateFilelist
 
-USE flhandling
+USE FilelistHandling
 
 IMPLICIT NONE
 
@@ -2335,14 +2377,14 @@ END DO
 
 CLOSE(2)
 
-END SUBROUTINE generateFilelist
+END SUBROUTINE GenerateFilelist
 
 !===============================================================================
 
 SUBROUTINE CreateRefTimeArray(dt)
 
 USE RefTimeVecs
-USE NameListHandling
+USE NamelistHandling
 
 IMPLICIT NONE
 
@@ -2354,11 +2396,11 @@ INTEGER :: tstotYYYY, tstotMM, tstotDD, tstotHH
 INTEGER :: tetotYYYY, tetotMM, tetotDD, tetotHH
 !!!INTEGER :: ndpy
 INTEGER, DIMENSION(12) :: ndpm
-IF (noCMOR) THEN
-  INTEGER :: ndOverall = 0 ! (n)umber of (d)ays
-ELSE
-  INTEGER :: ndOverall = 31 ! initialized with the 31 days of Dec 1949, this is DIRTY
-END IF
+!IF (noCMOR) THEN
+!  INTEGER :: ndOverall = 0 ! (n)umber of (d)ays
+!ELSE
+INTEGER :: ndOverall = 31 ! initialized with the 31 days of Dec 1949, this is DIRTY
+!END IF
 INTEGER :: ntspd ! number of timesteps per time-interval
 
 PRINT *, "CreateRefTimeArray"
@@ -2381,8 +2423,8 @@ READ( tstot, '(I4,1X,I2,1X,I2,1X,I2)' ) tstotYYYY, tstotMM, tstotDD, tstotHH
 READ( tetot, '(I4,1X,I2,1X,I2,1X,I2)' ) tetotYYYY, tetotMM, tetotDD, tetotHH
 
 ! get the overall number of days within the considered timespan
-!DO i=tstotYYYY+1,tetotYYYY,1
-DO i=tstotYYYY,tetotYYYY,1
+DO i=tstotYYYY+1,tetotYYYY,1
+!DO i=tstotYYYY,tetotYYYY,1
   ndOverall = ndOverall + CheckForLeapyear( i )
 END DO
 PRINT *, "number of days, overall = ", ndOverall

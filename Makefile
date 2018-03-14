@@ -65,4 +65,4 @@ clean:
 	rm -f *.o *.mod *.MOD *_genmod.f90 tmpfile* log
 
 veryclean: clean
-	rm -rf *~ $(PROGRAMS) /home/kgo/Documents/sandbox/cmorization_testing/CORDEX/EUR-44
+	rm -rf *~ $(PROGRAMS) /home/kgo/Documents/sandbox/cmorization_testing/CORDEX

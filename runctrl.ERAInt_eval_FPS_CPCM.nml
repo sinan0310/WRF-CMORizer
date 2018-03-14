@@ -12,7 +12,7 @@
    model_id = "MIUB-WRF361N",
    rcm_version_id = "v02",
    project_id = "CORDEX",
-   CORDEX_domain = "EUR-44",
+   CORDEX_domain = "EUR-11",
    product = "output",
    references = "http://www.fz-juelich.de",
 /
@@ -37,12 +37,14 @@
    yfocus = 412,
    tstot = '1949-12-01_00:00:00',
    tetot = '2100-12-31_21:00:00',
-   tsact = '2009-06-20_00:00:00',
-   teact = '2009-06-22_00:00:00',
 /
 &static_fields
    PnFnGeo = '/home/kgo/Documents/sandbox/cmorization_testing/geo_em.d01.nc'
 /
 &tool_config
-   noCMOR = .TRUE. ! if noCMOR=T
+   aggregation_yearly = .FALSE., ! default CMOR, 1hr 3hr data are stored in yearly files
+   aggregation_monthly = .FALSE.,
+   aggregation_individually = .TRUE.,
+   tsact = '2009-06-20_00:00:00', ! only needed if aggregation_individually = .TRUE.,
+   teact = '2009-06-22_00:00:00', ! see above
 /
