@@ -1,6 +1,6 @@
 &globalvars
    Conventions = "CF-1.4",
-   contact = "k.goergen@fz-juelich.de",
+   contact = "cordex@fz-juelich.de",
    experiment_id = "evaluation",
    experiment = "Evaluation run with re-analysis forcing",
    driving_experiment = "ECMWF-ERAINT_evaluation_r1i1p1",
