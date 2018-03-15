@@ -45,6 +45,6 @@
    aggregation_yearly = .F., ! default CMOR, 1hr 3hr data are stored in yearly files, data controls files created
    aggregation_monthly = .F., ! data controls files created
    aggregation_individually = .T.,
-   tsact = '1953-06-20_00:00:00', ! only needed if aggregation_individually = .TRUE.,
-   teact = '1953-06-26_00:00:00', ! see above
+   tsact = '2009-06-20_00:00:00', ! only needed if aggregation_individually = .TRUE.,
+   teact = '2009-06-26_00:00:00', ! see above
 /

@@ -494,11 +494,12 @@ REAL :: stat_mean, slope
 !-------------------------------------------------------------------------------
 ! general
 
-INTEGER :: i, sts, ivar, ifrq, ifl, it, counter, j, np, nl, ii, ivarnml, prevpass ! j
+INTEGER :: i, sts, ivar, ifrq, ifl, it, counter, j, np, nl, ii, ivarnml, prevpass
 !!!INTEGER :: AllocateStatus, DeAllocateStatus
 LOGICAL :: FileExists, newpass   !, comb_flags
 REAL :: cpuTs, cpuTe
-REAL(KIND=8), ALLOCATABLE :: ipos(:)
+!REAL(KIND=8), ALLOCATABLE :: ipos(:)
+INTEGER, ALLOCATABLE :: ipos(:)
 
 !-------------------------------------------------------------------------------
 ! system calls
@@ -590,18 +591,18 @@ sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "POLE_LON", GeoNPLon)
 
 sts = NF90_CLOSE(ncidin)
 
-PRINT *, "rlon = "
-PRINT *, SHAPE(GeoInRLon)
-PRINT *, GeoInRLon
+!PRINT *, "rlon = "
+!PRINT *, SHAPE(GeoInRLon)
+!PRINT *, GeoInRLon
 
-PRINT *, "rlat = "
-PRINT *, SHAPE(GeoInRLat)
-PRINT *, GeoInRLat
+!PRINT *, "rlat = "
+!PRINT *, SHAPE(GeoInRLat)
+!PRINT *, GeoInRLat
 
-PRINT *, "GeoInLonLat = "
-PRINT *, SHAPE(GeoInLonLat)
-PRINT *, "lon = ", GeoInLonLat(:,:,1)
-PRINT *, "lat = ", GeoInLonLat(:,:,2)
+!PRINT *, "GeoInLonLat = "
+!PRINT *, SHAPE(GeoInLonLat)
+!PRINT *, "lon = ", GeoInLonLat(:,:,1)
+!PRINT *, "lat = ", GeoInLonLat(:,:,2)
 
 !-------------------------------------------------------------------------------
 ! main loop over the different variables, namelist controlled
@@ -974,6 +975,7 @@ DO ifrq = 7, 7, 1
 ! InDateTimeYear(it), InDateTimeMonth(it), InDateTimeDay(it), InDateTimeHour(it), InDateTimeCombined(it)
 ! TimeRefArray, TimeRefArraySubset
 
+            ! index, y, m, d, h
             PRINT *, "size & shape of the TimRefArray = ", SIZE(TimeRefArray), &
               SHAPE(TimeRefArray)
   
@@ -995,17 +997,18 @@ DO ifrq = 7, 7, 1
             counter = 0
             IF (aggregation_individually) THEN
               PRINT *, "aggregation_individually"
+              PRINT *,tsactYear, teactYear, tsactMonth, teactMonth, tsactDay, teactDay, tsactHour, teactHour
               DO i = 1, SIZE(TimeRefArray, 1), 1
-                IF ( ( TimeRefArray(i,2) >= tsactYear ) .AND. & ! not working XXXXXXXXXXXXXXXXXXXX TODO
-                   ( TimeRefArray(i,2) <= teactYear ) ) THEN
-!                   ( TimeRefArray(i,3) >= tsactMonth ) .AND. &
- !                  ( TimeRefArray(i,3) <= teactMonth ) .AND. &
-  !                 ( TimeRefArray(i,4) >= tsactDay ) .AND. &
-   !                ( TimeRefArray(i,4) <= teactDay ) .AND. &
-    !               ( TimeRefArray(i,5) >= tsactHour ) .AND. &
-     !              ( TimeRefArray(i,5) <= teactHour ) ) THEN
+                IF ( ( TimeRefArray(i,2) >= tsactYear ) .AND. & 
+                     ( TimeRefArray(i,2) <= teactYear ) .AND. &
+                     ( TimeRefArray(i,3) >= tsactMonth ) .AND. &
+                     ( TimeRefArray(i,3) <= teactMonth ) .AND. &
+                     ( TimeRefArray(i,4) >= tsactDay ) .AND. &
+                     ( TimeRefArray(i,4) <= teactDay ) ) THEN !.AND. &
+!                   ( TimeRefArray(i,5) >= tsactHour ) .AND. &
+!                   ( TimeRefArray(i,5) <= teactHour ) ) THEN ! TODO, porblem if the end of also 00UTC > then there is no match with the hours
                   counter = counter + 1
-                  ipos = [ipos, TimeRefArray(i,1)] ! store the index, automatic reallocation
+                  ipos = [ipos, i] ! store the index, automatic reallocation
                 END IF
               END DO
             ELSE IF (aggregation_monthly) THEN
@@ -1014,23 +1017,23 @@ DO ifrq = 7, 7, 1
                 IF (( TimeRefArray(i,2) == InDateTimeYear(it)) .AND. &
                    ( TimeRefArray(i,3) == InDateTimeMonth(it))) THEN
                   counter = counter + 1
+                  ipos = [ipos, i]
                 END IF
               END DO
             ELSE ! default, CORDEX annual files
               PRINT *, "aggregation_annually"
+              PRINT *, InDateTimeYear(it)
               DO i = 1, SIZE(TimeRefArray, 1), 1
                 IF ( TimeRefArray(i,2) == InDateTimeYear(it)) THEN
                   counter = counter + 1
+                  ipos = [ipos, i]
                 END IF
               END DO
             END IF
             PRINT *, "timesteps in the time ref. subset = ", counter
-            PRINT *, TimeRefArray(ipos(:),1:5)
-            
+ 
             ALLOCATE( TimeRefArraySubset( counter, 5 ) ) ! index, y, m, d, h
-!            PRINT *, "ALLOCATE( TimeRefArraySubset( counter, 5 ) )"
             ALLOCATE( Time_bnds( 2, counter ) )
-!            PRINT *, "ALLOCATE( Time_bnds( 2, counter ) )", Time_bnds( 2, counter )
   
             ! find the matching elements of the respecitve year and copy them
 !            counter = 0
@@ -1045,8 +1048,11 @@ DO ifrq = 7, 7, 1
 !              END IF
 !            END DO
 
-
-  
+            DO i =1, counter, 1
+              j = ipos(i)
+              PRINT *, TimeRefArray(j, :)
+              TimeRefArraySubset(i,1:5) = TimeRefArray(j,1:5)
+            END DO
             !PRINT '(F9.3,1X,F5.0,1X,F3.0,1X,F3.0,1X,F3.0)', TRANSPOSE( TimeRefArraySubset(:,:) )
             
             DEALLOCATE(ipos)
@@ -1074,13 +1080,13 @@ STOP 777
   
               CALL SYSTEM("mkdir -p " // TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) )
   
-  !-------------------------------------------------------------------------------
-  ! the SYSTEM call is non-std Fortran95, works for gfortran (fct & subroutine) 
-  ! and ifort
-  ! comment lines in the NetCDF file global attribute definition
-  ! turn standard checking in Makefile off
-  ! trackingID = "xxxxxxxx-xxxx-Mxxx-Nxxx-xxxxxxxxxxxx"
-  ! creationDate = "YYYY-MM-DD-THH:MM:SSZ"
+!-------------------------------------------------------------------------------
+! the SYSTEM call is non-std Fortran95, works for gfortran (fct & subroutine) 
+! and ifort
+! comment lines in the NetCDF file global attribute definition
+! turn standard checking in Makefile off
+! trackingID = "xxxxxxxx-xxxx-Mxxx-Nxxx-xxxxxxxxxxxx"
+! creationDate = "YYYY-MM-DD-THH:MM:SSZ"
   
               CALL SYSTEM(cmdUUID)
               OPEN(1,FILE="tmpfileUUID",STATUS='old')
@@ -1245,7 +1251,8 @@ STOP 777
               IF ( cell_methods(ivar) == "mean" ) THEN
   
                 print*, 'cell_methods:', cell_methods(ivar)
-                sts = NF90_PUT_VAR(ncid, rec_varid, (TimeRefArraySubset(:,1)+(dtHours/2.)/24._8) )
+                !sts = NF90_PUT_VAR(ncid, rec_varid, (TimeRefArraySubset(:,1)+(dtHours/2.)/24._8) ) ! CHECK
+                sts = NF90_PUT_VAR(ncid, rec_varid, (TimeRefArraySubset(:,1)+(dtHours/2.)) )
   
                 print *, 'sts NF90_PUT_VAR time', sts
   
@@ -1256,7 +1263,7 @@ STOP 777
                 print*, 'TimeRefArraySubset(:,5)', TimeRefArraySubset(:,5)
   
                 Time_bnds(1,:) = TimeRefArraySubset(:,1)
-                Time_bnds(2,:) = TimeRefArraySubset(:,1)+dtHours/24._8
+                Time_bnds(2,:) = TimeRefArraySubset(:,1)+dtHours !/24._8 ! CHECK
   
                 PRINT*, 'recbnds_varid', recbnds_varid
   
