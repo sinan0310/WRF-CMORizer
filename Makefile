@@ -44,8 +44,10 @@
 FC = /usr/bin/gfortran
 FCFLAGS = -O3
 FCFLAGS += -Wall
-FCFLAGS += -ffree-line-length-none 
+#FCFLAGS += -std=f95
+FCFLAGS += -ffree-line-length-none
 FCFLAGS += -Wno-tabs
+#FCFLAGS += -fall-intrinsics
 FCFLAGS += -I/usr/include
 LDFLAGS = -L/usr/lib -lnetcdff -lnetcdf
 

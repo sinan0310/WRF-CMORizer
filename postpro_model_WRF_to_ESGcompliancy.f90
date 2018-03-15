@@ -359,11 +359,6 @@ USE netcdf
 
 IMPLICIT NONE
 
-PRINT *, "============================================================"
-PRINT *, "WRF RCM CMORizer"
-PRINT *, "============================================================"
-PRINT *, "*** VARAIBLE DEFINITION ***"
-
 !===============================================================================
 
 INTERFACE
@@ -432,7 +427,7 @@ CHARACTER (len = 19), DIMENSION(:), ALLOCATABLE :: InVarDataRec
 REAL, DIMENSION(:,:), ALLOCATABLE :: data_in, psl_in, t2_in, &
   cldfra_inv, u10_in, v10_in, cape, cin, lcl, lfc, prw, clwvi, clivi, &
   sinalpha_in, cosalpha_in
-REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: TimeRefArraySelYear, Time_bnds 
+REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: TimeRefArraySubset, Time_bnds 
 REAL, DIMENSION(:,:,:), ALLOCATABLE :: pp_in, pb_in, ph_in, phb_in, qv_in, qvs, &
   qc_in, qr_in, qi_in, qs_in,  theta_in, t_in, ph_fl, p_in, cldfra_in, &
   u_in, v_in, var3d_in, var_pl, potevp_in, &
@@ -503,6 +498,7 @@ INTEGER :: i, sts, ivar, ifrq, ifl, it, counter, j, np, nl, ii, ivarnml, prevpas
 !!!INTEGER :: AllocateStatus, DeAllocateStatus
 LOGICAL :: FileExists, newpass   !, comb_flags
 REAL :: cpuTs, cpuTe
+REAL(KIND=8), ALLOCATABLE :: ipos(:)
 
 !-------------------------------------------------------------------------------
 ! system calls
@@ -514,6 +510,10 @@ CHARACTER (len = *), PARAMETER :: cmdDate = "date -u +%Y-%m-%d-T%H:%M:%SZ > tmpf
 CHARACTER (len = 21) :: creationDate
 
 !===============================================================================
+
+PRINT *, "============================================================"
+PRINT *, "WRF RCM CMORizer"
+PRINT *, "============================================================"
 
 PRINT *, "============================================================"
 PRINT *, "*** CENTRAL NAMELIST READING ***"
@@ -551,7 +551,7 @@ CLOSE(2)
 ALLOCATE( data_in( xfocus, yfocus ), STAT=sts )
 IF (sts /= 0) STOP "*** Not enough memory on this device, stopping***"
 
-ALLOCATE( TimeRefArraySelYear(2,2) )
+ALLOCATE( TimeRefArraySubset(2,2) )
 ALLOCATE( Time_bnds(2,2) )
 
 !-------------------------------------------------------------------------------
@@ -773,7 +773,7 @@ DO ifrq = 7, 7, 1
       DO ifl = 1, SIZE(fl_wrfout), 1 ! operational: loop over complete filelist
 
         PRINT *,"============================================================"
-        PRINT *, "# files to process = ", ' SIZE(fl_wrfout', SIZE(fl_wrfout)
+        PRINT *, "# files to process = ", SIZE(fl_wrfout)
 
         ! measure CPU time for 1 variable and file, including all timesteps
         CALL CPU_TIME(cpuTs)
@@ -810,6 +810,13 @@ DO ifrq = 7, 7, 1
         ALLOCATE(InDateTimeMonth(InDimLenRec))
         ALLOCATE(InDateTimeDay(InDimLenRec))
         ALLOCATE(InDateTimeHour(InDimLenRec))
+        ALLOCATE(InDateTimeMinute(InDimLenRec))
+        ALLOCATE(InDateTimeSecond(InDimLenRec))
+        ALLOCATE(InDateTimeCombined(InDimLenRec))
+        
+        PRINT *, SIZE(InDateTimeYear)
+        PRINT *, SIZE(InVarDataRec)
+        PRINT *, InVarDataRec(:)
   
         ! this is the temporal coverage of the RCM input data of the specific
         ! file; split the date/time information string into several vectors
@@ -823,14 +830,15 @@ DO ifrq = 7, 7, 1
             InDateTimeMinute(i), &
             InDateTimeSecond(i)
             
-          InDateTimeCombined(i) = & ! 2009062008 use for later-on comparisons
+          ! 2009062008 use for later-on comparisons
+          InDateTimeCombined(i) = & 
             InDateTimeYear(i) * 1000000 + &
             InDateTimeMonth(i) * 10000 + &
             InDateTimeDay(i) * 100 + &
-            InDateTimeHour
+            InDateTimeHour(i)
             
         END DO
-  
+
 !-------------------------------------------------------------------------------
 ! loop over the individual timesteps in the individual RCM input file
 ! this may take some time but it is robust and also extremely large arrays
@@ -913,8 +921,8 @@ DO ifrq = 7, 7, 1
               !READ( InDateTimeYear(it), '(4A)' ) InDateTimeYearStr
               !READ( InDateTimeMonth(it), '(2A)' ) InDateTimeMonthStr
               WRITE (InDateTimeYearStr,'(I4.4)') InDateTimeYear(it)
-              WRITE (InDateTimeMonthStr,'(I2.2)') InDateTimeMonth(it)
-              WRITE (LastHourStr,'(I2.2)') 24.0-dtHours
+              WRITE (InDateTimeMonthStr,'(I2.2)') InDateTimeMonth(it)              
+              WRITE (LastHourStr,'(I2.2)') 23 ! TODO 24-dtHours type issues
               PRINT *, "strings for the output filename date/time information", &
                 InDateTimeYearStr, InDateTimeMonthStr, LastHourStr
               IF (aggregation_monthly) THEN
@@ -955,70 +963,95 @@ DO ifrq = 7, 7, 1
   
             PRINT *, "CORDEX compliant pathname, pn_out = ", TRIM(pn_out)
             PRINT *, "CORDEX compliant filename, fn_out = ", TRIM(fn_out)
-STOP "testing"
+
 !-------------------------------------------------------------------------------
-! extract the time info from the ref array which fits the respective file
+! extract the time info from the ref time array which matches the respective
+! file in which data is to be written and thereby matches also the input data
 ! ...as there is no "WHERE" the way I need it in F95, use loops
 ! this is needed whenever a new netcdf file is to be used and also if
 ! this file exists already
-  
-  !        READ( InVarDataRec(i), '(I4,1X,I2,1X,I2,1X,I2)' ) InDateTimeYear(it), InDateTimeMonth(it), InDateTimeDay(it), InDateTimeHour(it)
-  
-              PRINT *, "size & shape of the TimRefArray = ", SIZE(TimeRefArray), &
-              SHAPE(TimeRefArray)
+! still working on single variable 'ivar', file 'ifl', and timestep 'it'
+! InDateTimeYear(it), InDateTimeMonth(it), InDateTimeDay(it), InDateTimeHour(it), InDateTimeCombined(it)
+! TimeRefArray, TimeRefArraySubset
 
-  
             PRINT *, "size & shape of the TimRefArray = ", SIZE(TimeRefArray), &
-                      SHAPE(TimeRefArray)
+              SHAPE(TimeRefArray)
   
-            DEALLOCATE( TimeRefArraySelYear )
-            PRINT *, "DEALLOCATE( TimeRefArraySelYear )" 
+            DEALLOCATE( TimeRefArraySubset )
+!            PRINT *, "DEALLOCATE( TimeRefArraySubset )" 
   
             DEALLOCATE( Time_bnds )
-            PRINT *, "DEALLOCATE( Time_bnds )"
-            counter = 0
-            PRINT *,'SIZE(TimeRefArray, 1)', SIZE(TimeRefArray, 1)
-            PRINT *,'SHAPE(TimeRefArray, 1)',  SHAPE(TimeRefArray, 1)
-            PRINT *,'TimeRefArray(1,2)', TimeRefArray(1,2)
-            PRINT *,'TimeRefArray(744,2)', TimeRefArray(744,2)
-            PRINT *,'InDateTimeYear(it)', InDateTimeYear(it)
+!            PRINT *, "DEALLOCATE( Time_bnds )"
+            
+!            PRINT *,'SIZE(TimeRefArray, 1)', SIZE(TimeRefArray, 1)
+!            PRINT *,'SHAPE(TimeRefArray, 1)', SHAPE(TimeRefArray, 1)
+!            PRINT *,'TimeRefArray(1,2)', TimeRefArray(1,2)
+!            PRINT *,'TimeRefArray(744,2)', TimeRefArray(744,2)
+!            PRINT *,'InDateTimeYear(it)', InDateTimeYear(it)
+
             ! number of date/time steps in the ref array which match the current year
-            DO i = 1, SIZE(TimeRefArray, 1), 1
-              IF ( TimeRefArray(i,2) == InDateTimeYear(it)) THEN
-                counter = counter + 1
-              END IF
-            END DO
-            ! holds data of exactly 1 year
+            ! the TimeRefArray must span the requested subsets
+            ALLOCATE( ipos(0) )
+            counter = 0
+            IF (aggregation_individually) THEN
+              PRINT *, "aggregation_individually"
+              DO i = 1, SIZE(TimeRefArray, 1), 1
+                IF ( ( TimeRefArray(i,2) >= tsactYear ) .AND. & ! not working XXXXXXXXXXXXXXXXXXXX TODO
+                   ( TimeRefArray(i,2) <= teactYear ) ) THEN
+!                   ( TimeRefArray(i,3) >= tsactMonth ) .AND. &
+ !                  ( TimeRefArray(i,3) <= teactMonth ) .AND. &
+  !                 ( TimeRefArray(i,4) >= tsactDay ) .AND. &
+   !                ( TimeRefArray(i,4) <= teactDay ) .AND. &
+    !               ( TimeRefArray(i,5) >= tsactHour ) .AND. &
+     !              ( TimeRefArray(i,5) <= teactHour ) ) THEN
+                  counter = counter + 1
+                  ipos = [ipos, TimeRefArray(i,1)] ! store the index, automatic reallocation
+                END IF
+              END DO
+            ELSE IF (aggregation_monthly) THEN
+              PRINT *, "aggregation_monthly"
+              DO i = 1, SIZE(TimeRefArray, 1), 1
+                IF (( TimeRefArray(i,2) == InDateTimeYear(it)) .AND. &
+                   ( TimeRefArray(i,3) == InDateTimeMonth(it))) THEN
+                  counter = counter + 1
+                END IF
+              END DO
+            ELSE ! default, CORDEX annual files
+              PRINT *, "aggregation_annually"
+              DO i = 1, SIZE(TimeRefArray, 1), 1
+                IF ( TimeRefArray(i,2) == InDateTimeYear(it)) THEN
+                  counter = counter + 1
+                END IF
+              END DO
+            END IF
             PRINT *, "timesteps in the time ref. subset = ", counter
-            ALLOCATE( TimeRefArraySelYear( counter, 5 ) ) ! index, y, m, d, h
-            PRINT *, "ALLOCATE( TimeRefArraySelYear( counter, 5 ) )"
-  
-            !print *, "TimeRefArraySelYear( counter, 1 )", TimeRefArraySelYear( counter, 1 )
-            !print *, "TimeRefArraySelYear( counter, 2 )", TimeRefArraySelYear( counter, 2 )
-            !print *, "TimeRefArraySelYear( counter, 3 )", TimeRefArraySelYear( counter, 3 )
-            !print *, "TimeRefArraySelYear( counter, 4 )", TimeRefArraySelYear( counter, 4 )
-            !print *, "TimeRefArraySelYear( counter, 5 )", TimeRefArraySelYear( counter, 5 )
+            PRINT *, TimeRefArray(ipos(:),1:5)
+            
+            ALLOCATE( TimeRefArraySubset( counter, 5 ) ) ! index, y, m, d, h
+!            PRINT *, "ALLOCATE( TimeRefArraySubset( counter, 5 ) )"
+            ALLOCATE( Time_bnds( 2, counter ) )
+!            PRINT *, "ALLOCATE( Time_bnds( 2, counter ) )", Time_bnds( 2, counter )
   
             ! find the matching elements of the respecitve year and copy them
+!            counter = 0
+!            DO i = 1, SIZE(TimeRefArray, 1), 1
+!              IF ( TimeRefArray(i,2) == InDateTimeYear(it)) THEN
+!                counter = counter + 1
+!                TimeRefArraySubset(counter,1:5) = TimeRefArray(i,1:5)
+!                PRINT *, 'i', i
+!                PRINT *, 'counter', counter
+!                PRINT *, 'TimeRefArray(i,1:5)', TimeRefArray(i,1:5)
+!                PRINT *, 'TimeRefArraySubset(counter,1:5)', TimeRefArraySubset(counter,1:5)
+!              END IF
+!            END DO
+
+
   
-            ALLOCATE( Time_bnds( 2, counter ) )
-            PRINT *, "ALLOCATE( Time_bnds( 2, counter ) )", Time_bnds( 2, counter )
-  
-            counter = 0
-            DO i = 1, SIZE(TimeRefArray, 1), 1
-              IF ( TimeRefArray(i,2) == InDateTimeYear(it)) THEN
-                counter = counter + 1
-                TimeRefArraySelYear(counter,1:5) = TimeRefArray(i,1:5)
-                !print *, 'counter', counter
-                !print *, 'i', i
-                !print *, 'TimeRefArray(i,1:5)', TimeRefArray(i,1:5)
-                !print *, 'TimeRefArraySelYear(counter,1:5)', TimeRefArraySelYear(counter,1:5)
-                
-              END IF
-            END DO
-  
-            !PRINT '(F9.3,1X,F5.0,1X,F3.0,1X,F3.0,1X,F3.0)', TRANSPOSE( TimeRefArraySelYear(:,:) )
-  
+            !PRINT '(F9.3,1X,F5.0,1X,F3.0,1X,F3.0,1X,F3.0)', TRANSPOSE( TimeRefArraySubset(:,:) )
+            
+            DEALLOCATE(ipos)
+            
+STOP 777
 !-------------------------------------------------------------------------------
 ! check for existance of the new output file and generate this file if needed
 ! could exist already from a previous run of tool and due to multiple months in 
@@ -1080,8 +1113,7 @@ STOP "testing"
               sts = NF90_DEF_DIM(ncid, "height", 1, height_dimid)
               sts = NF90_DEF_DIM(ncid, "time", NF90_UNLIMITED, rec_dimid)
               sts = NF90_DEF_DIM(ncid, "nb2", 2, nb2_dimid)
-  
-  
+
               ! always included
               sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lon_varid)
               sts = nf90_put_att(ncid, lon_varid, "standard_name", "longitude")
@@ -1125,7 +1157,7 @@ STOP "testing"
                 sts = nf90_put_att(ncid, height_varid, "axis", "Z")
               END IF
   
-              !missing: lvl, depends
+              !missing: lvl, depends > TODO
   
               ! always included
               sts = nf90_def_var(ncid, "time", NF90_DOUBLE, (/ rec_dimid /), rec_varid)
@@ -1196,42 +1228,42 @@ STOP "testing"
   
               sts = NF90_ENDDEF(ncid)
   
-              ! add time, whole year from above
+              ! SUPER IMPORTANT: add time, whole year from above
               IF ( cell_methods(ivar) == "point" ) THEN
   
                 print*, 'cell_methods:', cell_methods(ivar)
-                sts = NF90_PUT_VAR(ncid, rec_varid, TimeRefArraySelYear(:,1) )
+                sts = NF90_PUT_VAR(ncid, rec_varid, TimeRefArraySubset(:,1) )
                
-                print*, 'TimeRefArraySelYear(:,1)', TimeRefArraySelYear(:,1)
-                print*, 'TimeRefArraySelYear(:,2)', TimeRefArraySelYear(:,2)
-                print*, 'TimeRefArraySelYear(:,3)', TimeRefArraySelYear(:,3)
-                print*, 'TimeRefArraySelYear(:,4)', TimeRefArraySelYear(:,4)
-                print*, 'TimeRefArraySelYear(:,5)', TimeRefArraySelYear(:,5)
+                print*, 'TimeRefArraySubset(:,1)', TimeRefArraySubset(:,1)
+                print*, 'TimeRefArraySubset(:,2)', TimeRefArraySubset(:,2)
+                print*, 'TimeRefArraySubset(:,3)', TimeRefArraySubset(:,3)
+                print*, 'TimeRefArraySubset(:,4)', TimeRefArraySubset(:,4)
+                print*, 'TimeRefArraySubset(:,5)', TimeRefArraySubset(:,5)
   
               END IF
   
               IF ( cell_methods(ivar) == "mean" ) THEN
   
                 print*, 'cell_methods:', cell_methods(ivar)
-                sts = NF90_PUT_VAR(ncid, rec_varid, (TimeRefArraySelYear(:,1)+(dtHours/2.)/24._8) )
+                sts = NF90_PUT_VAR(ncid, rec_varid, (TimeRefArraySubset(:,1)+(dtHours/2.)/24._8) )
   
                 print *, 'sts NF90_PUT_VAR time', sts
   
-                print*, 'TimeRefArraySelYear(:,1)', TimeRefArraySelYear(:,1)
-                print*, 'TimeRefArraySelYear(:,2)', TimeRefArraySelYear(:,2)
-                print*, 'TimeRefArraySelYear(:,3)', TimeRefArraySelYear(:,3)
-                print*, 'TimeRefArraySelYear(:,4)', TimeRefArraySelYear(:,4)
-                print*, 'TimeRefArraySelYear(:,5)', TimeRefArraySelYear(:,5)
+                print*, 'TimeRefArraySubset(:,1)', TimeRefArraySubset(:,1)
+                print*, 'TimeRefArraySubset(:,2)', TimeRefArraySubset(:,2)
+                print*, 'TimeRefArraySubset(:,3)', TimeRefArraySubset(:,3)
+                print*, 'TimeRefArraySubset(:,4)', TimeRefArraySubset(:,4)
+                print*, 'TimeRefArraySubset(:,5)', TimeRefArraySubset(:,5)
   
-                Time_bnds(1,:) = TimeRefArraySelYear(:,1)
-                Time_bnds(2,:) = TimeRefArraySelYear(:,1)+dtHours/24._8
+                Time_bnds(1,:) = TimeRefArraySubset(:,1)
+                Time_bnds(2,:) = TimeRefArraySubset(:,1)+dtHours/24._8
   
                 PRINT*, 'recbnds_varid', recbnds_varid
   
                 sts = NF90_PUT_VAR(ncid, recbnds_varid, Time_bnds(:,:), START = (/ 1, 1 /) , COUNT = (/ 2, SIZE(Time_bnds(1,:)) /) )
   
               END IF
-              !print *,'TimeRefArraySelYear(:,1)', TimeRefArraySelYear(:,1)
+              !print *,'TimeRefArraySubset(:,1)', TimeRefArraySubset(:,1)
                
               sts = NF90_PUT_VAR(ncid, lon_varid, GeoInLonLat(:,:,1), &
                 START = (/ 1, 1, 1 /), COUNT = (/ xfocus, yfocus, 1 /) )
@@ -1260,21 +1292,21 @@ STOP "testing"
   ! see whether the current time of the timestep fits anywhere in the
   
           PRINT *, "reading WRF sim. res. = ", TRIM(InVarDataRec(it)), it
-          !PRINT *, SIZE(TimeRefArraySelYear,1)
-          !PRINT *, SHAPE(TimeRefArraySelYear)
+          !PRINT *, SIZE(TimeRefArraySubset,1)
+          !PRINT *, SHAPE(TimeRefArraySubset)
           !PRINT *, "current transferred input time: ", InDateTimeYear(it), InDateTimeMonth(it), InDateTimeDay(it), InDateTimeHour(it)
   
           counter = 0
-          DO i = 1, SIZE(TimeRefArraySelYear,1),1 ! time content of the WRF file
+          DO i = 1, SIZE(TimeRefArraySubset,1),1 ! time content of the WRF file
   
             counter = counter + 1
   
-            !PRINT '(F9.3,1X,F5.0,1X,F3.0,1X,F3.0,1X,F3.0)',TimeRefArraySelYear(i,1),TimeRefArraySelYear(i,2),TimeRefArraySelYear(i,3),TimeRefArraySelYear(i,4),TimeRefArraySelYear(i,5)
+            !PRINT '(F9.3,1X,F5.0,1X,F3.0,1X,F3.0,1X,F3.0)',TimeRefArraySubset(i,1),TimeRefArraySubset(i,2),TimeRefArraySubset(i,3),TimeRefArraySubset(i,4),TimeRefArraySubset(i,5)
   
-            IF ( ( TimeRefArraySelYear(i,2) == InDateTimeYear(it)  ) .AND. &
-                 ( TimeRefArraySelYear(i,3) == InDateTimeMonth(it) ) .AND. &
-                 ( TimeRefArraySelYear(i,4) == InDateTimeDay(it)   ) .AND. &
-                 ( TimeRefArraySelYear(i,5) == InDateTimeHour(it)  ) ) THEN
+            IF ( ( TimeRefArraySubset(i,2) == InDateTimeYear(it)  ) .AND. &
+                 ( TimeRefArraySubset(i,3) == InDateTimeMonth(it) ) .AND. &
+                 ( TimeRefArraySubset(i,4) == InDateTimeDay(it)   ) .AND. &
+                 ( TimeRefArraySubset(i,5) == InDateTimeHour(it)  ) ) THEN
               EXIT
             END IF
   
@@ -2443,10 +2475,15 @@ STOP "testing"
 ! next WRF file may contain different number of output intervals
 
         DEALLOCATE(InVarDataRec)
+
         DEALLOCATE(InDateTimeYear)
         DEALLOCATE(InDateTimeMonth)
         DEALLOCATE(InDateTimeDay)
         DEALLOCATE(InDateTimeHour)
+        DEALLOCATE(InDateTimeMinute)
+        DEALLOCATE(InDateTimeSecond)
+
+        DEALLOCATE(InDateTimeCombined)
 
 !-------------------------------------------------------------------------------
 
@@ -2548,7 +2585,7 @@ CASE ('3hr')
   ntspd = 1.0 / dtDecDay ! (n)umber (t)ime(s)teps (p)er (d)ay
 CASE ('1hr')
   dtDecDay = 1.0 / 24.0_8
-  ntspd = 1.0 / dtDecDay
+  ntspd = 24.
 CASE DEFAULT
   PRINT *, "invalid time interval specified"
   STOP

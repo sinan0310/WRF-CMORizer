@@ -18,7 +18,7 @@
 /
 &globalvars_additional
    comment = "Simulations in cooperation with the Meteorological Institute (MIUB), Bonn University, Germany; this is the predecessor of the MIUB-WRF361N v03 historical, rcp45 and rcp85 runs",
-   institute_run_id = "rv031r01",
+   institute_run_id = "rv055r00",
 /
 &filesystem
    DirInputSimResRoot = "/home/kgo/Documents/sandbox/cmorization_testing/simres.INITWL"
@@ -42,9 +42,9 @@
    PnFnGeo = '/home/kgo/Documents/sandbox/cmorization_testing/geo_em.d01.nc'
 /
 &tool_config
-   aggregation_yearly = .FALSE., ! default CMOR, 1hr 3hr data are stored in yearly files
-   aggregation_monthly = .FALSE.,
-   aggregation_individually = .TRUE.,
-   tsact = '2009-06-20_00:00:00', ! only needed if aggregation_individually = .TRUE.,
-   teact = '2009-06-22_00:00:00', ! see above
+   aggregation_yearly = .F., ! default CMOR, 1hr 3hr data are stored in yearly files, data controls files created
+   aggregation_monthly = .F., ! data controls files created
+   aggregation_individually = .T.,
+   tsact = '1953-06-20_00:00:00', ! only needed if aggregation_individually = .TRUE.,
+   teact = '1953-06-26_00:00:00', ! see above
 /
