@@ -1,3 +1,9 @@
+
+! compression
+! mv filling
+! ncview testing
+
+
 !===============================================================================
 ! BOP
 !
@@ -6,24 +12,25 @@
 !   See license information at the end of the preamble.
 !
 ! VERSION:
-!   v2018-03-09
+!   v2018-03-16
 !   see git log for revision details and history
 !
 ! STATUS:
-!   under development -- not yet fit for purpose
+!   under development -- not yet fit for purpose, see ToDos below
+!
 !   currently merging forks from different contributors in this sequence
-!   autumn 2017, winter 2017/208, all a mess, git w/ multiple branches, nothing merged, nothign considered
+!   autumn 2017, winter 2017/2018, all a mess, git w/ multiple branches, nothing merged, no work form others considered
 !   take the latest heads from the branches and merge old-school locally without git
-!   - master is totally out of date > Knist+Truhetz+Kartsios worked from that version, nobody merged
-!   - start with Knist version as new base, trust him most
-!   - Truhetz ********* ongoing merge, 2 versions form heimo, merge first version first // fix and check and implement the time span ajustment
-!   - Kartsios
+!
+
+!
+
 !
 ! CURRENT / (FORMER) CODE OWNER(S):
 !   - Klaus GOERGEN | k.goergen@fz-juelich.de | KGo | FZJ/IBG-3
 !   - Sebastian KNIST | sebastian.knist@gmx.de | SKn | MIUB
 !   - Heimo TRUHETZ
-!   - Stergios KARTSIOS
+!   - Stergios KARTSIOS ~~~~
 !   Support and testing:
 !   - Kirsten WARRACH-SAGI
 !   - Eleni KATRAGKOU
@@ -42,28 +49,32 @@
 !   (1) [...]
 !   (2)
 !
-! CONVENTION:
-!   crpgl_ucc_v01
+! CODING STANDARD / CONVENTIONS:
+!   - http://fortranwiki.org/fortran/show/Style
+!   - http://jules-lsm.github.io/coding_standards/
+!   (F95 ISO FORTRAN except "SYSTEM" intrinsic function) -std=f95 raises errors
 !
 ! PRG.-LANGUAGE / ENVIRONMENT:
 !   - >=F95 compiler
-!   - used: gfortran 4.6.3, ifort 11.1
+!   - used for development and testing:
+!     * gfortran 7.2.0
+!     * ifort 11.1??????????
 !   - Linux/UNIX OS (-> system calls)
-!   - F95 ISO FORTRAN except "SYSTEM" intrinsic function
 !
 ! REQUIREMENTS:
 !   - FORTRAN95 compiler
 !   - NetCDF F90 library (http://www.unidata.ucar.edu/software/netcdf/)
 !     v4.x, used: v4.1.1 and 4.2.1.1 incl. HDF5 -> write NetCDF-4 classic model
 !     format
-!   - make *nix console application
-!   - date *nix console application
+!   - make *nix console application (https://www.gnu.org/software/make/)
+!   - date *nix console application (http://man7.org/linux/man-pages/man1/date.1.html)
 !   - uuidgen *nix console application (http://www.uuidgen.com/)
 !
 ! BUILDING:
-!   a) command line:
+!   Two options:
+!   a) command line
 !      gfortran -I/usr/include <prg>.f90 -L/usr/lib -lnetcdff -lnetcdf
-!   b) Makefile:
+!   b) Makefile (recommended)
 !      make
 !
 ! CATEGORY:
@@ -71,7 +82,9 @@
 !
 ! CALLING SEQUENCE:
 !   ./postpro_model_WRF_to_ESGcompliancy > log
-!
+! 2>&1 > output.log 
+!2>&1 | tee output.log
+! 
 ! GETTING STARTED:
 !   just specify 1 domain
 !   2 dirs
@@ -109,11 +122,26 @@
 ! no relationship between different domains during processing
 ! the highest temporal resolution possible is 1h
 ! xtrm is not yeat properly traeted > might be a different file list
-
+!
+! if a storage file exists and wrf data for a date/time is read a second time
+! the data alreday stored wil be overwritten; there is no warning
+! in case the input data is the same file, there is no damage done except for lost efficiency
+! if for some reason the data handling is upside down, this corrupts the data
+!
+! the tool is not takling care of the file handling of the wrf files before or after the processing
+!
+! 
 ! BUGS:
 !   - None.
 !
-! PROCEDURE / FEATURES:
+! PROCEDURE:
+! ifrq (loop over temporal output and aggregation frequencies) 
+!   ivarnml (namelists with different variable combinations)
+!     ivar (variables from the namelists)
+!       ifl (all files in the search path)
+!         it (all timesteps per file)
+!           **processing**
+! FEATURES:
 !   - The tool can produce all required variables, i.e. output NetCDF files as
 !     defined in the CORDEX archive design specifications as available in
 !     July/August 2013 in possibly one pass based on standard WRF simulation
@@ -175,6 +203,10 @@
 ! can be adjusted easily to other RCMs, the variable naming is following the namelist
 ! anything hardcoded is based on ESGF variables
 !
+!
+! maximum 13 variables per namlist is currently hardcoded
+! the numbers of vars per namelist is hardcoded
+! 
 !   - Currently only one input root directory is possible. If data is stored at
 !     different locations symbolic links might have to be done beforehand.
 !   - The static fields are treated independently by the tool.
@@ -190,6 +222,11 @@
 !
 ! EXAMPLE:
 !   ./postpro_model_WRF_to_ESGcompliancy > log
+!
+! nothing is hardcoded
+! tool can be scripted 
+! and nml files maybe modified using sed
+! embedding in workflows possible
 !
 ! MODIFICATION / REVISION HISTORY:
 !   See either git log or NEWS for details.
@@ -209,6 +246,28 @@
 !     to have all vars in that format and have more vertical levels
 !   - (OpenMP parallelism for the processing section), via pre-processor flags
 !   - (Parallel NetCDF I/O where possible), via pre-processor flags
+!
+! check netcdf4 classic model, not netcdf4
+!
+!   with month and annual: the files are generated according to the content of the data
+!   with individual the file is generated according to timespan and all wrf data which does not fit is left out
+!   also with individual the tool is run for one pass only, i.e.multiple wrf files may be read, but just one  output file is generated
+!
+!   walk through the code, contnuously building and checking using gfortran
+!   - [X] master is totally out of date > Knist+Truhetz+Kartsios worked from that version, nobody merged
+!   - [X] start with Knist version as new base, know his version most
+!   - [X] Truhetz merge file 1, start
+!   - [ ] fix (!) and check overall, document, and implement the flexible time span for the storage file ************
+!         > have some proper output which can be viewed with ncview also
+!   - [ ] Truhetz merge file 1, cont.
+!   - [ ] Truhetz merge file 2
+!   - [ ] process data for the ICTP paper
+!   - [ ] refine according to standard < see ESGF archive
+!   - [ ] Aris, temporal averaging
+!   - [ ] adjustment for different RCMs < see CCLM code from Heimo (not yet included in merge file 1 or 2)
+!
+!   !!!!!!! check the ESGF UCAN and CSC for reasonable additional global vars
+!
 !
 ! XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 !
@@ -494,9 +553,9 @@ REAL :: stat_mean, slope
 !-------------------------------------------------------------------------------
 ! general
 
-INTEGER :: i, sts, ivar, ifrq, ifl, it, counter, j, np, nl, ii, ivarnml, prevpass
+INTEGER :: i, sts, ivar, ifrq, ifl, it, counter, j, np, nl, ii, ivarnml, prevpass = 0
 !!!INTEGER :: AllocateStatus, DeAllocateStatus
-LOGICAL :: FileExists, newpass   !, comb_flags
+LOGICAL :: FileExists, newpass, time_match   !, comb_flags
 REAL :: cpuTs, cpuTe
 !REAL(KIND=8), ALLOCATABLE :: ipos(:)
 INTEGER, ALLOCATABLE :: ipos(:)
@@ -608,13 +667,13 @@ sts = NF90_CLOSE(ncidin)
 ! main loop over the different variables, namelist controlled
 
 ALLOCATE ( frequency(7) )
-frequency(1) = "3hr"
-frequency(2) = "6hr"
-frequency(3) = "day"
-frequency(4) = "mon"
-frequency(5) = "sem"
-frequency(6) = "fx"
-frequency(7) = "1hr"
+frequency(1) = "1hr"
+frequency(2) = "3hr"
+frequency(3) = "6hr"
+frequency(4) = "day"
+frequency(5) = "mon"
+frequency(6) = "sem"
+frequency(7) = "fx"
 
 ALLOCATE ( fnNMLvar(11) )
 fnNMLvar(1) = "runctrl.vars.nml"
@@ -629,33 +688,14 @@ fnNMLvar(9) = "runctrl.vars.nml_pr_tas_1hr_test"
 fnNMLvar(10) = "runctrl.vars.nml_weathertyping" ! new form HTr
 fnNMLvar(11) = "runctrl.vars.nml_psl" ! new from HTr
 
-!DO ifrq = 1, SIZE(frequency), 1 ! default > individual vars contain information on whether they are treated or not
-DO ifrq = 7, 7, 1
+! individual vars contain information on whether they are treated or not, i.e.
+! the tool may loop over all frequencies and the namelist controls what is to 
+! be done
+!DO ifrq = 1, SIZE(frequency), 1 
+DO ifrq = 1, 1, 1
 
   PRINT *, "============================================================"
   PRINT *, "freq = ", frequency(ifrq)
-
-!-------------------------------------------------------------------------------
-  
-  SELECT CASE (frequency(ifrq))
-  CASE ('1hr')
-    cell_methods(:) = cm1hr(:)
-    dtHours = 1.
-  CASE ('3hr')
-    cell_methods(:) = cm3hr(:)
-    dtHours = 3.
-  CASE ('6hr')
-    cell_methods(:) = cm6hr(:)
-  CASE ('day')
-    cell_methods(:) = cmDay(:)
-  CASE ('mon')
-    cell_methods(:) = cmMon(:)
-  CASE ('sem')
-    cell_methods(:) = cmSea(:)
-  CASE DEFAULT
-    PRINT *, "invalid time interval specified"
-    STOP
-  END SELECT
 
 !-------------------------------------------------------------------------------
 ! get a file list of all wrfout and wrfxtrm files
@@ -683,7 +723,9 @@ DO ifrq = 7, 7, 1
   
   DO i=1,SIZE(fl_wrfout(:)),1
     PRINT '(100A)', fl_wrfout(i)
-    PRINT '(100A)', fl_wrfxtr(i)
+  END DO
+  DO i=1,SIZE(fl_wrfxtr(:)),1
+      PRINT '(100A)', fl_wrfxtr(i)
   END DO
   
 !-------------------------------------------------------------------------------
@@ -718,6 +760,30 @@ DO ifrq = 7, 7, 1
     OPEN(2,FILE=TRIM(fnNMLvar(ivarnml)))
       READ(UNIT=2,NML=vars)
     CLOSE(2)
+
+    ! must have read the namelist already
+    ! get the call methods from the namelist, determines what has to be done with 
+    ! a variable 
+    SELECT CASE (frequency(ifrq))
+    CASE ('1hr')
+      cell_methods(:) = cm1hr(:)
+      dtHours = 1.
+    CASE ('3hr')
+      cell_methods(:) = cm3hr(:)
+      dtHours = 3.
+    CASE ('6hr')
+      cell_methods(:) = cm6hr(:)
+      dtHours = 6.
+    CASE ('day')
+      cell_methods(:) = cmDay(:)
+    CASE ('mon')
+      cell_methods(:) = cmMon(:)
+    CASE ('sem')
+      cell_methods(:) = cmSea(:)
+    CASE DEFAULT
+      PRINT *, "invalid time interval specified"
+      STOP
+    END SELECT
 
     ! nvar_nnml might be determined through the namelist itself
     SELECT CASE (TRIM(fnNMLvar(ivarnml)))
@@ -756,7 +822,7 @@ DO ifrq = 7, 7, 1
 ! better avoid this kind of filtering, but then create a new namelist
 
     !DO ivar = 1, nvar_nml, 1
-    DO ivar = 1, 2, 1 ! testing
+    DO ivar = 1, 1, 1 ! testing, tas only
   
       PRINT *,"============================================================"
       PRINT *, "*** ", TRIM(var_cmip(ivar)), " ***"
@@ -872,13 +938,19 @@ DO ifrq = 7, 7, 1
 ! in case of annual and monthly aggregation, the file content of the WRF inputs
 ! defines the storage files creation, in case of the individual definition, the
 ! opposite is true
-  
+
           IF (aggregation_individually) THEN ! first pass, always needed, file may exist or not
-            IF ( prevpass == 0 ) newpass = .TRUE. 
+            IF ( prevpass == 0 ) THEN
+              newpass = .TRUE.
+            END IF
           ELSE IF (aggregation_monthly) THEN
-            IF ( InDateTimeMonthPrev /= InDateTimeMonth(it) ) newpass = .TRUE.
+            IF ( InDateTimeMonthPrev /= InDateTimeMonth(it) ) THEN
+              newpass = .TRUE.
+            END IF
           ELSE ! default, if the current year is different than the one previous > create a new file
-            IF ( InDateTimeYearPrev /= InDateTimeYear(it) ) newpass = .TRUE.
+            IF ( InDateTimeYearPrev /= InDateTimeYear(it) ) THEN
+              newpass = .TRUE.
+            END IF
           END IF
           
           IF (newpass) THEN
@@ -886,6 +958,7 @@ DO ifrq = 7, 7, 1
             InDateTimeYearPrev = InDateTimeYear(it)
             InDateTimeMonthPrev = InDateTimeMonth(it)
             prevpass = 1
+            newpass = .FALSE.
   
             PRINT *, "start of processing or new year/month/timespan encountered"
 
@@ -980,10 +1053,7 @@ DO ifrq = 7, 7, 1
               SHAPE(TimeRefArray)
   
             DEALLOCATE( TimeRefArraySubset )
-!            PRINT *, "DEALLOCATE( TimeRefArraySubset )" 
-  
             DEALLOCATE( Time_bnds )
-!            PRINT *, "DEALLOCATE( Time_bnds )"
             
 !            PRINT *,'SIZE(TimeRefArray, 1)', SIZE(TimeRefArray, 1)
 !            PRINT *,'SHAPE(TimeRefArray, 1)', SHAPE(TimeRefArray, 1)
@@ -997,20 +1067,25 @@ DO ifrq = 7, 7, 1
             counter = 0
             IF (aggregation_individually) THEN
               PRINT *, "aggregation_individually"
-              PRINT *,tsactYear, teactYear, tsactMonth, teactMonth, tsactDay, teactDay, tsactHour, teactHour
+              PRINT *,tsactYear, tsactMonth, tsactDay, tsactHour, teactYear, teactMonth, teactDay, teactHour
               DO i = 1, SIZE(TimeRefArray, 1), 1
                 IF ( ( TimeRefArray(i,2) >= tsactYear ) .AND. & 
                      ( TimeRefArray(i,2) <= teactYear ) .AND. &
                      ( TimeRefArray(i,3) >= tsactMonth ) .AND. &
                      ( TimeRefArray(i,3) <= teactMonth ) .AND. &
                      ( TimeRefArray(i,4) >= tsactDay ) .AND. &
-                     ( TimeRefArray(i,4) <= teactDay ) ) THEN !.AND. &
+                     ( TimeRefArray(i,4) < teactDay ) ) THEN !.AND. &
 !                   ( TimeRefArray(i,5) >= tsactHour ) .AND. &
 !                   ( TimeRefArray(i,5) <= teactHour ) ) THEN ! TODO, porblem if the end of also 00UTC > then there is no match with the hours
                   counter = counter + 1
-                  ipos = [ipos, i] ! store the index, automatic reallocation
+                  ipos = [ipos, i] ! store the position, automatic reallocation
                 END IF
               END DO
+              ! TODO see the problem with the ending, there is one timestep too
+              ! few in the file if this is not done
+              ! artifically add a further postion at the very end
+              ipos = [ipos, ipos(counter)+1] 
+              counter = counter + 1
             ELSE IF (aggregation_monthly) THEN
               PRINT *, "aggregation_monthly"
               DO i = 1, SIZE(TimeRefArray, 1), 1
@@ -1020,6 +1095,8 @@ DO ifrq = 7, 7, 1
                   ipos = [ipos, i]
                 END IF
               END DO
+              !ipos = [ipos, ipos(counter)+1] 
+              !counter = counter + 1
             ELSE ! default, CORDEX annual files
               PRINT *, "aggregation_annually"
               PRINT *, InDateTimeYear(it)
@@ -1031,33 +1108,22 @@ DO ifrq = 7, 7, 1
               END DO
             END IF
             PRINT *, "timesteps in the time ref. subset = ", counter
- 
+
             ALLOCATE( TimeRefArraySubset( counter, 5 ) ) ! index, y, m, d, h
             ALLOCATE( Time_bnds( 2, counter ) )
-  
-            ! find the matching elements of the respecitve year and copy them
-!            counter = 0
-!            DO i = 1, SIZE(TimeRefArray, 1), 1
-!              IF ( TimeRefArray(i,2) == InDateTimeYear(it)) THEN
-!                counter = counter + 1
-!                TimeRefArraySubset(counter,1:5) = TimeRefArray(i,1:5)
-!                PRINT *, 'i', i
-!                PRINT *, 'counter', counter
-!                PRINT *, 'TimeRefArray(i,1:5)', TimeRefArray(i,1:5)
-!                PRINT *, 'TimeRefArraySubset(counter,1:5)', TimeRefArraySubset(counter,1:5)
-!              END IF
-!            END DO
 
+            ! the TimeRefArraySubset is the time vec of the newly created (or
+            ! already existing) file; it may be any size <= the original ref
+            ! time vec
             DO i =1, counter, 1
               j = ipos(i)
               PRINT *, TimeRefArray(j, :)
               TimeRefArraySubset(i,1:5) = TimeRefArray(j,1:5)
             END DO
             !PRINT '(F9.3,1X,F5.0,1X,F3.0,1X,F3.0,1X,F3.0)', TRANSPOSE( TimeRefArraySubset(:,:) )
-            
+
             DEALLOCATE(ipos)
-            
-STOP 777
+
 !-------------------------------------------------------------------------------
 ! check for existance of the new output file and generate this file if needed
 ! could exist already from a previous run of tool and due to multiple months in 
@@ -1067,15 +1133,17 @@ STOP 777
 ! could exist already from a previous run of tool and due to multiple
 ! months in a file (i.e. 1 WRF output file may cover several months)
 
+            PRINT *, "*** CHECK FOR FILE EXISTANCE / CREATE FILE WITH BASIC STRUCTURE + METADATA***"
+
             INQUIRE( FILE=TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) // "/" // TRIM(fn_out), EXIST=FileExists )
 
             IF ( FileExists ) THEN
   
-              PRINT *, "path and file exist, continue filling"
+              PRINT *, "++++ path and file exist, continue filling"
 
             ELSE
 
-              PRINT *, "path and file do not yet exist, create path and NetCDF file first"
+              PRINT *, "++++ path and file do not yet exist, create path and NetCDF file first"
               PRINT '(150A)', "path = ", TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out)
   
               CALL SYSTEM("mkdir -p " // TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) )
@@ -1100,25 +1168,28 @@ STOP 777
               CLOSE(1)
               PRINT *, "date externally generated creation date = ", creationDate
   
-  !-------------------------------------------------------------------------------
-  ! create NetCDF file
-  ! NF90_CLASSIC_MODEL = NetCDF4_classic
-  ! NF90_HDF5 = NetCDF4 based on HDF5
-  ! NF90_CLOBBER = old NetCDF
-  ! sts = NF90_CREATE(PathFileNameOutTEST, NF90_HDF5, ncid)
+!-------------------------------------------------------------------------------
+! create NetCDF file, must be NetCDF4 'classic data model' and compression level 1
+! NF90_CLASSIC_MODEL = NetCDF4_classic
+! NF90_HDF5 = NetCDF4 based on HDF5
+! NF90_CLOBBER = old NetCDF
   
               !comb_flags = IOR(NF90_HDF5, NF90_CLASSIC_MODEL)
               !https://www.unidata.ucar.edu/software/netcdf/docs/netcdf-f90/NF90_005fCREATE.html
               !sts = NF90_CREATE(TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) // "/" // TRIM(fn_out), IOR(NF90_HDF5, NF90_CLASSIC_MODEL), ncid)   !not sure whether this is the right data format spec. I guess it may be right using compression but not the other fancy stuff from NetCDF4
-              !sts = NF90_CREATE(TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) // "/" // TRIM(fn_out), IOR(NF90_NETCDF4, NF90_CLASSIC_MODEL), ncid)   !if anything, then use this here
-              sts = NF90_CREATE(TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) // "/" // TRIM(fn_out), NF90_NETCDF4, ncid)
-  
-              ! always included
+              sts = NF90_CREATE(TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) // "/" // TRIM(fn_out), IOR(NF90_NETCDF4, NF90_CLASSIC_MODEL), ncid)   !if anything, then use this here
+              !sts = NF90_CREATE(TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) // "/" // TRIM(fn_out), NF90_NETCDF4, ncid)
+
+              !-----------------------------------------------------------------
+
+              ! always included define dimensions
               sts = NF90_DEF_DIM(ncid, "rlon", xfocus, lon_dimid)
               sts = NF90_DEF_DIM(ncid, "rlat", yfocus, lat_dimid)
-              sts = NF90_DEF_DIM(ncid, "height", 1, height_dimid)
+              sts = NF90_DEF_DIM(ncid, "height", 1, height_dimid) ! ????????????????????????????????? CHECK
               sts = NF90_DEF_DIM(ncid, "time", NF90_UNLIMITED, rec_dimid)
-              sts = NF90_DEF_DIM(ncid, "nb2", 2, nb2_dimid)
+              sts = NF90_DEF_DIM(ncid, "nb2", 2, nb2_dimid) ! ??????????????????????? CHECK > only of time_bnds > only if cell_method mean
+
+              !-----------------------------------------------------------------
 
               ! always included
               sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lon_varid)
@@ -1146,8 +1217,7 @@ STOP 777
               sts = nf90_put_att(ncid, rlat_varid, "units", "degrees")
               sts = nf90_put_att(ncid, rlat_varid, "axis", "Y")
   
-              ! always included
-              ! restriction to one domain only
+              ! always included, restriction to one domain only
               sts = nf90_def_var(ncid, "rotated_pole", NF90_CHAR, rotated_pole_varid)
               sts = nf90_put_att(ncid, rotated_pole_varid, "grid_mapping_name", "rotated_latitude_longitude")
               sts = nf90_put_att(ncid, rotated_pole_varid, "grid_north_pole_latitude", GeoNPLat)
@@ -1169,26 +1239,23 @@ STOP 777
               sts = nf90_def_var(ncid, "time", NF90_DOUBLE, (/ rec_dimid /), rec_varid)
               sts = nf90_put_att(ncid, rec_varid, "standard_name", "time")
               sts = nf90_put_att(ncid, rec_varid, "long_name", "time")
-              !sts = nf90_put_att(ncid, rec_varid, "units", "days since 1949-12-01 00:00:00")
               sts = nf90_put_att(ncid, rec_varid, "units", "days since " // tstot(1:10) // " " // tstot(12:19))
               sts = nf90_put_att(ncid, rec_varid, "calendar", "standard")
               sts = nf90_put_att(ncid, rec_varid, "axis", "T")
   
-              ! for mean variables
+              ! for mean variables need the time bounds
               IF ( cell_methods(ivar) == "mean" ) THEN
                 sts = nf90_def_var(ncid, "time_bnds", NF90_DOUBLE, (/ nb2_dimid, rec_dimid /), recbnds_varid)
                 sts = nf90_put_att(ncid, recbnds_varid, "standard_name", "time_bnds")
                 sts = nf90_put_att(ncid, recbnds_varid, "long_name", "time_bnds")
-                !sts = nf90_put_att(ncid, recbnds_varid, "units", "days since 1949-12-01 00:00:00")
                 sts = nf90_put_att(ncid, recbnds_varid, "units", "days since " // tstot(1:10) // " " // tstot(12:19))
                 sts = nf90_put_att(ncid, recbnds_varid, "calendar", "standard")
                 sts = nf90_put_att(ncid, recbnds_varid, "axis", "T")
-              
-                print *,'rec_varid', rec_varid
-                print *,'recbnds_varid', recbnds_varid
               END IF
-  
-              ! always included
+
+              !-----------------------------------------------------------------
+              
+              ! always included -- global attributes
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "Conventions", Conventions)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "contact", contact)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "creation_date", creationDate)
@@ -1208,15 +1275,24 @@ STOP 777
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "product", product)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "references", references)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "tracking_id", trackingID)
+              
+              ! optional global variables
+              ! TODO: check UCAN and CSC for more reasonable variables
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "comment", comment)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "institute_run_id", institute_run_id)
-  
-              ! always included
+
+              !-----------------------------------------------------------------
+              ! always included -- definition of the individual variable
+              ! compression:
+              ! nc_def_var_deflate(int ncid, int varid, int shuffle, int deflate, int deflate_level);
+              ! PREFILLLING with mv????????????????
+              
               IF ( height(ivar) /= -999 ) THEN
                 sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, height_dimid, rec_dimid /), x_varid)
               ELSE
                 sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, rec_dimid /), x_varid)
               END IF
+              
               sts = nf90_put_att(ncid, x_varid, "standard_name", standard_name(ivar))
               sts = nf90_put_att(ncid, x_varid, "long_name", long_name(ivar))
               sts = nf90_put_att(ncid, x_varid, "units", units(ivar))
@@ -1226,77 +1302,88 @@ STOP 777
               sts = nf90_put_att(ncid, x_varid, "cell_methods", "time: "//TRIM(cell_methods(ivar)))
               sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat")
               sts = nf90_put_att(ncid, x_varid, "grid_mapping", "Rotated_Pole")
-  
-              IF ( height(ivar) == 850 ) THEN
-                sts = nf90_put_att(ncid, x_varid, "missing_value", 1.e20)
-                sts = nf90_put_att(ncid, x_varid, "_FillValue", 1.e20)
-              END IF
+              sts = nf90_put_att(ncid, x_varid, "missing_value", 1.e20)
+              sts = nf90_put_att(ncid, x_varid, "_FillValue", 1.e20)
+
+              !-----------------------------------------------------------------
   
               sts = NF90_ENDDEF(ncid)
+
+              !-----------------------------------------------------------------
   
               ! SUPER IMPORTANT: add time, whole year from above
               IF ( cell_methods(ivar) == "point" ) THEN
   
-                print*, 'cell_methods:', cell_methods(ivar)
+                PRINT *, 'cell_methods:', cell_methods(ivar)
+                PRINT *, TimeRefArraySubset(:,1)
                 sts = NF90_PUT_VAR(ncid, rec_varid, TimeRefArraySubset(:,1) )
                
-                print*, 'TimeRefArraySubset(:,1)', TimeRefArraySubset(:,1)
-                print*, 'TimeRefArraySubset(:,2)', TimeRefArraySubset(:,2)
-                print*, 'TimeRefArraySubset(:,3)', TimeRefArraySubset(:,3)
-                print*, 'TimeRefArraySubset(:,4)', TimeRefArraySubset(:,4)
-                print*, 'TimeRefArraySubset(:,5)', TimeRefArraySubset(:,5)
+!                print*, 'TimeRefArraySubset(:,1)', TimeRefArraySubset(:,1)
+!                print*, 'TimeRefArraySubset(:,2)', TimeRefArraySubset(:,2)
+!                print*, 'TimeRefArraySubset(:,3)', TimeRefArraySubset(:,3)
+!                print*, 'TimeRefArraySubset(:,4)', TimeRefArraySubset(:,4)
+!                print*, 'TimeRefArraySubset(:,5)', TimeRefArraySubset(:,5)
   
               END IF
   
               IF ( cell_methods(ivar) == "mean" ) THEN
   
-                print*, 'cell_methods:', cell_methods(ivar)
+                PRINT *, 'cell_methods:', cell_methods(ivar)
                 !sts = NF90_PUT_VAR(ncid, rec_varid, (TimeRefArraySubset(:,1)+(dtHours/2.)/24._8) ) ! CHECK
                 sts = NF90_PUT_VAR(ncid, rec_varid, (TimeRefArraySubset(:,1)+(dtHours/2.)) )
+                PRINT *, 'sts NF90_PUT_VAR time', sts
   
-                print *, 'sts NF90_PUT_VAR time', sts
-  
-                print*, 'TimeRefArraySubset(:,1)', TimeRefArraySubset(:,1)
-                print*, 'TimeRefArraySubset(:,2)', TimeRefArraySubset(:,2)
-                print*, 'TimeRefArraySubset(:,3)', TimeRefArraySubset(:,3)
-                print*, 'TimeRefArraySubset(:,4)', TimeRefArraySubset(:,4)
-                print*, 'TimeRefArraySubset(:,5)', TimeRefArraySubset(:,5)
+!                print*, 'TimeRefArraySubset(:,1)', TimeRefArraySubset(:,1)
+!                print*, 'TimeRefArraySubset(:,2)', TimeRefArraySubset(:,2)
+!                print*, 'TimeRefArraySubset(:,3)', TimeRefArraySubset(:,3)
+!                print*, 'TimeRefArraySubset(:,4)', TimeRefArraySubset(:,4)
+!                print*, 'TimeRefArraySubset(:,5)', TimeRefArraySubset(:,5)
   
                 Time_bnds(1,:) = TimeRefArraySubset(:,1)
                 Time_bnds(2,:) = TimeRefArraySubset(:,1)+dtHours !/24._8 ! CHECK
-  
-                PRINT*, 'recbnds_varid', recbnds_varid
-  
+                PRINT *, 'recbnds_varid', recbnds_varid
                 sts = NF90_PUT_VAR(ncid, recbnds_varid, Time_bnds(:,:), START = (/ 1, 1 /) , COUNT = (/ 2, SIZE(Time_bnds(1,:)) /) )
   
               END IF
               !print *,'TimeRefArraySubset(:,1)', TimeRefArraySubset(:,1)
-               
+
+              !-----------------------------------------------------------------
+              
+              ! add non-rotated coordinate fields
               sts = NF90_PUT_VAR(ncid, lon_varid, GeoInLonLat(:,:,1), &
                 START = (/ 1, 1, 1 /), COUNT = (/ xfocus, yfocus, 1 /) )
               sts = NF90_PUT_VAR(ncid, lat_varid, GeoInLonLat(:,:,2), &
                 START = (/ 1, 1, 2 /), COUNT = (/ xfocus, yfocus, 1 /) )
+
+              ! add rotated coordinates
               sts = NF90_PUT_VAR(ncid, rlon_varid, GeoInRLon )
               sts = NF90_PUT_VAR(ncid, rlat_varid, GeoInRLat )
-  
-              ! add time_bnds, calc here
-  
+    
               ! add height from NML
               IF ( height(ivar) /= -999 ) THEN
                 sts = NF90_PUT_VAR(ncid, height_varid, height(ivar) )
               END IF
+
+              !-----------------------------------------------------------------
   
               sts = NF90_CLOSE(ncid)
+
+              !-----------------------------------------------------------------
   
             END IF ! file exists y/n
+
+!-------------------------------------------------------------------------------
   
-          END IF ! checking with previous year or month
-  
-  !-------------------------------------------------------------------------------
-  ! match timestep of WRFin with the subset of the ref time vec which belong to
-  ! the NetCDF file of the year currently open to receive data
-  ! NOT SURE WHETHER THIS IS NEEDED AT ALL, THIS IS THE WRONG DIRECTION ???
-  ! see whether the current time of the timestep fits anywhere in the
+          ELSE ! checking whether this is the first pass or previously run
+
+            PRINT *, "this is a subsequent pass, just reading and procecessing stuff"
+
+          END IF
+
+!-------------------------------------------------------------------------------
+! match timestep 'it' of WRFin with the subset of the ref time vec which belongs
+! to the NetCDF file of the year/month/arbitrary timespan currently open to
+! receive data
   
           PRINT *, "reading WRF sim. res. = ", TRIM(InVarDataRec(it)), it
           !PRINT *, SIZE(TimeRefArraySubset,1)
@@ -1304,6 +1391,7 @@ STOP 777
           !PRINT *, "current transferred input time: ", InDateTimeYear(it), InDateTimeMonth(it), InDateTimeDay(it), InDateTimeHour(it)
   
           counter = 0
+          time_match = .FALSE.
           DO i = 1, SIZE(TimeRefArraySubset,1),1 ! time content of the WRF file
   
             counter = counter + 1
@@ -1314,24 +1402,37 @@ STOP 777
                  ( TimeRefArraySubset(i,3) == InDateTimeMonth(it) ) .AND. &
                  ( TimeRefArraySubset(i,4) == InDateTimeDay(it)   ) .AND. &
                  ( TimeRefArraySubset(i,5) == InDateTimeHour(it)  ) ) THEN
+              time_match = .TRUE.
               EXIT
             END IF
   
           END DO
+
+          ! in case the aggregation_individually is set and the desired file
+          ! temporal coverage is after the beginning or before the end
+          ! of the timespans covered by the WRF input file(s) this functionality
+          ! prevents that the last counter value from above is just written to
+          ! the file, even without a match; if there is no match then just go to
+          ! the next 'it'
+          ! with the annual and monthly this is not possible as with every 'it'
+          ! there is a check whether a storage file exists
+          IF (time_match) THEN
   
           PRINT *, "index where in the NC file the WRF data is sorted in = ", &
             counter
   
-  !-------------------------------------------------------------------------------
-  ! read orig WRF outpouts
-  ! there is always a corresponding time-slot in the NC file
-  ! extracted time from above
-  ! "it" controls it all: timestep in the individual WRF file
-  ! there is only one variable at a time under processing
+!-------------------------------------------------------------------------------
+! read orig WRF outpouts
+! there is always a corresponding time-slot in the NC file
+! extracted time from above
+! "it" controls it all: timestep in the individual WRF file
+! there is only one variable at a time under processing
+
+          PRINT *, "*** SOME VARS ALWAYS HAVE TO BE READ: T00, P00 ***"
   
           sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin)
   
-  ! HTr: read actual value of base state temperature T00
+          ! HTr: read actual value of base state temperature T00
           sts = NF90_INQ_VARID(ncidin, "T00", t00_varid)
           IF ( sts /= NF90_NOERR ) THEN
             T00(1) = 300.0
@@ -1340,7 +1441,7 @@ STOP 777
               START = (/ it /), COUNT = (/ 1 /) )
           END IF
   
-  ! HTr: use actual value of base state pressure P00, if possible
+          ! HTr: use actual value of base state pressure P00, if possible
           sts = NF90_INQ_VARID(ncidin, "P00", p00_varid)
           IF ( sts /= NF90_NOERR ) THEN
             P00(1) = 100000.
@@ -1348,12 +1449,16 @@ STOP 777
             sts = NF90_GET_VAR(ncidin, p00_varid, P00(:), &
               START = (/ it /), COUNT = (/ 1 /) )
           END IF
-  
-  !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  ! SKn: It is not necessary to read all 3D variables for every single output variable.
-  !      Here it is done to have a more compact structure, but it could be separated 
-  !      in multiple if-blocks for every variable.
-  ! HTr: I've changed the hard coded '40' levels to nz levels given by the nml-file
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! SKn: It is not necessary to read all 3D variables for every single output variable.
+!      Here it is done to have a more compact structure, but it could be separated 
+!      in multiple if-blocks for every variable.
+! HTr: I've changed the hard coded '40' levels to nz levels given by the nml-file
+
+          PRINT *, "*** READING OF VARIABLES ***"
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   
           IF ( (var_cmip(ivar) == "psl") &
                 .or. (height(ivar) == 850) &
@@ -1367,11 +1472,11 @@ STOP 777
   
             PRINT *,'read 3D vars'
   
-  ! (het) PH and PHB have "bottom_top_stag" levels, which are nz+1 
-  !          ALLOCATE( ph_in( xfocus, yfocus, nz ), STAT=sts )
-  !          ALLOCATE( phb_in( xfocus, yfocus, nz ), STAT=sts )
-  ! (het) IF (.not. ALLOCATED) commands added, in order to avoid memory problems 
-  !       when long-term simulations are converted to ESGF format
+            ! (het) PH and PHB have "bottom_top_stag" levels, which are nz+1 
+            ! ALLOCATE( ph_in( xfocus, yfocus, nz ), STAT=sts )
+            ! ALLOCATE( phb_in( xfocus, yfocus, nz ), STAT=sts )
+            ! (het) IF (.not. ALLOCATED) commands added, in order to avoid memory problems 
+            ! when long-term simulations are converted to ESGF format
             IF (.not. ALLOCATED(pp_in)) ALLOCATE( pp_in( xfocus, yfocus, nz ), STAT=sts )
             IF (.not. ALLOCATED(pb_in)) ALLOCATE( pb_in( xfocus, yfocus, nz ), STAT=sts )
             IF (.not. ALLOCATED(ph_in)) ALLOCATE( ph_in( xfocus, yfocus, nz+1 ), STAT=sts )
@@ -1550,8 +1655,8 @@ STOP 777
   
             END IF
   
-  !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  ! Convective Precipitation [kg m-2 s-1]
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! Convective Precipitation [kg m-2 s-1]
   
           ELSE IF (var_cmip(ivar) == "prc") THEN
   
@@ -2002,11 +2107,13 @@ STOP 777
             sts = NF90_GET_VAR(ncidin, cosalpha_varid, cosalpha_in(:,:), &
               START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )          
   
-  !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  ! this is all variables which are solely based on the namelist for whom no 
-  ! processing is needed whatsoever
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! this is all variables which are solely based on the namelist for whom no 
+! processing is needed whatsoever
   
           ELSE
+
+            PRINT *, "variable to read/write (no additional processing) = ", var_wrf(ivar)
   
             sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
   
@@ -2016,28 +2123,32 @@ STOP 777
           END IF
   
           sts = NF90_CLOSE(ncidin)
+
+!-------------------------------------------------------------------------------
+! some analysis of the data
   
-  !-------------------------------------------------------------------------------
-  ! some analysis of the data
-  
+          PRINT *, "*** STATISTICS BEFORE PROCESSING OF VARIABLES ***"
+
           print *, "shape of array" , SHAPE(data_in)
           print *, "size of array" , SIZE(data_in)
-  
-  !       stat_mean = SUM(data_in(:,:,5))/(MAX(1,SIZE(data_in(:,:,5))))
-  !       PRINT *, stat_mean
           stat_mean = SUM(data_in(:,:))/SIZE(data_in(:,:))
           PRINT *, "mean of array", stat_mean
+
+!-------------------------------------------------------------------------------
+! this is where the real processing takes place 
+! if nothing is to be calculated or scaled, etc., then the variables are just
+! passed on to the write section in data_in 
   
-  !-------------------------------------------------------------------------------
-  ! this is where the real processing takes place 
-  ! if nothing is to be calculated or scaled, etc., then the variables are just
-  ! passed on to the write section in data_in 
+          PRINT *, "*** PROCESSING OF VARIABLES ***"
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! ***psl***   ***vars on pressure levels***     
   
-  !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  !       ***psl***   ***vars on pressure levels***     
-  
-          IF ( (var_cmip(ivar) == "psl") .or. (height(ivar) == 850) &
-                .or.(height(ivar) == 500) .or. (height(ivar) == 200)) THEN
+          IF ( (var_cmip(ivar) == "psl") .OR. &
+               (height(ivar) == 850) .OR. &
+               (height(ivar) == 700) .OR. &
+               (height(ivar) == 500) .OR. &
+               (height(ivar) == 200) ) THEN
   
             DO nl = 1,40-1
               ph_fl(:,:,nl) = ((ph_in(:,:,nl)+phb_in(:,:,nl))+(ph_in(:,:,nl+1)+phb_in(:,:,nl+1)))/2./9.81
@@ -2110,9 +2221,9 @@ STOP 777
             END IF 
   
           END IF
-  
-  !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  !       ***prw, clwvi, clivi***
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! ***prw, clwvi, clivi***
   
           IF ( (var_cmip(ivar) == "prw") ) THEN     
   
@@ -2419,61 +2530,55 @@ STOP 777
             data_in(:,:) = v10_in(:,:)*cosalpha_in(:,:) + u10_in(:,:)*sinalpha_in(:,:) ! rotate to earth grid
   
           END IF
+
+!-------------------------------------------------------------------------------
+! write data to NetCDF file
   
-  !-------------------------------------------------------------------------------
-  ! write data to NetCDF file
-  
-          PRINT *, 'write data to NetCDF file'
+          PRINT *, '*** WRITE DATA TO NETCDF ***'
           PRINT *, 'fn_out: ', fn_out
   
           sts = NF90_OPEN( TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) // "/" // TRIM(fn_out), NF90_WRITE, ncid )
-  
-          IF (sts/=0) EXIT ! file must exist after checkling from above
-  
+
+          ! file must exist, but still test
+          IF (sts/=0) EXIT
+          
           PRINT *, 'NF90_OPEN',  sts
           sts = NF90_INQ_VARID(ncid, TRIM(var_cmip(ivar)), x_varid)
   
-          PRINT *, 'NF90_INQ_VARID', ncid
-          PRINT *, 'var_cmip(ivar)', var_cmip(ivar)
-          PRINT *, 'x_varid', x_varid
-          PRINT *, 'counter', counter
-          PRINT *, 'xfocus', xfocus
-          PRINT *, 'yfocus', yfocus
-  
-          IF ( height(ivar) /= -999 ) THEN
-            sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
-              START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1, 1 /) )
-          ELSE
-            sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
-              START=(/ 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1 /) )
-          END IF
-  
-          print *, 'NF90_PUT_VAR', sts
-          print *, 'ncid', ncid
-          print *, 'x_varid', x_varid
-          print *, 'some exmple output in the middle of the domain', data_in(xfocus/2:(xfocus/2+2),yfocus/2:(yfocus/2+2))
-  
+            PRINT *, 'NF90_INQ_VARID', ncid
+            PRINT *, 'var_cmip(ivar)', var_cmip(ivar)
+            PRINT *, 'x_varid', x_varid
+            PRINT *, 'counter/offset', counter
+            PRINT *, 'xfocus', xfocus
+            PRINT *, 'yfocus', yfocus
+    
+            IF ( height(ivar) /= -999 ) THEN
+              sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
+                START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1, 1 /) )
+            ELSE
+              sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
+                START=(/ 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1 /) )
+            END IF
+    
+            PRINT *, 'NF90_PUT_VAR', sts
+            PRINT *, 'ncid', ncid
+            PRINT *, 'x_varid', x_varid
+            PRINT *, 'some exmple output in the middle of the domain', data_in(xfocus/2:(xfocus/2+2),yfocus/2:(yfocus/2+2))
+
           sts = NF90_CLOSE(ncid)
-  
-          print *, pn_out//"/"//fn_out
-          print *, TRIM(var_cmip(ivar)), xfocus, yfocus, counter, ncid, x_varid
-  
-  !?????????????????????   
-          ! xxxxxxxxxxx this is new by HTr > is there a conflict of the HTr implementation
-          ! xxxxxxxxxxx the way SKn is doing this all?
-          ! (het): stop here, if end of the period to be extracted is reached
-          ! this also guarantees a normal termination at this point
-  !        print *, 'check date: '
-  !        print *, InDateTimeYear(it), InDateTimeMonth(it), InDateTimeDay(it), InDateTimeHour(it)
-  !        print *, NINT(TimeRefArray(SIZE(TimeRefArray, 1) ,2:5))
-          
-  !        IF ( ( InDateTimeYear(it)  == NINT(TimeRefArray(SIZE(TimeRefArray, 1) ,2)) ) .AND. &
-  !          ( InDateTimeMonth(it) == NINT(TimeRefArray(SIZE(TimeRefArray, 1) ,3)) ) .AND. &
-  !          ( InDateTimeDay(it)   == NINT(TimeRefArray(SIZE(TimeRefArray, 1) ,4)) ) .AND. &
-  !          ( InDateTimeHour(it)  == NINT(TimeRefArray(SIZE(TimeRefArray, 1) ,5)) ) ) THEN
-  !          EXIT
-  !        ENDIF
-  
+          PRINT *, 'NF90_CLOSE',  sts
+            
+          PRINT *, TRIM(pn_out) // "/" // TRIM(fn_out)
+          PRINT *, TRIM(var_cmip(ivar)), xfocus, yfocus, counter, ncid, x_varid
+
+!-------------------------------------------------------------------------------
+
+          ELSE
+
+            PRINT *, "no time match", time_match
+
+          END IF
+
 !-------------------------------------------------------------------------------
   
         END DO ! it i-time WRF indiv file loop
@@ -2503,7 +2608,7 @@ STOP 777
       ! must be reset, when moving to new var, always check file existance
       InDateTimeYearPrev = 0
       InDateTimeMonthPrev = 0
-      prevpass = 0
+      prevpass = 0 ! ?????????????????????? one level inside????
 
     END DO ! ivar - variable loop
 

@@ -42,7 +42,7 @@
 
 # Ubuntu Desktop
 FC = /usr/bin/gfortran
-FCFLAGS = -O3
+FCFLAGS = -O2
 FCFLAGS += -Wall
 #FCFLAGS += -std=f95
 FCFLAGS += -ffree-line-length-none
