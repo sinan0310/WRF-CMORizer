@@ -1,67 +1,78 @@
-
-! Version 3.1, 3 March 2014
-! http://cordex.dmi.dk/joomla/images/CORDEX/cordex_archive_specifications.pdf
-
-              ! https://www.unidata.ucar.edu/software/netcdf/conventions.html
-              ! "recommended standard" is CF
-
-!!! veryclean in Makefile: remove that, killing the data also
-
 !===============================================================================
 ! BOP
+!
+! ****************************************************************************
+! ***                                                                      ***
+! ***      SEE THE LICENSE INFORMATION AT THE END OF THE PREAMBLE          ***
+! ***                                                                      ***  
+! ***       THIS PREAMBLE THE ONLY DOCUMENTATION OF THIS PROGRAM           ***
+! ***     BEFORE ATTEMPTING TO USE THIS PROGRAM, READ THIS PREAMBLE        ***
+! ***                                                                      ***
+! ****************************************************************************
 !
 ! NAME:
 !   WRF_CMORizer.f90
 !
-!   SEE LICENSE INFORMATION AT THE END OF THE PREAMBLE
-!
 ! VERSION:
-!   vX.X as of 2018-03-16
-!   see git log for revision details and history
+!   vX.X as of 2018-03-17
+!   see git tags and log for revision details, history, and versions
 !
 ! STATUS:
 !   under development -- not yet fit for purpose, see ToDos below
 !
-!   currently merging forks from different contributors in this sequence
-!   autumn 2017, winter 2017/2018, all a mess, git w/ multiple branches, nothing merged, no work form others considered
-!   take the latest heads from the branches and merge old-school locally without git
+! CURRENT CODE MAINTAINER:
+!   - Klaus GOERGEN | k.goergen@fz-juelich.de | KGo | FZJ/IBG-3
 !
-! if the storage file is created but the input data does not cover th ecomplete file
-! once the first data have been written, the unlimited diemnsion is expanded and the empty fields / timesteps are filled with missing values
-!
-
-!
-! CURRENT CODE OWNERS:
-! - Klaus GOERGEN | k.goergen@fz-juelich.de | KGo | FZJ/IBG-3
+! FORMER CODE CONTRIBUTERS:
 !   - Sebastian KNIST | sebastian.knist@gmx.de | SKn | MIUB
-!   - Heimo TRUHETZ
-!   - Stergios KARTSIOS ~~~~
-!   Support and testing:
+!   - Heimo TRUHETZ | heimo.truhetz@uni-graz.at | HTr | WEGC
+!   - Aristotelis LAZARIDIS | lazarida@math.auth.gr | ALa | AUTH
+! 
+! SUPPORT AND TESTING:
 !   - Kirsten WARRACH-SAGI
 !   - Eleni KATRAGKOU
 !
 ! PURPOSE / DESCRIPTION:
-!   This application postprocesses (standard) raw WRF simulation results into
-!   CORDEX (and CMIP5) compliant netCDF files in a dedicated directory tree.
-!   See the references below for the specifications used for this program.
-!   The code can easily be adjusted in case specifications change. The post-
-!   processing is necessary in order to being able to upload, stage and
-!   distribute RCM simulation results via the Earth System Grid infrastructure
-!   adopted by CORDEX from CMIP5. Files which do not adhere to this are
-!   rejected.
-!   Other, similar tool-sets are e.g.: (i) CMOR, (ii) XXXX wrf spain [...]
-!   This tool has be seen in conjunction with 
-!   (1) [...]
-!   (2)
+!   Fortran 95 postprocessing tool to convert raw, standard WRF regional 
+!   climate model output (http://www2.mmm.ucar.edu/wrf/users/) to a CORDEX 
+!   (http://cordex.org) experiment protocol compliant data set ("CMORization") 
+!   (http://cordex.org/experiment-guidelines/experiment-protocol-rcms/) for 
+!   exchange via ESGF data nodes (https://www.earthsystemcog.org).
+!   The tool implements the CORDEX archive specification Version 3.1, as of 
+!   3 March 2014 [1]. The code can easily be adjusted in case specifications 
+!   change. The post-processing is necessary in order to being able to upload, 
+!   stage and distribute RCM simulation results via the Earth System Grid 
+!   infrastructure adopted by CORDEX from CMIP5. Files which do not adhere to 
+!   this are rejected. For details of the features implemented for the CORDEX 
+!   protocol see [1].
+!   Furthermore the tool can be used to systematically reduce model output data
+!   volume after a simulation; CMORized data are also used for efficient data
+!   exchange between modelling groups as part of joint analysis; makes also a 
+!   very good archive format. To reduce storage and archive data volume from
+!   WRF simulaitons, the tool is intended to completely replace the raw output,
+!   therefore many more than the required variables and diagnostics have been
+!   implemented.
+!
+! MOTIVATION:
+!   Developmnet started during Summer 2013 by K. GOERGEN, as it becamse obvious
+!   that the combination of shell scripting, cdo and nco made the CMORization
+!   of WRF EUR-11 evaluation and projection simulaitons very tedious; it would
+!   mean lots of scripting and lots of I/O. The idea of the F95 tool is to be 
+!   simple and by doing a single pass, with as few I/O operations as possible
+!   and a low memory footprint, and produce fully compliant data.  
+!   
+! DISSEMINATION:
+!   https://www.github.com/kgoergen 
 !
 ! CODING STANDARD / CONVENTIONS:
 !   - http://fortranwiki.org/fortran/show/Style
 !   - http://jules-lsm.github.io/coding_standards/
-!   (F95 ISO FORTRAN except "SYSTEM" intrinsic function) -std=f95 raises errors
+!   - Tries to be F95 ISO FORTRAN but has "SYSTEM" intrinsic function) 
+!   - also -std=f95 raises errors
 !
 ! PRG.-LANGUAGE / ENVIRONMENT:
 !   - >=F95 compiler
-!   - used for development and testing:
+!   - Used for development and testing:
 !     * gfortran 7.2.0
 !     * ifort 11.1??????????
 !   - Linux/UNIX OS (-> system calls)
@@ -71,13 +82,13 @@
 !   - netCDF F90 library (http://www.unidata.ucar.edu/software/netcdf/)
 !     v4.x, used: v4.1.1 and 4.2.1.1 incl. HDF5 -> write netCDF-4 classic model
 !     format
-!   - make *nix console application (https://www.gnu.org/software/make/)
-!   - date *nix console application (http://man7.org/linux/man-pages/man1/date.1.html)
+!   - make (https://www.gnu.org/software/make/)
+!   - date (http://man7.org/linux/man-pages/man1/date.1.html)
 !   - uuidgen *nix console application (http://www.uuidgen.com/)
 !
 ! BUILDING:
 !   Two options:
-!   a) command line
+!   a) command line, e.g.
 !      gfortran -I/usr/include <prg>.f90 -L/usr/lib -lnetcdff -lnetcdf
 !   b) Makefile (recommended)
 !      make
@@ -86,16 +97,16 @@
 !   PostPro.RCM.WRF.
 !
 ! CALLING SEQUENCE EXAMPLES:
-!   ./postpro_model_WRF_to_ESGcompliancy
-!   ./postpro_model_WRF_to_ESGcompliancy > log
-!   nohup time ./postpro_model_WRF_to_ESGcompliancy > log 2>&1 &
-!   ./postpro_model_WRF_to_ESGcompliancy 2>&1 | tee output.log
+!   - ./postpro_model_WRF_to_ESGcompliancy
+!   - ./postpro_model_WRF_to_ESGcompliancy > log
+!   - nohup time ./postpro_model_WRF_to_ESGcompliancy > log 2>&1 &
+!   - ./postpro_model_WRF_to_ESGcompliancy 2>&1 | tee output.log
 ! 
 ! GETTING STARTED:
-!   just specify 1 domain
-!   2 dirs
-! start with one variable and one namelist
-! > make this the default
+!   1. Read this preamble as a user guide and technical description
+!   2. Use a single or a few smaller WRF standard outputs
+!   3. Adjust the main central namelist (just setup the input and output dirs.)
+!   4. Start by using one variable namelist and specify a single variable: tas
 !
 ! CALLED FROM:
 !   Standalone command-line tool.
@@ -108,58 +119,108 @@
 !   - WRF static fields (geo_em*)
 !   - WRF outputs (wrfout*)
 !   - WRF outputs extremes (wrfxtrm*)
-!   No optional inputs, no keyword parameters.
+!   No optional inputs, no keyword parameters. The tool is controlled by the
+!   namelists.
 !
 ! FILES USED:
 !   - See inputs.
 !
 ! OUTPUTS:
 !   - netCDF files according to standard specification.
-!   - No Optional outputs.
+!   - No Optional outputs, except log file.
 !
 ! RESTRICTIONS:
-!   - No restrictions. No side effects.
+!   - No side effects.
+!   - If the WRF output filenames are non-standard, the file list pattern 
+!     matching may have to be adjusted
+!   - Hardcoded time vector name 'Times', etc. so some work to adjust for other
+!     RCMs.
+!   - The highest temporal resolution possible is 1h at the moment, because of 
+!     how the time matching is coded.
+!   - A maximum of 13 variables per namlist is currently hardcoded. Could be 
+!     expanded, there is not limit.
+!   - The number of vars per namelist is hardcoded, has to be adjusted if a 
+!   - namelist is to be expanded.
+!   - Currently only one input root directory is possible. If data is stored at
+!     different locations, symbolic links might have to be done beforehand.
+!   - With files with an individually created time-coverage (non standard) only 
+!     one pass is possible, i.e. the file is created coverign a certain timespan
+!     and data from the netCDF files in the filelist are tranbsferred according 
+!     to the variable namelist.
+!   - If a storage file exists and wrf data for a date/time is read a second 
+!     time the data alreday stored wil be overwritten; there is no warning;
+!     in case the input data is the same original WRF output file, there is no 
+!     damage done except for lost efficiency; if for some reason the data 
+!     handling is upside down, this corrupts the data.
+!   - With many variables not data_in, there is an inflation of the RAM used
+!     they are not dealllocated again after usage...
 !
-! file list pattern matching may have to be adjusted
-!   - Hardcoded time vector name 'Times'.
-!
-! one experiment at a time
-! one resolution at a time
-! no relationship between different domains during processing
-! the highest temporal resolution possible is 1h
-! xtrm is not yeat properly traeted > might be a different file list
-!
-! if a storage file exists and wrf data for a date/time is read a second time
-! the data alreday stored wil be overwritten; there is no warning
-! in case the input data is the same file, there is no damage done except for lost efficiency
-! if for some reason the data handling is upside down, this corrupts the data
-!
-! the tool is not takling care of the file handling of the wrf files before or after the processing
-!
-! 
 ! BUGS:
-!   - None.
+!   - In case of average variables, like pr, for the very last timestep in an 
+!     storage file, there is one timestep too much. like 00:30, when then 
+!     timespan ends at 00:00, no fields are written in there. Usually an issue
+!     at the very end of the simulaiton timespan.
+!   - When calculating the average time vec: e.g. 05:29:60 is shown with ncdump,
+!     should be 05:30:00, even with double precision calc no chance. cdo is OK,
+!     ncview too. Seems more a ncdump issue.
+!   - In the Makefile, there is a 'veryclean' option: remove that, it is killing 
+!     the data also. In there for testing.
 !
 ! PROCEDURE:
-! ifrq (loop over temporal output and aggregation frequencies) 
-!   ivarnml (namelists with different variable combinations)
-!     ivar (variables from the namelists)
-!       ifl (all files in the search path)
-!         it (all timesteps per file)
-!           **processing**
-
+!   The tool may be called as part of a processing chain. It is meant as an all-
+!   in-one tool. It basically reads data, controlled by a namelist, checks the
+!   dates in the input file, starts looping over the input file, one variable or
+!   diagnostic at a time, checks whether th storage file exists, and if not 
+!   creates the storage file based on the data reference syntax and all. No 
+!   ancilliary files except the basic namelists are needed, no libraries except 
+!   netCDF. No fancy compiler functionalities are used. The tool always checks 
+!   the model data time information and sorts in the data based on a reference
+!   time vector. It handles a timestep at a time, to keep memory footprint very 
+!   low. The namelists determine whether the variables are to be prepared for a 
+!   certain resolution or averaged or regridded, based on the protocol variable
+!   lists. They also contain the standard names. Namelists may be modified by
+!   adding or removing vars, but thir processing may also be just switched off.
+!   Originally all was meant to go into a single monolithic namelist, then it
+!   was decided to split the namelists according to variable groups. 
 !
+!   The looping structure is as follows:
+!   ifrq (loop over temporal output and aggregation frequencies) 
+!     ivarnml (namelists with different variable combinations)
+!       ivar (variables from the namelists)
+!         ifl (all files in the search path)
+!           it (all timesteps per file)
+!             **processing**
 !
-! prefilling  of the storage files > can sort in data also if they are not in chronologicla order or if something is missing at the beginning
+!   WRF standard output means: Data as written based on a standard unmodified 
+!   registry. The tool works on one experiment at a time (e.g. 'CORDEX'), and on
+!   one resolution at a time (e.g. EUR-11). There is no relationship between 
+!   different domains or experiments during processing.
+!
+!   If the storage file is created but the input data does not cover the 
+!   complete file, once the first data have been written, the unlimited 
+!   dimension is expanded and the empty fields / timesteps are filled with 
+!   missing values. Due to the way the tool sorts in data, e.g., when working
+!   in auto-mode, i.e. creating annual files for tier-2 storage, it will always
+!   create as many files as needed according to the time information in the WRF
+!   outputs. Fields can be sorted in as they appear. No matter whether it is in 
+!   the middle of the storage file or at the very beginning, in chronoilogicl 
+!   order.
+!
+!   To be resource efficient and fast, the tool tries to check whether a 
+!   certain operation is nedded or not, like whether it is on a second pass 
+!   through a file or variable, then ther eis no need to setup the time vecs 
+!   etc. again. Though temporally very fine-grained, this improves efficieny.
+!
+!   This is pure research code, there is literally no error trapping.
 !
 ! FEATURES:
 !   - The tool can produce all required variables, i.e. output netCDF files as
-!     defined in the CORDEX archive design specifications as available in
-!     July/August 2013 in possibly one pass based on standard WRF simulation
+!     defined in the CORDEX archive design specifications as available in 2018
+!     in possibly one pass based on standard WRF simulation
 !     outputs. No additional processing is needed. Also the reuiqred netCDF-4
 !     classic data model format is written immediately, no later conversion
 !     needed.
-!   - 3hr data is produced first. This is closest to outputs most groups have
+!   - 3h/1h data is produced first. This is closest to outputs most groups have
 !     anyway. It is possible to produce more 3hr output than needed, i.e. for
 !     all variables specified plus more vertical levels. Thereby the tool might
 !     also be used for a general data volume reduction after a model run.
@@ -191,8 +252,8 @@
 !     It also means that the WRF outputs may cover any timespan, daily, monthly,
 !     or any overlap of months and/or years and that they may come in filelists
 !     even not temporally ordered.
-!
-! noCMOR
+!   - The tool is not takling care of the file handling of the wrf files before 
+!     or after the processing.
 !   - Different ways of date/time handling:
 !     (A)
 !     With CORDEX archive protocol, at 3hr resolution, data is stored annually; 
@@ -201,31 +262,20 @@
 !     data is sorted in.
 !     (B)
 !     If the tool is used for general postprocessing, then sometimes timespans 
-!     of less than a year are simulated; for this case there is a flag noCMOR,
-!     it leads to files being created according to a spcified timespan.
-!     The overall length of the simulation time-span, i.e. the general offset
+!     of less than a year are simulated; for this case timespan in the general
+!     namelist maye specified. The overall length of the simulation time-span, 
 !     is independent of this.
-!
-! with indivisual aggregation, only one pass is possible
-!
-! tool tries to be very resource efficient
-!
-! only the variable table has to be translated to the namelist
-! can be adjusted easily to other RCMs, the variable naming is following the namelist
-! anything hardcoded is based on ESGF variables
-!
-! with many variables not data_in, there is an inflation of the RAM used
-! they are not dealllocated again after usage...
-!
-! when calculating the evareg time vec: issues e.g. 05:29:60 should be 05:30:00
-! even with double precision no chance
-!
-!
-! maximum 13 variables per namlist is currently hardcoded
-! the numbers of vars per namelist is hardcoded
-! 
-!   - Currently only one input root directory is possible. If data is stored at
-!     different locations symbolic links might have to be done beforehand.
+!     (C)
+!     A monthly option, which works like the annual default options has also 
+!     been added.
+!     With month and annual: the files are generated according to the content of
+!     the input data; with individual storage files, the file is generated 
+!     according to timespan and all wrf data which does not fit is left out;
+!     also with individual the tool is run for one pass only, i.e.multiple wrf 
+!     files may be read, but just one output file is generated
+!   - An adjustment to other RCMs should be easy as only the variable table has 
+!     to be translated to the other model. Anything hardcoded is based on ESGF 
+!     variables.
 !   - The static fields are treated independently by the tool.
 !   - Currently the namelists are split into several parts but they may also 
 !     be combined. 
@@ -233,100 +283,108 @@
 !     means that original raw model outputs are likely to be erased afterwards.
 !     Therefore the tool generates slightly more variables than required by the
 !     CORDEX data protocol: e.g. CAPE, ....
-!
 !   - To fully understand the structure and possibilities of the code, take a 
 !     look at the code itself, it is rich in comments and explanations.
+!   - Tries to have minimum hardcoded.
+!   - The tool can be scripted and nml files maybe modified using sed, 
+!     embedding in workflows possible.
 !
 ! EXAMPLE:
 !   ./postpro_model_WRF_to_ESGcompliancy > log
 !
-! nothing is hardcoded
-! tool can be scripted 
-! and nml files maybe modified using sed
-! embedding in workflows possible
-!
-! MODIFICATION / REVISION HISTORY:
-!   See either git log or NEWS for details.
-!   2013-08-09_KGo v0.1
-!
-! TODO / PLANNED EXTENSIONS:      ------    outdated
-!   - Temporal aggregations, i.e. 6hr, day, mon, seas; all based on orginal
-!     outputs
+! TODO / PLANNED EXTENSIONS (**see TODO and CHECK markers in the code**)
+!   - Temporal aggregations, i.e. 6hr, day, mon, seas
+!   - Spatial averaging
 !   - Static fields processing
 !   - All variables -> extension of namelist
-!   - Variable-dependent processings, e.g. MSLP
-!   - time_bnds and lvl vars and processing, ask Grigori about this 00,24 thing
-!   - Import of alternative (to NML) ASCII file with long and standard names
-!   - Add units to that ASCII file as well
-!   - Not yet tested with EUR-11, i.e. large model outputs
-!   - Additional variable in runctrl.vars.nml to control additional 3hr outputs
-!     to have all vars in that format and have more vertical levels
+!   - lvl_bnds
 !   - (OpenMP parallelism for the processing section), via pre-processor flags
 !   - (Parallel netCDF I/O where possible), via pre-processor flags
+!   - Run output via the compliancy checker
+!   - Registation of naming schemes with CORDEX
+!   - Adjust to other model system
+!   - Incroporate wrfpress and wrfxtrm files
 !
-! check netcdf4 classic model, not netcdf4
+! QUESTIONS:
+!   - do we need time_bnds also with point data, like tas
 !
-!   with month and annual: the files are generated according to the content of the data
-!   with individual the file is generated according to timespan and all wrf data which does not fit is left out
-!   also with individual the tool is run for one pass only, i.e.multiple wrf files may be read, but just one  output file is generated
+! ONGOING DEVELOPMENTS (March 2018):
+!   - Currently merging forks from different contributors, complete check of the
+!     code, fix multiple functionalities not in line with the overall concept
+!   - Despite on an internal gitlab nothing was merged, no work form others 
+!     considered: take the latest heads from various git branches and merge old-
+!     school locally without git
+!   - Walk through the code, contnuously building and checking using gfortran
 !
-!   walk through the code, contnuously building and checking using gfortran
-!   - [X] master is totally out of date > Knist+Truhetz+Kartsios worked from that version, nobody merged
-!   - [X] start with Knist version as new base, know his version most
-!   - [X] Truhetz merge file 1, start
-!   - [X] fix (!) and check overall, document, and implement the flexible time span for the storage file ************
-!         > have some proper output which can be viewed with ncview also
-!   - [ ] fix header
-!   - [ ] check w/ protocol: definition + ESGF archive + FPS new nomenclature, experiment name SFTP
-!   - [ ] adjust for my data from the experiment
-!   - [ ] Truhetz merge file 1, cont.
-!   - [ ] Truhetz merge file 2
-!   - [ ] process data for the ICTP paper
-
-!   - [ ] Aris, temporal averaging
-!   - [ ] adjustment for different RCMs < see CCLM code from Heimo (not yet included in merge file 1 or 2)
+!   * [X] master totally out of date > Knist+Truhetz+Kartsios worked from here
+!         most versions were running, but not ideal, just doing a fraction
+!   * [X] start with Knist version as new base, know this version most
+!   * [X] Truhetz merge file 1, start
+!   * [X] fix (!) and check overall, document, and implement the flexible time 
+!         span for the storage file > have some proper output which can be 
+!         viewed with ncview also
+!   * [ ] fix preamble
+!   * [ ] check w/ protocol: definition + ESGF archive + FPS new nomenclature, 
+!         experiment name SFTP
+!   * [ ] Truhetz merge file 1, cont.
+!   * [ ] Truhetz merge file 2
+!   * [ ] process data for the ICTP paper
+!   * [ ] Aris, temporal averaging
+!   * [ ] adjustment for different RCMs < see CCLM code from Heimo 
+!         (not yet included in merge file 1 or 2)
+!   * [ ] check the ESGF UCAN and CSC for reasonable additional global vars
 !
-!   !!!!!!! check the ESGF UCAN and CSC for reasonable additional global vars
+! DOUBLE-CHECKING OF FUNCTIONALITY (March 2018):
+! tier-2 (1hr, 3hr): tas, pr
+! Testing: 2018-03-17: 
+! - time vec correct
+! - creation of files correct
+! - sorting in perfect (cdo, ncdump, ncview...)
+! - compression OK, format OK
+! - alternative timespans work
 !
-!
-! Testing: 2018-03-17: time vec correct, creation of files correct, ..., sorting in perfect (cdo, ncdump, ncview...)
-!
-! XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-!
-! see TODO marker in the code
-!
-! adjust to other model system
-! ? how to incorporate the xtrm files
-! ? do we need time_bnds also with the 
-
-!   noCMOR nml logical variable for alternative timespans
-!
-! REFERENCES (some reference tool format):
-!   - CORDEX WRF group model identification and naming:
-!     https://docs.google.com/spreadsheet/ccc?key=0ArYFyU35McvvdFBqaXdLcERjbFp3U
-!     lBZcC1qbm53NFE#gid=0
-!   - Standard specification / naming conventions (see NML files)
-!     ... CMIP5, CORDEX, txt files
+! MODIFICATION / REVISION HISTORY:
+!   See either git log for details.
 !
 ! CALLED PROCEDURES:
 !   System calls: uuidgen, date
 !
 ! RELATED TOOLS:
-! Lluis, complimentary, his is in-situ, this one is standalone postprocessing
+!   - Lluis FITA, WRF in-situ plugin module to write CMORized output
+!   - Jesus FERNANDEZ, Python
+!   - cdo
+!   Often do not do everythign required. Too complicated to use. Cannot be used
+!   on large existing datasets. Sometimes do not scale with very large model 
+!   domains as they may treat too many time steps at a time.
 !
-! ACKNOWLEDGEMENTS
+! ACKNOWLEDGEMENTS:
+!   Thanks from K.GOERGEN as the originator of the tool goes to all who willing-
+!   ly helped to further develop and improve the code, namely, Sebastian, Heimo,
+!   and Aris.
+!   Thanks for testing goes to: Kirsten WARRACH-SAGI from University of Hohen-
+!   heim, Germany, and Eleni KATRAGKOU
 !
 ! PERFORMANCE:
-!   EUR-44: 1min/yr > 3hr/150yr OR 1h/1yr65vars... + averaging, after each run
+!   Runtimes:
+!   - EUR-44: 1min/yr > 3hr/150yr OR 1h/1yr65vars... + averaging, after each run
 !
-! DOUBLE-CHECKING (March 2018):
-! tier-2 (1hr, 3hr): tas, pr
+! REFERENCES:
+! [1] http://cordex.dmi.dk/joomla/images/CORDEX/cordex_archive_specifications.pdf
+! [2] https://www.hymex.org/cordexfps-convection/wiki/doku.php?id=protocol
+! [3] https://www.unidata.ucar.edu/software/netcdf/conventions.html
+! ...
 !
 ! LICENSE / COPYING:
 !
+! For explanation see also
+! https://choosealicense.com/, https://opensource.org/licenses/MIT
+!
+! ******************************************************************************
+!
 ! MIT License
 !
-! Copyright (c) 2018 Klaus GOERGEN, Sebastian KNIST, Heimo TRUHETZ, Aris XXX
+! Copyright (c) 2018 Klaus GOERGEN, Sebastian KNIST, Heimo TRUHETZ, 
+!                    Aristotelis LAZARIDIS
 !
 ! Permission is hereby granted, free of charge, to any person obtaining a copy
 ! of this software and associated documentation files (the "Software"), to deal
@@ -346,8 +404,7 @@
 ! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ! SOFTWARE.
 !
-! For explanation see also
-! https://choosealicense.com/, https://opensource.org/licenses/MIT
+! ******************************************************************************
 !
 ! EOP
 !-------------------------------------------------------------------------------
