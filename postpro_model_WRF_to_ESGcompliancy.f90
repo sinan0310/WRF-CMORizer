@@ -1,18 +1,22 @@
 
-! compression
-! mv filling
-! ncview testing
+! Version 3.1, 3 March 2014
+! http://cordex.dmi.dk/joomla/images/CORDEX/cordex_archive_specifications.pdf
 
+              ! https://www.unidata.ucar.edu/software/netcdf/conventions.html
+              ! "recommended standard" is CF
+
+!!! veryclean in Makefile: remove that, killing the data also
 
 !===============================================================================
 ! BOP
 !
 ! NAME:
-!   postpro_model_WRF_to_ESGcompliancy.f90 -> WRF_CMORizer.f90
-!   See license information at the end of the preamble.
+!   WRF_CMORizer.f90
+!
+!   SEE LICENSE INFORMATION AT THE END OF THE PREAMBLE
 !
 ! VERSION:
-!   v2018-03-16
+!   vX.X as of 2018-03-16
 !   see git log for revision details and history
 !
 ! STATUS:
@@ -22,12 +26,13 @@
 !   autumn 2017, winter 2017/2018, all a mess, git w/ multiple branches, nothing merged, no work form others considered
 !   take the latest heads from the branches and merge old-school locally without git
 !
-
+! if the storage file is created but the input data does not cover th ecomplete file
+! once the first data have been written, the unlimited diemnsion is expanded and the empty fields / timesteps are filled with missing values
 !
 
 !
-! CURRENT / (FORMER) CODE OWNER(S):
-!   - Klaus GOERGEN | k.goergen@fz-juelich.de | KGo | FZJ/IBG-3
+! CURRENT CODE OWNERS:
+! - Klaus GOERGEN | k.goergen@fz-juelich.de | KGo | FZJ/IBG-3
 !   - Sebastian KNIST | sebastian.knist@gmx.de | SKn | MIUB
 !   - Heimo TRUHETZ
 !   - Stergios KARTSIOS ~~~~
@@ -37,7 +42,7 @@
 !
 ! PURPOSE / DESCRIPTION:
 !   This application postprocesses (standard) raw WRF simulation results into
-!   CORDEX (and CMIP5) compliant NetCDF files in a dedicated directory tree.
+!   CORDEX (and CMIP5) compliant netCDF files in a dedicated directory tree.
 !   See the references below for the specifications used for this program.
 !   The code can easily be adjusted in case specifications change. The post-
 !   processing is necessary in order to being able to upload, stage and
@@ -63,8 +68,8 @@
 !
 ! REQUIREMENTS:
 !   - FORTRAN95 compiler
-!   - NetCDF F90 library (http://www.unidata.ucar.edu/software/netcdf/)
-!     v4.x, used: v4.1.1 and 4.2.1.1 incl. HDF5 -> write NetCDF-4 classic model
+!   - netCDF F90 library (http://www.unidata.ucar.edu/software/netcdf/)
+!     v4.x, used: v4.1.1 and 4.2.1.1 incl. HDF5 -> write netCDF-4 classic model
 !     format
 !   - make *nix console application (https://www.gnu.org/software/make/)
 !   - date *nix console application (http://man7.org/linux/man-pages/man1/date.1.html)
@@ -80,10 +85,11 @@
 ! CATEGORY:
 !   PostPro.RCM.WRF.
 !
-! CALLING SEQUENCE:
+! CALLING SEQUENCE EXAMPLES:
+!   ./postpro_model_WRF_to_ESGcompliancy
 !   ./postpro_model_WRF_to_ESGcompliancy > log
-! 2>&1 > output.log 
-!2>&1 | tee output.log
+!   nohup time ./postpro_model_WRF_to_ESGcompliancy > log 2>&1 &
+!   ./postpro_model_WRF_to_ESGcompliancy 2>&1 | tee output.log
 ! 
 ! GETTING STARTED:
 !   just specify 1 domain
@@ -108,7 +114,7 @@
 !   - See inputs.
 !
 ! OUTPUTS:
-!   - NetCDF files according to standard specification.
+!   - netCDF files according to standard specification.
 !   - No Optional outputs.
 !
 ! RESTRICTIONS:
@@ -141,11 +147,16 @@
 !       ifl (all files in the search path)
 !         it (all timesteps per file)
 !           **processing**
+
+!
+!
+! prefilling  of the storage files > can sort in data also if they are not in chronologicla order or if something is missing at the beginning
+!
 ! FEATURES:
-!   - The tool can produce all required variables, i.e. output NetCDF files as
+!   - The tool can produce all required variables, i.e. output netCDF files as
 !     defined in the CORDEX archive design specifications as available in
 !     July/August 2013 in possibly one pass based on standard WRF simulation
-!     outputs. No additional processing is needed. Also the reuiqred NetCDF-4
+!     outputs. No additional processing is needed. Also the reuiqred netCDF-4
 !     classic data model format is written immediately, no later conversion
 !     needed.
 !   - 3hr data is produced first. This is closest to outputs most groups have
@@ -173,7 +184,7 @@
 !     for wrfout and wrfxtrm files.
 !   - The tool creates a reference time vector. The time-information contained
 !     in each original WRF sim. file is retrieved and according to this
-!     information data is sorted into the resulting NetCDF files. This makes the
+!     information data is sorted into the resulting netCDF files. This makes the
 !     the tool rather robust and flexible, a tradeoff is the possibly longer
 !     processing time due to the searches needed for the date and time matching.
 !     However these searches are on subsets only and therefore fairly efficient.
@@ -245,7 +256,7 @@
 !   - Additional variable in runctrl.vars.nml to control additional 3hr outputs
 !     to have all vars in that format and have more vertical levels
 !   - (OpenMP parallelism for the processing section), via pre-processor flags
-!   - (Parallel NetCDF I/O where possible), via pre-processor flags
+!   - (Parallel netCDF I/O where possible), via pre-processor flags
 !
 ! check netcdf4 classic model, not netcdf4
 !
@@ -259,15 +270,19 @@
 !   - [X] Truhetz merge file 1, start
 !   - [ ] fix (!) and check overall, document, and implement the flexible time span for the storage file ************
 !         > have some proper output which can be viewed with ncview also
+!   - [ ] check w/ protocol: definition + ESGF archive + FPS new nomenclature, experiment name SFTP
+!   - [ ] adjust for my data from the experiment
 !   - [ ] Truhetz merge file 1, cont.
 !   - [ ] Truhetz merge file 2
 !   - [ ] process data for the ICTP paper
-!   - [ ] refine according to standard < see ESGF archive
+
 !   - [ ] Aris, temporal averaging
 !   - [ ] adjustment for different RCMs < see CCLM code from Heimo (not yet included in merge file 1 or 2)
 !
 !   !!!!!!! check the ESGF UCAN and CSC for reasonable additional global vars
 !
+!
+! Testing: 2018-03-17: time vec correct, creation of files correct, ..., sorting in perfect (cdo, ncdump, ncview...)
 !
 ! XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 !
@@ -297,25 +312,32 @@
 ! PERFORMANCE:
 !   EUR-44: 1min/yr > 3hr/150yr OR 1h/1yr65vars... + averaging, after each run
 !
-! LICENSE / COPYING:    ------ replace by MIT license, see github
+! LICENSE / COPYING:
 !
-!   Copyright (C) 2013 Klaus GOERGEN
+! MIT License
 !
-!   This file is part of postpro_model_WRF_to_ESGcompliancy.
+! Copyright (c) 2018 Klaus GOERGEN, Sebastian KNIST, Heimo TRUHETZ, Aris XXX
 !
-!   postpro_model_WRF_to_ESGcompliancy is free software: you can
-!   redistribute it and/or modify it under the terms of the GNU
-!   General Public License as published by the Free Software
-!   Foundation, either version 3 of the License, or any later
-!   version.
+! Permission is hereby granted, free of charge, to any person obtaining a copy
+! of this software and associated documentation files (the "Software"), to deal
+! in the Software without restriction, including without limitation the rights
+! to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+! copies of the Software, and to permit persons to whom the Software is
+! furnished to do so, subject to the following conditions:
 !
-!   This program is distributed in the hope that it will be useful,
-!   but WITHOUT ANY WARRANTY; without even the implied warranty of
-!   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-!   GNU General Public License for more details.
+! The above copyright notice and this permission notice shall be included in all
+! copies or substantial portions of the Software.
 !
-!   You should have received a copy of the GNU General Public License
-!   along with this program. If not, see <http://www.gnu.org/licenses/>.
+! THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+! IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+! FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+! AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+! LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+! SOFTWARE.
+!
+! For explanation see also
+! https://choosealicense.com/, https://opensource.org/licenses/MIT
 !
 ! EOP
 !-------------------------------------------------------------------------------
@@ -345,6 +367,7 @@ MODULE RefTimeVecs
   SAVE
 
   REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: TimeRefArray
+  !DOUBLE PRECISION, DIMENSION(:,:), ALLOCATABLE :: TimeRefArray
   !INTEGER :: Tyear_start, Tyear_end
 
 END MODULE RefTimeVecs
@@ -460,7 +483,7 @@ CHARACTER (len = 200) :: pn_out, fn_out, iflWRFin
 ! auxilliary vars, just needed during development
 ! INTEGER, PARAMETER :: nt = 8
 
-! new NetCDF file
+! new netCDF file
 INTEGER :: ncid, ncidin, ncidin0
 INTEGER :: lon_dimid, lat_dimid, rec_dimid, height_dimid, &
   nb2_dimid
@@ -475,6 +498,7 @@ INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, &
 ! input data general query
 INTEGER :: ncid_in, ndims_in, nvars_in, ngatts_in, unlimdimid_in !!!, formatp_in
 
+! inputs, number of elements
 INTEGER :: nvar_nml
 ! record variable in input data
 INTEGER :: InVarIdRec, InDimLenRec !!!, InVarNdimsRec
@@ -483,21 +507,43 @@ CHARACTER (len = NF90_MAX_NAME) :: InDimNameRec !!!, InVarNameRec
 CHARACTER (len = 19), DIMENSION(:), ALLOCATABLE :: InVarDataRec
 
 ! data
-REAL, DIMENSION(:,:), ALLOCATABLE :: data_in, psl_in, t2_in, &
-  cldfra_inv, u10_in, v10_in, cape, cin, lcl, lfc, prw, clwvi, clivi, &
-  sinalpha_in, cosalpha_in
-REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: TimeRefArraySubset, Time_bnds 
+REAL, DIMENSION(:,:), ALLOCATABLE :: &
+  data_in     , &
+  psl_in      , &
+  t2_in       , &
+  cldfra_inv  , &
+  u10_in      , &
+  v10_in      , &
+  cape        , &
+  cin         , &
+  lcl         , &
+  lfc         , &
+  prw         , &
+  clwvi       , &
+  clivi       , &
+  sinalpha_in , &
+  cosalpha_in
 REAL, DIMENSION(:,:,:), ALLOCATABLE :: pp_in, pb_in, ph_in, phb_in, qv_in, qvs, &
   qc_in, qr_in, qi_in, qs_in,  theta_in, t_in, ph_fl, p_in, cldfra_in, &
   u_in, v_in, var3d_in, var_pl, potevp_in, &
   rainnc_in, rainc_in, rad_in, t_p, snownc_in, acsnom_in, GeoInLonLat, &
   sfcevp_in, sfroff_in, udroff_in
+REAL, DIMENSION(:,:,:,:), ALLOCATABLE :: smois_in
 
-! (het): bucket system
+! time vec stuff
+REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: &
+  TimeRefArraySubset, &
+  Time_bnds
+REAL(KIND=8), DIMENSION(:), ALLOCATABLE :: &
+  TimeRefArraySubsetMean
+!DOUBLE PRECISION, DIMENSION(:,:), ALLOCATABLE :: TimeRefArraySubset, Time_bnds
+!DOUBLE PRECISION, DIMENSION(:), ALLOCATABLE :: TimeRefArraySubsetMean 
+
+! bucket system
 INTEGER, DIMENSION(:,:,:), ALLOCATABLE :: i_rainnc_in, i_rainc_in, i_rad_in
 REAL :: bucket_mm, bucket_J
 
-REAL, DIMENSION(:,:,:,:), ALLOCATABLE :: smois_in
+
 REAL, DIMENSION(:), ALLOCATABLE :: GeoInRLat, GeoInRLon, pout
 
 ! (het): base state temperature is made flexible in newer versions of WRF. The
@@ -525,6 +571,7 @@ REAL, PARAMETER :: b = 17.27 !
 REAL, PARAMETER :: c = 273.15 !
 REAL, PARAMETER :: d = 35.86 !
 REAL, PARAMETER :: n = L*0.622*a/cp !
+REAL, PARAMETER :: mv = 1.e20
 
 ! time and date handling
 CHARACTER (len = 3), DIMENSION(:), ALLOCATABLE :: frequency
@@ -822,7 +869,7 @@ DO ifrq = 1, 1, 1
 ! better avoid this kind of filtering, but then create a new namelist
 
     !DO ivar = 1, nvar_nml, 1
-    DO ivar = 1, 1, 1 ! testing, tas only
+    DO ivar = 2, 2, 1 ! testing, tas only
   
       PRINT *,"============================================================"
       PRINT *, "*** ", TRIM(var_cmip(ivar)), " ***"
@@ -1042,7 +1089,7 @@ DO ifrq = 1, 1, 1
 ! extract the time info from the ref time array which matches the respective
 ! file in which data is to be written and thereby matches also the input data
 ! ...as there is no "WHERE" the way I need it in F95, use loops
-! this is needed whenever a new netcdf file is to be used and also if
+! this is needed whenever a new netCDF file is to be used and also if
 ! this file exists already
 ! still working on single variable 'ivar', file 'ifl', and timestep 'it'
 ! InDateTimeYear(it), InDateTimeMonth(it), InDateTimeDay(it), InDateTimeHour(it), InDateTimeCombined(it)
@@ -1110,6 +1157,7 @@ DO ifrq = 1, 1, 1
             PRINT *, "timesteps in the time ref. subset = ", counter
 
             ALLOCATE( TimeRefArraySubset( counter, 5 ) ) ! index, y, m, d, h
+            ALLOCATE( TimeRefArraySubsetMean( counter ) )
             ALLOCATE( Time_bnds( 2, counter ) )
 
             ! the TimeRefArraySubset is the time vec of the newly created (or
@@ -1143,7 +1191,7 @@ DO ifrq = 1, 1, 1
 
             ELSE
 
-              PRINT *, "++++ path and file do not yet exist, create path and NetCDF file first"
+              PRINT *, "++++ path and file do not yet exist, create path and netCDF file first"
               PRINT '(150A)', "path = ", TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out)
   
               CALL SYSTEM("mkdir -p " // TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) )
@@ -1151,7 +1199,7 @@ DO ifrq = 1, 1, 1
 !-------------------------------------------------------------------------------
 ! the SYSTEM call is non-std Fortran95, works for gfortran (fct & subroutine) 
 ! and ifort
-! comment lines in the NetCDF file global attribute definition
+! comment lines in the netCDF file global attribute definition
 ! turn standard checking in Makefile off
 ! trackingID = "xxxxxxxx-xxxx-Mxxx-Nxxx-xxxxxxxxxxxx"
 ! creationDate = "YYYY-MM-DD-THH:MM:SSZ"
@@ -1169,10 +1217,10 @@ DO ifrq = 1, 1, 1
               PRINT *, "date externally generated creation date = ", creationDate
   
 !-------------------------------------------------------------------------------
-! create NetCDF file, must be NetCDF4 'classic data model' and compression level 1
+! create netCDF file, must be NetCDF4 'classic data model' and compression lvl=1
 ! NF90_CLASSIC_MODEL = NetCDF4_classic
 ! NF90_HDF5 = NetCDF4 based on HDF5
-! NF90_CLOBBER = old NetCDF
+! NF90_CLOBBER = old netCDF
   
               !comb_flags = IOR(NF90_HDF5, NF90_CLASSIC_MODEL)
               !https://www.unidata.ucar.edu/software/netcdf/docs/netcdf-f90/NF90_005fCREATE.html
@@ -1185,33 +1233,39 @@ DO ifrq = 1, 1, 1
               ! always included define dimensions
               sts = NF90_DEF_DIM(ncid, "rlon", xfocus, lon_dimid)
               sts = NF90_DEF_DIM(ncid, "rlat", yfocus, lat_dimid)
-              sts = NF90_DEF_DIM(ncid, "height", 1, height_dimid) ! ????????????????????????????????? CHECK
+              IF ( height(ivar) /= -999 ) THEN
+                sts = NF90_DEF_DIM(ncid, "height", 1, height_dimid)
+              END IF
               sts = NF90_DEF_DIM(ncid, "time", NF90_UNLIMITED, rec_dimid)
-              sts = NF90_DEF_DIM(ncid, "nb2", 2, nb2_dimid) ! ??????????????????????? CHECK > only of time_bnds > only if cell_method mean
+              sts = NF90_DEF_DIM(ncid, "nb2", 2, nb2_dimid) ! ??????????????????????? CHECK > only of time_bnds > only if cell_method mean nbds????
 
               !-----------------------------------------------------------------
 
-              ! always included
+              ! always included -- longitude field, unrotated
               sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lon_varid)
+              sts = nf90_def_var_deflate(ncid, lon_varid, 1, 1, 1)
               sts = nf90_put_att(ncid, lon_varid, "standard_name", "longitude")
               sts = nf90_put_att(ncid, lon_varid, "long_name", "longitude")
               sts = nf90_put_att(ncid, lon_varid, "units", "degrees_east")
   
-              ! always included
+              ! always included -- latitude field, unrotated
               sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lat_varid)
+              sts = nf90_def_var_deflate(ncid, lat_varid, 1, 1, 1)
               sts = nf90_put_att(ncid, lat_varid, "standard_name", "latitude")
               sts = nf90_put_att(ncid, lat_varid, "long_name", "latitude")
               sts = nf90_put_att(ncid, lat_varid, "units", "degrees_north")
   
-              ! always included
+              ! always included -- longitude vector, rotated
               sts = nf90_def_var(ncid, "rlon", NF90_DOUBLE, (/ lon_dimid /), rlon_varid)
+              sts = nf90_def_var_deflate(ncid, rlon_varid, 1, 1, 1)
               sts = nf90_put_att(ncid, rlon_varid, "standard_name", "grid_longitude")
               sts = nf90_put_att(ncid, rlon_varid, "long_name", "longitude in rotated pole grid")
               sts = nf90_put_att(ncid, rlon_varid, "units", "degrees")
               sts = nf90_put_att(ncid, rlon_varid, "axis", "X")
   
-              ! always included
+              ! always included -- latitude vector, rotated
               sts = nf90_def_var(ncid, "rlat", NF90_DOUBLE, (/ lat_dimid /), rlat_varid)
+              sts = nf90_def_var_deflate(ncid, rlat_varid, 1, 1, 1)
               sts = nf90_put_att(ncid, rlat_varid, "standard_name", "grid_latitude")
               sts = nf90_put_att(ncid, rlat_varid, "long_name", "latitude in rotated pole grid")
               sts = nf90_put_att(ncid, rlat_varid, "units", "degrees")
@@ -1283,16 +1337,32 @@ DO ifrq = 1, 1, 1
 
               !-----------------------------------------------------------------
               ! always included -- definition of the individual variable
-              ! compression:
-              ! nc_def_var_deflate(int ncid, int varid, int shuffle, int deflate, int deflate_level);
-              ! PREFILLLING with mv????????????????
+              ! compression is always on variable level, use compression with 
+              ! level = 1 (=> CORDEX protocol),  
+              ! REAL PERFORMANCE ISSUES: shuffling and chunking
+              ! https://earthscience.stackexchange.com/questions/12527/regarding-compression-shuffle-filter-of-netcdf4
+              ! https://www.unidata.ucar.edu/software/netcdf/netcdf-4/newdocs/netcdf-f90.html#Variables
+              ! https://www.unidata.ucar.edu/software/netcdf/workshops/2011/nc4chunking/index.html
+              ! https://www.unidata.ucar.edu/software/netcdf/docs/netcdf_perf_chunking.html
+              ! compression on/off: 19MB->12MB, 0.1s->0.5s
+              ! chunking: needs some careful considerations
               
               IF ( height(ivar) /= -999 ) THEN
-                sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, height_dimid, rec_dimid /), x_varid)
+                sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, height_dimid, rec_dimid /), x_varid) 
               ELSE
                 sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, rec_dimid /), x_varid)
               END IF
-              
+              ! TODO -> determine chunksizes vector beforehand otherwise
+              ! this can only make it worse
+              !sts = nf90_def_var_chunking(ncid, x_varid, NF90_CHUNKED, XXXchunksizesXXX) 
+              ! fill up with missing values, despite unlimited dim.
+              ! not needed, at this point the unlimited time dim is not filled
+              !sts = nf90_def_var_fill(ncid, x_varid, 0, mv) 
+              ! shuffle ON, deflate ON, deflate_level lowest
+              sts = nf90_def_var_deflate(ncid, x_varid, 1, 1, 1)
+              ! default, change with care
+              !sts = nf90_def_var_endian(ncid, x_varid, NF90_ENDIAN_NATIVE)
+                            
               sts = nf90_put_att(ncid, x_varid, "standard_name", standard_name(ivar))
               sts = nf90_put_att(ncid, x_varid, "long_name", long_name(ivar))
               sts = nf90_put_att(ncid, x_varid, "units", units(ivar))
@@ -1302,16 +1372,17 @@ DO ifrq = 1, 1, 1
               sts = nf90_put_att(ncid, x_varid, "cell_methods", "time: "//TRIM(cell_methods(ivar)))
               sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat")
               sts = nf90_put_att(ncid, x_varid, "grid_mapping", "Rotated_Pole")
-              sts = nf90_put_att(ncid, x_varid, "missing_value", 1.e20)
-              sts = nf90_put_att(ncid, x_varid, "_FillValue", 1.e20)
+              sts = nf90_put_att(ncid, x_varid, "missing_value", mv)
+              sts = nf90_put_att(ncid, x_varid, "_FillValue", mv)
 
               !-----------------------------------------------------------------
   
               sts = NF90_ENDDEF(ncid)
 
-              !-----------------------------------------------------------------
-  
-              ! SUPER IMPORTANT: add time, whole year from above
+              !-----------------------------------------------------------------  
+              ! SUPER IMPORTANT: write time information, the complete time vec
+              ! for the respective file
+
               IF ( cell_methods(ivar) == "point" ) THEN
   
                 PRINT *, 'cell_methods:', cell_methods(ivar)
@@ -1327,10 +1398,15 @@ DO ifrq = 1, 1, 1
               END IF
   
               IF ( cell_methods(ivar) == "mean" ) THEN
-  
-                PRINT *, 'cell_methods:', cell_methods(ivar)
-                !sts = NF90_PUT_VAR(ncid, rec_varid, (TimeRefArraySubset(:,1)+(dtHours/2.)/24._8) ) ! CHECK
-                sts = NF90_PUT_VAR(ncid, rec_varid, (TimeRefArraySubset(:,1)+(dtHours/2.)) )
+
+                ! problem
+                ! https://www.unidata.ucar.edu/mailing_lists/archives/netcdfgroup/2015/msg00071.html  
+                TimeRefArraySubsetMean (:) = TimeRefArraySubset(:,1) + ( 0.5_8 * (1._8 / 24._8))
+                PRINT *, "cell_methods:", cell_methods(ivar)
+                PRINT *, "dtHours",  dtHours, dtHours/2.
+                PRINT *, "TimeRefArraySubset", TimeRefArraySubset(:,1)
+                PRINT *, "TimeRefArraySubsetMean", TimeRefArraySubsetMean(:)
+                sts = NF90_PUT_VAR(ncid, rec_varid, TimeRefArraySubsetMean(:) )
                 PRINT *, 'sts NF90_PUT_VAR time', sts
   
 !                print*, 'TimeRefArraySubset(:,1)', TimeRefArraySubset(:,1)
@@ -1340,14 +1416,17 @@ DO ifrq = 1, 1, 1
 !                print*, 'TimeRefArraySubset(:,5)', TimeRefArraySubset(:,5)
   
                 Time_bnds(1,:) = TimeRefArraySubset(:,1)
-                Time_bnds(2,:) = TimeRefArraySubset(:,1)+dtHours !/24._8 ! CHECK
-                PRINT *, 'recbnds_varid', recbnds_varid
+                Time_bnds(2,:) = TimeRefArraySubset(:,1) + ( 1.0_8 * (1._8 / 24._8))
+                PRINT *, "time bnds lower", Time_bnds(1,:)
+                PRINT *, "time bnds upper", Time_bnds(2,:)
                 sts = NF90_PUT_VAR(ncid, recbnds_varid, Time_bnds(:,:), START = (/ 1, 1 /) , COUNT = (/ 2, SIZE(Time_bnds(1,:)) /) )
+                PRINT *, 'sts NF90_PUT_VAR time bnds', sts
   
               END IF
               !print *,'TimeRefArraySubset(:,1)', TimeRefArraySubset(:,1)
 
               !-----------------------------------------------------------------
+              ! write coordinates and height information
               
               ! add non-rotated coordinate fields
               sts = NF90_PUT_VAR(ncid, lon_varid, GeoInLonLat(:,:,1), &
@@ -1382,7 +1461,7 @@ DO ifrq = 1, 1, 1
 
 !-------------------------------------------------------------------------------
 ! match timestep 'it' of WRFin with the subset of the ref time vec which belongs
-! to the NetCDF file of the year/month/arbitrary timespan currently open to
+! to the netCDF file of the year/month/arbitrary timespan currently open to
 ! receive data
   
           PRINT *, "reading WRF sim. res. = ", TRIM(InVarDataRec(it)), it
@@ -1418,7 +1497,7 @@ DO ifrq = 1, 1, 1
           ! there is a check whether a storage file exists
           IF (time_match) THEN
   
-          PRINT *, "index where in the NC file the WRF data is sorted in = ", &
+          PRINT *, "index, single number, where in the NC file the WRF data is sorted in = ", &
             counter
   
 !-------------------------------------------------------------------------------
@@ -1457,9 +1536,10 @@ DO ifrq = 1, 1, 1
 ! HTr: I've changed the hard coded '40' levels to nz levels given by the nml-file
 
           PRINT *, "*** READING OF VARIABLES ***"
+          PRINT *, "variable to work on = ", TRIM(var_cmip(ivar))
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  
+
           IF ( (var_cmip(ivar) == "psl") &
                 .or. (height(ivar) == 850) &
                 .or. (height(ivar) == 700) &
@@ -1592,19 +1672,23 @@ DO ifrq = 1, 1, 1
             sts = NF90_GET_VAR(ncidin, varid, cldfra_in(:,:,:), &
               START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
   
-  !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  ! Precipitation [kg m-2 s-1]
-  ! EURO-CORDEX Jan/2018 meeting, conv+incl. snow graupel, hail, etc. ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! Precipitation [kg m-2 s-1]
+! EURO-CORDEX Jan/2018 meeting, conv+incl. snow graupel, hail, etc.
+! TODO CHECK !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   
           ELSE IF (var_cmip(ivar) == "pr") THEN 
              
-            !print*, 'read iflWRFin ' , iflWRFin
-            !print*, 'read pr, it =',it
+            PRINT *, "read iflWRFin " , iflWRFin
+            PRINT *, "it = ", it
+            PRINT *, "inDimLenRec, number of output times in input = ", InDimLenRec
   
             IF (it /= InDimLenRec) THEN
+
+              PRINT *, "read rainc and rainnc"
   
-              ALLOCATE( rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
-              ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+              IF (.not. ALLOCATED(rainnc_in)) ALLOCATE( rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
+              IF (.not. ALLOCATED(rainc_in)) ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
   
               sts = NF90_INQ_VARID(ncidin, "RAINNC", rainnc_varid)
               sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
@@ -1616,42 +1700,42 @@ DO ifrq = 1, 1, 1
               sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus, 2 /) )
+
+!            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
   
-            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+!              ALLOCATE( rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )        
+!              ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
   
-              ALLOCATE( rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )        
-              ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+!              sts = NF90_INQ_VARID(ncidin, "RAINNC", rainnc_varid)
+!              sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
   
-              sts = NF90_INQ_VARID(ncidin, "RAINNC", rainnc_varid)
-              sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
+!              sts = NF90_GET_VAR(ncidin, rainnc_varid, rainnc_in(:,:,1), &
+!                START = (/ xoffset, yoffset, it /), &
+!                COUNT = (/ xfocus,yfocus, 1 /) )
   
-              sts = NF90_GET_VAR(ncidin, rainnc_varid, rainnc_in(:,:,1), &
-                START = (/ xoffset, yoffset, it /), &
-                COUNT = (/ xfocus,yfocus, 1 /) )
+!              sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,1), &
+!                START = (/ xoffset, yoffset, it /), &
+!                COUNT = (/ xfocus, yfocus, 1 /) )
   
-              sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,1), &
-                START = (/ xoffset, yoffset, it /), &
-                COUNT = (/ xfocus, yfocus, 1 /) )
+!              iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfout file 
+!                                          ! if it is not the first
   
-              iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfout file 
-                                          ! if it is not the first
+!              sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
   
-              sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
+!              sts = NF90_INQ_VARID(ncidin0, "RAINNC", rainnc_varid)
+!              sts = NF90_INQ_VARID(ncidin0, "RAINC", rainc_varid)
   
-              sts = NF90_INQ_VARID(ncidin0, "RAINNC", rainnc_varid)
-              sts = NF90_INQ_VARID(ncidin0, "RAINC", rainc_varid)
+!              sts = NF90_GET_VAR(ncidin0, rainnc_varid, rainnc_in(:,:,2), &
+!                START = (/ xoffset, yoffset, 1 /), &
+!                COUNT = (/ xfocus, yfocus,1 /) )   !read last timestep of previous wrfout file
   
-              sts = NF90_GET_VAR(ncidin0, rainnc_varid, rainnc_in(:,:,2), &
-                START = (/ xoffset, yoffset, 1 /), &
-                COUNT = (/ xfocus, yfocus,1 /) )   !read last timestep of previous wrfout file
-  
-              sts = NF90_GET_VAR(ncidin0, rainc_varid, rainc_in(:,:,2), &
-                START = (/ xoffset, yoffset, 1 /), &
-                COUNT = (/ xfocus, yfocus,1 /) )
+!              sts = NF90_GET_VAR(ncidin0, rainc_varid, rainc_in(:,:,2), &
+!                START = (/ xoffset, yoffset, 1 /), &
+!                COUNT = (/ xfocus, yfocus,1 /) )
    
-              sts = NF90_CLOSE(ncidin0)
+!              sts = NF90_CLOSE(ncidin0)
   
-              iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+!              iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
   
             END IF
   
@@ -2125,15 +2209,18 @@ DO ifrq = 1, 1, 1
           sts = NF90_CLOSE(ncidin)
 
 !-------------------------------------------------------------------------------
+!-------------------------------------------------------------------------------
 ! some analysis of the data
   
           PRINT *, "*** STATISTICS BEFORE PROCESSING OF VARIABLES ***"
+          PRINT *, "useless if more data is stored in "
 
           print *, "shape of array" , SHAPE(data_in)
           print *, "size of array" , SIZE(data_in)
           stat_mean = SUM(data_in(:,:))/SIZE(data_in(:,:))
           PRINT *, "mean of array", stat_mean
 
+!-------------------------------------------------------------------------------
 !-------------------------------------------------------------------------------
 ! this is where the real processing takes place 
 ! if nothing is to be calculated or scaled, etc., then the variables are just
@@ -2197,7 +2284,7 @@ DO ifrq = 1, 1, 1
               !print*, 'var3d_in(50,50,10)', var3d_in(50,50,10), var_cmip(ivar)
             END IF
   
-            var_pl = 1.e20
+            var_pl = mv
   
             IF (var_cmip(ivar) == "psl") THEN
               data_in(:,:) = psl_in(:,:)
@@ -2394,13 +2481,18 @@ DO ifrq = 1, 1, 1
   
           END IF
   
-  !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-  !       ***pr***
-  
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! pr
+! [mm/3h] -> [kg m-2 s-1]
+! t2-t1, no bucket used
+! InDimLenRec - 1
+
           IF (var_cmip(ivar) == "pr") THEN 
   
-            data_in(:,:) = ((rainnc_in(:,:,2) + rainc_in(:,:,2)) - (rainnc_in(:,:,1) + rainc_in(:,:,1)))/(dtHours*3600.) !unit [mm/3hr] to [kg m-2 s-1]
-                                                           !ATTENTION: implement adjustable time intervals that the differences are devided by
+            data_in(:,:) = ( ( rainnc_in(:,:,2) + rainc_in(:,:,2) ) - &
+                             ( rainnc_in(:,:,1) + rainc_in(:,:,1) ) ) / &
+                             ( dtHours * 3600. )
+
           END IF
   
   !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2532,18 +2624,20 @@ DO ifrq = 1, 1, 1
           END IF
 
 !-------------------------------------------------------------------------------
-! write data to NetCDF file
-  
-          PRINT *, '*** WRITE DATA TO NETCDF ***'
-          PRINT *, 'fn_out: ', fn_out
+! write data to netCDF file
+
+          PRINT *, ""
+          PRINT *, "*** WRITE DATA TO netCDF ***"
+          PRINT *, TRIM(pn_out) // "/" // TRIM(fn_out)
+          PRINT *, TRIM(var_cmip(ivar)), xfocus, yfocus, counter, ncid, x_varid
   
           sts = NF90_OPEN( TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) // "/" // TRIM(fn_out), NF90_WRITE, ncid )
 
-          ! file must exist, but still test
+          ! file must exist, just from the logic of the code, nevertheless: test
           IF (sts/=0) EXIT
           
-          PRINT *, 'NF90_OPEN',  sts
           sts = NF90_INQ_VARID(ncid, TRIM(var_cmip(ivar)), x_varid)
+          PRINT *, "NF90_OPEN",  sts
   
             PRINT *, 'NF90_INQ_VARID', ncid
             PRINT *, 'var_cmip(ivar)', var_cmip(ivar)
@@ -2566,15 +2660,15 @@ DO ifrq = 1, 1, 1
             PRINT *, 'some exmple output in the middle of the domain', data_in(xfocus/2:(xfocus/2+2),yfocus/2:(yfocus/2+2))
 
           sts = NF90_CLOSE(ncid)
-          PRINT *, 'NF90_CLOSE',  sts
-            
-          PRINT *, TRIM(pn_out) // "/" // TRIM(fn_out)
-          PRINT *, TRIM(var_cmip(ivar)), xfocus, yfocus, counter, ncid, x_varid
+          PRINT *, "NF90_CLOSE",  sts
 
 !-------------------------------------------------------------------------------
 
           ELSE
 
+            ! tested this: just define file with a temporal coverage outside the
+            ! range of the input file: create file, loop over the inputs,
+            ! nothing happens, no false sorting in 
             PRINT *, "no time match", time_match
 
           END IF

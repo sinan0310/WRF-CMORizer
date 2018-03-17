@@ -18,7 +18,7 @@
 /
 &globalvars_additional
    comment = "data production: k.goergen@fz-juelich.de",
-   institute_run_id = "rv054r05",
+   institute_run_id = "rv054r05", ! should be: fzj-ibg3_id
 /
 &filesystem
    DirInputSimResRoot = "/home/kgo/Documents/sandbox/cmorization_testing/simres.INITWL"
