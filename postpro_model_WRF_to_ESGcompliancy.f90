@@ -214,6 +214,12 @@
 ! can be adjusted easily to other RCMs, the variable naming is following the namelist
 ! anything hardcoded is based on ESGF variables
 !
+! with many variables not data_in, there is an inflation of the RAM used
+! they are not dealllocated again after usage...
+!
+! when calculating the evareg time vec: issues e.g. 05:29:60 should be 05:30:00
+! even with double precision no chance
+!
 !
 ! maximum 13 variables per namlist is currently hardcoded
 ! the numbers of vars per namelist is hardcoded
@@ -268,8 +274,9 @@
 !   - [X] master is totally out of date > Knist+Truhetz+Kartsios worked from that version, nobody merged
 !   - [X] start with Knist version as new base, know his version most
 !   - [X] Truhetz merge file 1, start
-!   - [ ] fix (!) and check overall, document, and implement the flexible time span for the storage file ************
+!   - [X] fix (!) and check overall, document, and implement the flexible time span for the storage file ************
 !         > have some proper output which can be viewed with ncview also
+!   - [ ] fix header
 !   - [ ] check w/ protocol: definition + ESGF archive + FPS new nomenclature, experiment name SFTP
 !   - [ ] adjust for my data from the experiment
 !   - [ ] Truhetz merge file 1, cont.
@@ -311,6 +318,9 @@
 !
 ! PERFORMANCE:
 !   EUR-44: 1min/yr > 3hr/150yr OR 1h/1yr65vars... + averaging, after each run
+!
+! DOUBLE-CHECKING (March 2018):
+! tier-2 (1hr, 3hr): tas, pr
 !
 ! LICENSE / COPYING:
 !
@@ -480,6 +490,16 @@ CHARACTER (len = 200) :: pn_out, fn_out, iflWRFin
 
 !-------------------------------------------------------------------------------
 
+REAL, PARAMETER :: cp = 1004.0 ! [J kg-1 K-1]
+REAL, PARAMETER :: R = 287.05 ! [J kg-1 K-1]
+REAL, PARAMETER :: L = 2501000.0 ! [J kg-1]
+REAL, PARAMETER :: a = 610.78 ! [Pa]
+REAL, PARAMETER :: b = 17.27 !
+REAL, PARAMETER :: c = 273.15 !
+REAL, PARAMETER :: d = 35.86 !
+REAL, PARAMETER :: n = L*0.622*a/cp !
+REAL, PARAMETER :: mv = 1.e20
+
 ! auxilliary vars, just needed during development
 ! INTEGER, PARAMETER :: nt = 8
 
@@ -563,15 +583,7 @@ REAL :: GeoNPLat, GeoNPLon
 
 REAL :: t_ii, dtHours
 
-REAL, PARAMETER :: cp = 1004.0 ! [J kg-1 K-1]
-REAL, PARAMETER :: R = 287.05 ! [J kg-1 K-1]
-REAL, PARAMETER :: L = 2501000.0 ! [J kg-1]
-REAL, PARAMETER :: a = 610.78 ! [Pa]
-REAL, PARAMETER :: b = 17.27 !
-REAL, PARAMETER :: c = 273.15 !
-REAL, PARAMETER :: d = 35.86 !
-REAL, PARAMETER :: n = L*0.622*a/cp !
-REAL, PARAMETER :: mv = 1.e20
+
 
 ! time and date handling
 CHARACTER (len = 3), DIMENSION(:), ALLOCATABLE :: frequency
@@ -602,7 +614,7 @@ REAL :: stat_mean, slope
 
 INTEGER :: i, sts, ivar, ifrq, ifl, it, counter, j, np, nl, ii, ivarnml, prevpass = 0
 !!!INTEGER :: AllocateStatus, DeAllocateStatus
-LOGICAL :: FileExists, newpass, time_match   !, comb_flags
+LOGICAL :: FileExists, newpass, time_match, calc = .TRUE.   !, comb_flags
 REAL :: cpuTs, cpuTe
 !REAL(KIND=8), ALLOCATABLE :: ipos(:)
 INTEGER, ALLOCATABLE :: ipos(:)
@@ -1676,66 +1688,83 @@ DO ifrq = 1, 1, 1
 ! Precipitation [kg m-2 s-1]
 ! EURO-CORDEX Jan/2018 meeting, conv+incl. snow graupel, hail, etc.
 ! TODO CHECK !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! this is without bucket method, this option here is bad
   
           ELSE IF (var_cmip(ivar) == "pr") THEN 
              
             PRINT *, "read iflWRFin " , iflWRFin
             PRINT *, "it = ", it
             PRINT *, "inDimLenRec, number of output times in input = ", InDimLenRec
-  
-            IF (it /= InDimLenRec) THEN
 
-              PRINT *, "read rainc and rainnc"
+            ! e.g. it=1..24, #24 fields/file > only 23 everage, field #23 = 22UTC
+            IF (it < InDimLenRec) THEN 
+
+              PRINT *, "read rainc and rainnc lower maximum"
   
               IF (.not. ALLOCATED(rainnc_in)) ALLOCATE( rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
               IF (.not. ALLOCATED(rainc_in)) ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
   
               sts = NF90_INQ_VARID(ncidin, "RAINNC", rainnc_varid)
               sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
-  
+
+              ! read two timesteps to calculate difference
               sts = NF90_GET_VAR(ncidin, rainnc_varid, rainnc_in(:,:,:), &
                 START = (/ xoffset, yoffset, it /), &
-                COUNT = (/ xfocus, yfocus, 2 /) )   !read two timesteps to calculate difference
+                COUNT = (/ xfocus, yfocus, 2 /) )
   
               sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus, 2 /) )
 
-!            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+            ! if the successor file exists, get the data from that file
+            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+
+              PRINT *, "get data from the subsequent file"
+
+              IF (.not. ALLOCATED(rainnc_in)) ALLOCATE( rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )        
+              IF (.not. ALLOCATED(rainc_in)) ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+
+              ! get the last available field from the current input file
+              sts = NF90_INQ_VARID(ncidin, "RAINNC", rainnc_varid)
+              sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
   
-!              ALLOCATE( rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )        
-!              ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+              sts = NF90_GET_VAR(ncidin, rainnc_varid, rainnc_in(:,:,1), &
+                START = (/ xoffset, yoffset, it /), &
+                COUNT = (/ xfocus,yfocus, 1 /) )
   
-!              sts = NF90_INQ_VARID(ncidin, "RAINNC", rainnc_varid)
-!              sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
+              sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,1), &
+                START = (/ xoffset, yoffset, it /), &
+                COUNT = (/ xfocus, yfocus, 1 /) )
+
+              ! just get the next input file
+              iflWRFin = fl_wrfout(ifl+1)
   
-!              sts = NF90_GET_VAR(ncidin, rainnc_varid, rainnc_in(:,:,1), &
-!                START = (/ xoffset, yoffset, it /), &
-!                COUNT = (/ xfocus,yfocus, 1 /) )
+              sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
   
-!              sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,1), &
-!                START = (/ xoffset, yoffset, it /), &
-!                COUNT = (/ xfocus, yfocus, 1 /) )
+              sts = NF90_INQ_VARID(ncidin0, "RAINNC", rainnc_varid)
+              sts = NF90_INQ_VARID(ncidin0, "RAINC", rainc_varid)
+
+              ! read the first timestep of the subsequent wrfout file
+              sts = NF90_GET_VAR(ncidin0, rainnc_varid, rainnc_in(:,:,2), &
+                START = (/ xoffset, yoffset, 1 /), &
+                COUNT = (/ xfocus, yfocus,1 /) )
   
-!              iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfout file 
-!                                          ! if it is not the first
-  
-!              sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
-  
-!              sts = NF90_INQ_VARID(ncidin0, "RAINNC", rainnc_varid)
-!              sts = NF90_INQ_VARID(ncidin0, "RAINC", rainc_varid)
-  
-!              sts = NF90_GET_VAR(ncidin0, rainnc_varid, rainnc_in(:,:,2), &
-!                START = (/ xoffset, yoffset, 1 /), &
-!                COUNT = (/ xfocus, yfocus,1 /) )   !read last timestep of previous wrfout file
-  
-!              sts = NF90_GET_VAR(ncidin0, rainc_varid, rainc_in(:,:,2), &
-!                START = (/ xoffset, yoffset, 1 /), &
-!                COUNT = (/ xfocus, yfocus,1 /) )
+              sts = NF90_GET_VAR(ncidin0, rainc_varid, rainc_in(:,:,2), &
+                START = (/ xoffset, yoffset, 1 /), &
+                COUNT = (/ xfocus, yfocus,1 /) )
    
-!              sts = NF90_CLOSE(ncidin0)
-  
-!              iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+              sts = NF90_CLOSE(ncidin0)
+
+              ! set to the current wrfout file again
+              iflWRFin = fl_wrfout(ifl) 
+
+            ! no further file, nothing can be done
+            ! just pass missing values on
+            ELSE
+
+              PRINT *, "no data available for average calculation any more"
+
+              calc = .FALSE.
   
             END IF
   
@@ -2487,11 +2516,21 @@ DO ifrq = 1, 1, 1
 ! t2-t1, no bucket used
 ! InDimLenRec - 1
 
-          IF (var_cmip(ivar) == "pr") THEN 
+          IF (var_cmip(ivar) == "pr") THEN
+
+            IF (calc) THEN
   
-            data_in(:,:) = ( ( rainnc_in(:,:,2) + rainc_in(:,:,2) ) - &
-                             ( rainnc_in(:,:,1) + rainc_in(:,:,1) ) ) / &
-                             ( dtHours * 3600. )
+              data_in(:,:) = ( ( rainnc_in(:,:,2) + rainc_in(:,:,2) ) - &
+                               ( rainnc_in(:,:,1) + rainc_in(:,:,1) ) ) / &
+                               ( dtHours * 3600. )
+
+            ELSE
+
+              data_in(:,:) = mv
+
+            END IF
+
+            calc = .TRUE.
 
           END IF
   
