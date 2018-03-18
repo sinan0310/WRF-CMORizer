@@ -14,7 +14,7 @@
 !   WRF_CMORizer.f90
 !
 ! VERSION:
-!   vX.X as of 2018-03-17
+!   vX.X as of 2018-03-18
 !   see git tags and log for revision details, history, and versions
 !
 ! STATUS:
@@ -59,7 +59,10 @@
 !   of WRF EUR-11 evaluation and projection simulaitons very tedious; it would
 !   mean lots of scripting and lots of I/O. The idea of the F95 tool is to be 
 !   simple and by doing a single pass, with as few I/O operations as possible
-!   and a low memory footprint, and produce fully compliant data.  
+!   and a low memory footprint, and produce fully compliant data.
+!   Nearly every dataset in ESGF is in detail somewhat contradicting the spec.
+!   also, because the spec. changed over time; with a one-stop tool, e.g. the
+!   defintion of attributes etc. is very robust and transparent.
 !   
 ! DISSEMINATION:
 !   https://www.github.com/kgoergen 
@@ -128,90 +131,6 @@
 ! OUTPUTS:
 !   - netCDF files according to standard specification.
 !   - No Optional outputs, except log file.
-!
-! RESTRICTIONS:
-!   - No side effects.
-!   - If the WRF output filenames are non-standard, the file list pattern 
-!     matching may have to be adjusted
-!   - Hardcoded time vector name 'Times', etc. so some work to adjust for other
-!     RCMs.
-!   - The highest temporal resolution possible is 1h at the moment, because of 
-!     how the time matching is coded.
-!   - A maximum of 13 variables per namlist is currently hardcoded. Could be 
-!     expanded, there is not limit.
-!   - The number of vars per namelist is hardcoded, has to be adjusted if a 
-!   - namelist is to be expanded.
-!   - Currently only one input root directory is possible. If data is stored at
-!     different locations, symbolic links might have to be done beforehand.
-!   - With files with an individually created time-coverage (non standard) only 
-!     one pass is possible, i.e. the file is created coverign a certain timespan
-!     and data from the netCDF files in the filelist are tranbsferred according 
-!     to the variable namelist.
-!   - If a storage file exists and wrf data for a date/time is read a second 
-!     time the data alreday stored wil be overwritten; there is no warning;
-!     in case the input data is the same original WRF output file, there is no 
-!     damage done except for lost efficiency; if for some reason the data 
-!     handling is upside down, this corrupts the data.
-!   - With many variables not data_in, there is an inflation of the RAM used
-!     they are not dealllocated again after usage...
-!
-! BUGS:
-!   - In case of average variables, like pr, for the very last timestep in an 
-!     storage file, there is one timestep too much. like 00:30, when then 
-!     timespan ends at 00:00, no fields are written in there. Usually an issue
-!     at the very end of the simulaiton timespan.
-!   - When calculating the average time vec: e.g. 05:29:60 is shown with ncdump,
-!     should be 05:30:00, even with double precision calc no chance. cdo is OK,
-!     ncview too. Seems more a ncdump issue.
-!   - In the Makefile, there is a 'veryclean' option: remove that, it is killing 
-!     the data also. In there for testing.
-!
-! PROCEDURE:
-!   The tool may be called as part of a processing chain. It is meant as an all-
-!   in-one tool. It basically reads data, controlled by a namelist, checks the
-!   dates in the input file, starts looping over the input file, one variable or
-!   diagnostic at a time, checks whether th storage file exists, and if not 
-!   creates the storage file based on the data reference syntax and all. No 
-!   ancilliary files except the basic namelists are needed, no libraries except 
-!   netCDF. No fancy compiler functionalities are used. The tool always checks 
-!   the model data time information and sorts in the data based on a reference
-!   time vector. It handles a timestep at a time, to keep memory footprint very 
-!   low. The namelists determine whether the variables are to be prepared for a 
-!   certain resolution or averaged or regridded, based on the protocol variable
-!   lists. They also contain the standard names. Namelists may be modified by
-!   adding or removing vars, but thir processing may also be just switched off.
-!   Originally all was meant to go into a single monolithic namelist, then it
-!   was decided to split the namelists according to variable groups. 
-!
-!   The looping structure is as follows:
-!   ifrq (loop over temporal output and aggregation frequencies) 
-!     ivarnml (namelists with different variable combinations)
-!       ivar (variables from the namelists)
-!         ifl (all files in the search path)
-!           it (all timesteps per file)
-!             **processing**
-!
-!   WRF standard output means: Data as written based on a standard unmodified 
-!   registry. The tool works on one experiment at a time (e.g. 'CORDEX'), and on
-!   one resolution at a time (e.g. EUR-11). There is no relationship between 
-!   different domains or experiments during processing.
-!
-!   If the storage file is created but the input data does not cover the 
-!   complete file, once the first data have been written, the unlimited 
-!   dimension is expanded and the empty fields / timesteps are filled with 
-!   missing values. Due to the way the tool sorts in data, e.g., when working
-!   in auto-mode, i.e. creating annual files for tier-2 storage, it will always
-!   create as many files as needed according to the time information in the WRF
-!   outputs. Fields can be sorted in as they appear. No matter whether it is in 
-!   the middle of the storage file or at the very beginning, in chronoilogicl 
-!   order.
-!
-!   To be resource efficient and fast, the tool tries to check whether a 
-!   certain operation is nedded or not, like whether it is on a second pass 
-!   through a file or variable, then ther eis no need to setup the time vecs 
-!   etc. again. Though temporally very fine-grained, this improves efficieny.
-!
-!   This is pure research code, there is literally no error trapping.
 !
 ! FEATURES:
 !   - The tool can produce all required variables, i.e. output netCDF files as
@@ -288,25 +207,130 @@
 !   - Tries to have minimum hardcoded.
 !   - The tool can be scripted and nml files maybe modified using sed, 
 !     embedding in workflows possible.
+!   - To adjust the tool to a new dataset / experiment, basically only the 
+!     runctrl.current.nml namelist has to be adjusted.
+!   - The tool is not hardcoded to any specific CORDEX domain, this is
+!     determined by the main namelist settings and by the geo_em file, which has
+!     to be read.
+!
+! PROCEDURE:
+!   The tool may be called as part of a processing chain. It is meant as an all-
+!   in-one tool. It basically reads data, controlled by a namelist, checks the
+!   dates in the input file, starts looping over the input file, one variable or
+!   diagnostic at a time, checks whether th storage file exists, and if not 
+!   creates the storage file based on the data reference syntax and all. No 
+!   ancilliary files except the basic namelists are needed, no libraries except 
+!   netCDF. No fancy compiler functionalities are used. The tool always checks 
+!   the model data time information and sorts in the data based on a reference
+!   time vector. It handles a timestep at a time, to keep memory footprint very 
+!   low. The namelists determine whether the variables are to be prepared for a 
+!   certain resolution or averaged or regridded, based on the protocol variable
+!   lists. They also contain the standard names. Namelists may be modified by
+!   adding or removing vars, but thir processing may also be just switched off.
+!   Originally all was meant to go into a single monolithic namelist, then it
+!   was decided to split the namelists according to variable groups. 
+!
+!   The looping structure is as follows:
+!   ifrq (loop over temporal output and aggregation frequencies) 
+!     ivarnml (namelists with different variable combinations)
+!       ivar (variables from the namelists)
+!         ifl (all files in the search path)
+!           it (all timesteps per file)
+!             **processing**
+!
+!   WRF standard output means: Data as written based on a standard unmodified 
+!   registry. The tool works on one experiment at a time (e.g. 'CORDEX'), and on
+!   one resolution at a time (e.g. EUR-11). There is no relationship between 
+!   different domains or experiments during processing.
+!
+!   If the storage file is created but the input data does not cover the 
+!   complete file, once the first data have been written, the unlimited 
+!   dimension is expanded and the empty fields / timesteps are filled with 
+!   missing values. Due to the way the tool sorts in data, e.g., when working
+!   in auto-mode, i.e. creating annual files for tier-2 storage, it will always
+!   create as many files as needed according to the time information in the WRF
+!   outputs. Fields can be sorted in as they appear. No matter whether it is in 
+!   the middle of the storage file or at the very beginning, in chronoilogicl 
+!   order.
+!
+!   To be resource efficient and fast, the tool tries to check whether a 
+!   certain operation is nedded or not, like whether it is on a second pass 
+!   through a file or variable, then ther eis no need to setup the time vecs 
+!   etc. again. Though temporally very fine-grained, this improves efficieny.
+!
+!   This is pure research code, there is literally no error trapping.
+!
+!   There is one master namelist, which contains information on the experiment
+!   this one is usually modified if and linked to runctrl.current.nml. The other
+!   namelists are usually kept as is.
+!
+!   The tier-2 processing is usually done first, i.e. the highest resolution
+!   data, 1h or 3h, e.g.; all tier-1 or core vars are derived by averaging from
+!   this tier-2 dataset.
 !
 ! EXAMPLE:
 !   ./postpro_model_WRF_to_ESGcompliancy > log
 !
-! TODO / PLANNED EXTENSIONS (**see TODO and CHECK markers in the code**)
+! RESTRICTIONS:
+!   - No side effects.
+!   - If the WRF output filenames are non-standard, the file list pattern 
+!     matching may have to be adjusted
+!   - Hardcoded time vector name 'Times', etc. so some work to adjust for other
+!     RCMs.
+!   - The highest temporal resolution possible is 1h at the moment, because of 
+!     how the time matching is coded.
+!   - A maximum of 13 variables per namlist is currently hardcoded. Could be 
+!     expanded, there is not limit.
+!   - The number of vars per namelist is hardcoded, has to be adjusted if a 
+!   - namelist is to be expanded.
+!   - Currently only one input root directory is possible. If data is stored at
+!     different locations, symbolic links might have to be done beforehand.
+!   - With files with an individually created time-coverage (non standard) only 
+!     one pass is possible, i.e. the file is created coverign a certain timespan
+!     and data from the netCDF files in the filelist are tranbsferred according 
+!     to the variable namelist.
+!   - If a storage file exists and wrf data for a date/time is read a second 
+!     time the data alreday stored wil be overwritten; there is no warning;
+!     in case the input data is the same original WRF output file, there is no 
+!     damage done except for lost efficiency; if for some reason the data 
+!     handling is upside down, this corrupts the data.
+!   - With many variables not data_in, there is an inflation of the RAM used
+!     they are not dealllocated again after usage...
+!
+! BUGS:
+!   - In case of average variables, like pr, for the very last timestep in an 
+!     storage file, there is one timestep too much. like 00:30, when then 
+!     timespan ends at 00:00, no fields are written in there. Usually an issue
+!     at the very end of the simulaiton timespan.
+!   - When calculating the average time vec: e.g. 05:29:60 is shown with ncdump,
+!     should be 05:30:00, even with double precision calc no chance. cdo is OK,
+!     ncview too. Seems more a ncdump issue. Others have this issue too.
+!   - In the Makefile, there is a 'veryclean' option: remove that, it is killing 
+!     the data also. In there for testing.
+!   - Filename: timespan information: point data, tier-2, e.g. 2100123123;
+!     average data: 2101010100, end of the time_bnds block, if 23:30 is midpoint
+!     time.
+!   - Precipitation does not include graupel etc., just rainnc and rainc.
+!
+! TODO / PLANNED EXTENSIONS
+! **see TODO and CHECK markers in the code**
+!   - Add levels: lvl_bnds, lvl
+!   - Use of wrfxtrm, wrfpress aside from wrfout
+!   - Aside from mean, also have min/max
+!   - Static fields processing, fx > seperate namelist
+!   - All variables/diagnostics -> extensions of namelist
 !   - Temporal aggregations, i.e. 6hr, day, mon, seas
-!   - Spatial averaging
-!   - Static fields processing
-!   - All variables -> extension of namelist
-!   - lvl_bnds
-!   - (OpenMP parallelism for the processing section), via pre-processor flags
-!   - (Parallel netCDF I/O where possible), via pre-processor flags
+!   - Spatial averaging EUR-11i grid...
 !   - Run output via the compliancy checker
-!   - Registation of naming schemes with CORDEX
-!   - Adjust to other model system
-!   - Incroporate wrfpress and wrfxtrm files
+!   - Registation of naming schemes with CORDEX (institude_id, model_id)
+!   - Add CMIP "realm" as new attribute -> important for TerrSysMP
+!   - (OpenMP parallelism for the processing section), via pre-processor flags
+!   - (Parallel netCDF I/O where possible), via pre-processor flags > using all
+!     compressed netCDF, no most likely not even possible
+!   - ((Adjust to other model system)) > TerrSysMP
 !
 ! QUESTIONS:
-!   - do we need time_bnds also with point data, like tas
+!   - Do we need time_bnds also with point data, like tas?
 !
 ! ONGOING DEVELOPMENTS (March 2018):
 !   - Currently merging forks from different contributors, complete check of the
@@ -323,25 +347,27 @@
 !   * [X] fix (!) and check overall, document, and implement the flexible time 
 !         span for the storage file > have some proper output which can be 
 !         viewed with ncview also
-!   * [ ] fix preamble
-!   * [ ] check w/ protocol: definition + ESGF archive + FPS new nomenclature, 
-!         experiment name SFTP
-!   * [ ] Truhetz merge file 1, cont.
+!   * [X] fix preamble
+!   * [X] check w/ FPS new nomenclature, also my runs...
+!   * [X] check w/ protocol: definition + ESGF archive + CD convention
+!   * [X] check the ESGF UCAN and CSC for reasonable additional global vars
+!   * [ ] variable inventory, what is needed? ICTP + CORDEX + FPS
+!   * [ ] Truhetz merge file 1, cont., u + v on mass grid!!!
 !   * [ ] Truhetz merge file 2
 !   * [ ] process data for the ICTP paper
-!   * [ ] Aris, temporal averaging
+!   * [ ] Aris, temporal averaging merge
 !   * [ ] adjustment for different RCMs < see CCLM code from Heimo 
 !         (not yet included in merge file 1 or 2)
-!   * [ ] check the ESGF UCAN and CSC for reasonable additional global vars
+!   * [ ] register new institute ID and model name with O.B. Christensen at DMI.
 !
 ! DOUBLE-CHECKING OF FUNCTIONALITY (March 2018):
-! tier-2 (1hr, 3hr): tas, pr
-! Testing: 2018-03-17: 
-! - time vec correct
-! - creation of files correct
-! - sorting in perfect (cdo, ncdump, ncview...)
-! - compression OK, format OK
-! - alternative timespans work
+! * tier-2 (1hr, 3hr): tas, pr
+! * Testing: 2018-03-17: 
+!   - time vec correct
+!   - creation of files correct
+!   - sorting in perfect (cdo, ncdump, ncview...)
+!   - compression OK, format OK
+!   - alternative timespans work
 !
 ! MODIFICATION / REVISION HISTORY:
 !   See either git log for details.
@@ -452,7 +478,7 @@ MODULE NamelistHandling
   CHARACTER (len = 200) :: Conventions, contact, experiment_id, experiment, &
     driving_experiment, driving_model_id, driving_model_ensemble_member, &
     driving_experiment_name, institution, institute_id, model_id, &
-    rcm_version_id, project_id, CORDEX_domain, product, references
+    rcm_version_id, project_id, CORDEX_domain, product, references, title
 
   CHARACTER (len = 200) :: comment, institute_run_id
 
@@ -520,7 +546,7 @@ INTERFACE
     CHARACTER (LEN = 3), INTENT(IN) :: dt
   END SUBROUTINE CreateRefTimeArray
 
-! (het) modified calculation of mean sea level pressure adopted from wrf_interp.F90	
+! HTr: modified calculation of mean sea level pressure adopted from wrf_interp.F90	
   SUBROUTINE calcslp(slp,pres,qv,tk1,ght,nz,ns,ew,T00)
     IMPLICIT NONE
     INTEGER, INTENT(IN) :: nz,ns,ew
@@ -539,10 +565,6 @@ END INTERFACE
 
 CHARACTER (len = *), PARAMETER :: fnNMLexp = "runctrl.current.nml"
 CHARACTER (len = 100), DIMENSION(:), ALLOCATABLE :: fnNMLvar
-
-!CHARACTER (len = *), PARAMETER :: PathFileNameInTEST = "testWRFin.nc"
-!CHARACTER (len = *), PARAMETER :: PathFileNameOutTEST = "testESGout.nc"
-
 CHARACTER (len = 200) :: pn_out, fn_out, iflWRFin
 
 !-------------------------------------------------------------------------------
@@ -555,7 +577,7 @@ REAL, PARAMETER :: b = 17.27 !
 REAL, PARAMETER :: c = 273.15 !
 REAL, PARAMETER :: d = 35.86 !
 REAL, PARAMETER :: n = L*0.622*a/cp !
-REAL, PARAMETER :: mv = 1.e20
+REAL, PARAMETER :: mv = 1.e20 ! missing value as specified
 
 ! auxilliary vars, just needed during development
 ! INTEGER, PARAMETER :: nt = 8
@@ -563,7 +585,7 @@ REAL, PARAMETER :: mv = 1.e20
 ! new netCDF file
 INTEGER :: ncid, ncidin, ncidin0
 INTEGER :: lon_dimid, lat_dimid, rec_dimid, height_dimid, &
-  nb2_dimid
+  nb2_dimid, x_dimid, y_dimid
 INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, &
   rotated_pole_varid, height_varid, rec_varid, pp_varid, pb_varid, ph_varid, &
   phb_varid, qv_varid, qc_varid, qi_varid, qr_varid, qs_varid, &
@@ -613,8 +635,6 @@ REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: &
   Time_bnds
 REAL(KIND=8), DIMENSION(:), ALLOCATABLE :: &
   TimeRefArraySubsetMean
-!DOUBLE PRECISION, DIMENSION(:,:), ALLOCATABLE :: TimeRefArraySubset, Time_bnds
-!DOUBLE PRECISION, DIMENSION(:), ALLOCATABLE :: TimeRefArraySubsetMean 
 
 ! bucket system
 INTEGER, DIMENSION(:,:,:), ALLOCATABLE :: i_rainnc_in, i_rainc_in, i_rad_in
@@ -728,6 +748,7 @@ ALLOCATE( data_in( xfocus, yfocus ), STAT=sts )
 IF (sts /= 0) STOP "*** Not enough memory on this device, stopping***"
 
 ALLOCATE( TimeRefArraySubset(2,2) )
+ALLOCATE( TimeRefArraySubsetMean(2) )
 ALLOCATE( Time_bnds(2,2) )
 
 !-------------------------------------------------------------------------------
@@ -938,7 +959,7 @@ DO ifrq = 1, 1, 1
 ! better avoid this kind of filtering, but then create a new namelist
 
     !DO ivar = 1, nvar_nml, 1
-    DO ivar = 2, 2, 1 ! testing, tas only
+    DO ivar = 1, 2, 1 ! testing
   
       PRINT *,"============================================================"
       PRINT *, "*** ", TRIM(var_cmip(ivar)), " ***"
@@ -1169,6 +1190,7 @@ DO ifrq = 1, 1, 1
               SHAPE(TimeRefArray)
   
             DEALLOCATE( TimeRefArraySubset )
+            DEALLOCATE( TimeRefArraySubsetMean )
             DEALLOCATE( Time_bnds )
             
 !            PRINT *,'SIZE(TimeRefArray, 1)', SIZE(TimeRefArray, 1)
@@ -1300,35 +1322,47 @@ DO ifrq = 1, 1, 1
               !-----------------------------------------------------------------
 
               ! always included define dimensions
+              sts = NF90_DEF_DIM(ncid, "x", xfocus, x_dimid)
+              sts = NF90_DEF_DIM(ncid, "y", yfocus, y_dimid)
               sts = NF90_DEF_DIM(ncid, "rlon", xfocus, lon_dimid)
               sts = NF90_DEF_DIM(ncid, "rlat", yfocus, lat_dimid)
               IF ( height(ivar) /= -999 ) THEN
                 sts = NF90_DEF_DIM(ncid, "height", 1, height_dimid)
               END IF
+!              IF ( ??? ) THEN
+!                sts = NF90_DEF_DIM(ncid, "plev", 1, plev_dimid)
+!              END IF
               sts = NF90_DEF_DIM(ncid, "time", NF90_UNLIMITED, rec_dimid)
-              sts = NF90_DEF_DIM(ncid, "nb2", 2, nb2_dimid) ! ??????????????????????? CHECK > only of time_bnds > only if cell_method mean nbds????
+              IF ( cell_methods(ivar) == "mean" ) THEN
+                sts = NF90_DEF_DIM(ncid, "bnds", 2, nb2_dimid)
+              ENDIF
 
               !-----------------------------------------------------------------
+              ! no rule in CF1.7 standard, for capital letters or not > make a
+              ! rule of my own to have long names start with capital letter
+              ! nice in plots
 
               ! always included -- longitude field, unrotated
-              sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lon_varid)
+              sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ x_dimid, y_dimid /), lon_varid)
               sts = nf90_def_var_deflate(ncid, lon_varid, 1, 1, 1)
               sts = nf90_put_att(ncid, lon_varid, "standard_name", "longitude")
-              sts = nf90_put_att(ncid, lon_varid, "long_name", "longitude")
+              sts = nf90_put_att(ncid, lon_varid, "long_name", "Longitude")
               sts = nf90_put_att(ncid, lon_varid, "units", "degrees_east")
-  
+              sts = nf90_put_att(ncid, lon_varid, "_CoordinateAxisType", "Lon") ! special addon, not needed, but allowed
+
               ! always included -- latitude field, unrotated
-              sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lat_varid)
+              sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ x_dimid, y_dimid /), lat_varid)
               sts = nf90_def_var_deflate(ncid, lat_varid, 1, 1, 1)
               sts = nf90_put_att(ncid, lat_varid, "standard_name", "latitude")
-              sts = nf90_put_att(ncid, lat_varid, "long_name", "latitude")
+              sts = nf90_put_att(ncid, lat_varid, "long_name", "Latitude")
               sts = nf90_put_att(ncid, lat_varid, "units", "degrees_north")
+              sts = nf90_put_att(ncid, lat_varid, "_CoordinateAxisType", "Lat") ! special addon, not needed, but allowed
   
               ! always included -- longitude vector, rotated
               sts = nf90_def_var(ncid, "rlon", NF90_DOUBLE, (/ lon_dimid /), rlon_varid)
               sts = nf90_def_var_deflate(ncid, rlon_varid, 1, 1, 1)
               sts = nf90_put_att(ncid, rlon_varid, "standard_name", "grid_longitude")
-              sts = nf90_put_att(ncid, rlon_varid, "long_name", "longitude in rotated pole grid")
+              sts = nf90_put_att(ncid, rlon_varid, "long_name", "Longitude in rotated pole grid")
               sts = nf90_put_att(ncid, rlon_varid, "units", "degrees")
               sts = nf90_put_att(ncid, rlon_varid, "axis", "X")
   
@@ -1336,44 +1370,74 @@ DO ifrq = 1, 1, 1
               sts = nf90_def_var(ncid, "rlat", NF90_DOUBLE, (/ lat_dimid /), rlat_varid)
               sts = nf90_def_var_deflate(ncid, rlat_varid, 1, 1, 1)
               sts = nf90_put_att(ncid, rlat_varid, "standard_name", "grid_latitude")
-              sts = nf90_put_att(ncid, rlat_varid, "long_name", "latitude in rotated pole grid")
+              sts = nf90_put_att(ncid, rlat_varid, "long_name", "Latitude in rotated pole grid")
               sts = nf90_put_att(ncid, rlat_varid, "units", "degrees")
               sts = nf90_put_att(ncid, rlat_varid, "axis", "Y")
-  
+
+! additional and useful
+! important for remapping with cdo (conservative remapping only possible with this information)
+!        vertices = 4 ;
+!        float lat_vertices(rlat, rlon, vertices) ;
+!                lat_vertices:units = "degrees_north" ;
+!        float lon_vertices(rlat, rlon, vertices) ;
+!                lon_vertices:units = "degrees_east" ;
+
               ! always included, restriction to one domain only
               sts = nf90_def_var(ncid, "rotated_pole", NF90_CHAR, rotated_pole_varid)
               sts = nf90_put_att(ncid, rotated_pole_varid, "grid_mapping_name", "rotated_latitude_longitude")
               sts = nf90_put_att(ncid, rotated_pole_varid, "grid_north_pole_latitude", GeoNPLat)
               sts = nf90_put_att(ncid, rotated_pole_varid, "grid_north_pole_longitude", GeoNPLon)
   
-              ! depends whether height is set in the nml
+              ! depends whether height is set in the nml, all between 1.5 and 10m
               IF ( height(ivar) /= -999 ) THEN
                 sts = nf90_def_var(ncid, "height", NF90_DOUBLE, (/ height_dimid /), height_varid)
                 sts = nf90_put_att(ncid, height_varid, "standard_name", "height")
-                sts = nf90_put_att(ncid, height_varid, "long_name", "height")
+                sts = nf90_put_att(ncid, height_varid, "long_name", "Height")
                 sts = nf90_put_att(ncid, height_varid, "units", "m")
                 sts = nf90_put_att(ncid, height_varid, "positive", "up")
                 sts = nf90_put_att(ncid, height_varid, "axis", "Z")
               END IF
   
-              !missing: lvl, depends > TODO
+              ! lvl TODO
+              ! just level definition, single number, like height
+!              IF ( ??? ) THEN
+!                sts = nf90_def_var(ncid, "plev", NF90_DOUBLE, (/ plev_dimid /), plev_varid)
+!                sts = nf90_put_att(ncid, plev_varid, "standard_name", "air_pressure")
+!                sts = nf90_put_att(ncid, plev_varid, "long_name", "Pressure")
+!                sts = nf90_put_att(ncid, plev_varid, "units", "Pa")
+!                sts = nf90_put_att(ncid, plev_varid, "positive", "down")
+!                sts = nf90_put_att(ncid, plev_varid, "axis", "Z")
+!                IF ( cell_methods(ivar) == "???xxx" ) THEN ! if this is layers over which there has been some everaging
+!                  sts = nf90_put_att(ncid, plev_varid, "bounds", "plev_bnds")
+!                END IF
+!              END IF
+
+              ! for vertically averaged variables need the plev bounds
+              ! plev_bnds(2), always just single field per file: this is just two numbers 
+!              IF ( cell_methods(ivar) == "???xxx" ) THEN
+!                sts = nf90_def_var(ncid, "plev_bnds", NF90_DOUBLE, (/ nb2_dimid /), plevbnds_varid)
+!              END IF
   
               ! always included
               sts = nf90_def_var(ncid, "time", NF90_DOUBLE, (/ rec_dimid /), rec_varid)
               sts = nf90_put_att(ncid, rec_varid, "standard_name", "time")
-              sts = nf90_put_att(ncid, rec_varid, "long_name", "time")
-              sts = nf90_put_att(ncid, rec_varid, "units", "days since " // tstot(1:10) // " " // tstot(12:19))
+              sts = nf90_put_att(ncid, rec_varid, "long_name", "Time")
+              sts = nf90_put_att(ncid, rec_varid, "units", "days since " // tstot(1:10) // "T" // tstot(12:19)) // "Z"
               sts = nf90_put_att(ncid, rec_varid, "calendar", "standard")
               sts = nf90_put_att(ncid, rec_varid, "axis", "T")
+              IF ( cell_methods(ivar) == "mean" ) THEN
+                sts = nf90_put_att(ncid, rec_varid, "bounds", "time_bnds")
+              END IF
   
               ! for mean variables need the time bounds
+              ! no further attributes, like plev_bnds
               IF ( cell_methods(ivar) == "mean" ) THEN
                 sts = nf90_def_var(ncid, "time_bnds", NF90_DOUBLE, (/ nb2_dimid, rec_dimid /), recbnds_varid)
-                sts = nf90_put_att(ncid, recbnds_varid, "standard_name", "time_bnds")
-                sts = nf90_put_att(ncid, recbnds_varid, "long_name", "time_bnds")
-                sts = nf90_put_att(ncid, recbnds_varid, "units", "days since " // tstot(1:10) // " " // tstot(12:19))
-                sts = nf90_put_att(ncid, recbnds_varid, "calendar", "standard")
-                sts = nf90_put_att(ncid, recbnds_varid, "axis", "T")
+!                sts = nf90_put_att(ncid, recbnds_varid, "standard_name", "time_bnds")
+!                sts = nf90_put_att(ncid, recbnds_varid, "long_name", "Time_bnds")
+!                sts = nf90_put_att(ncid, recbnds_varid, "units", "days since " // tstot(1:10) // "T" // tstot(12:19)) // "Z"
+!                sts = nf90_put_att(ncid, recbnds_varid, "calendar", "standard")
+!                sts = nf90_put_att(ncid, recbnds_varid, "axis", "T")
               END IF
 
               !-----------------------------------------------------------------
@@ -1400,7 +1464,7 @@ DO ifrq = 1, 1, 1
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "tracking_id", trackingID)
               
               ! optional global variables
-              ! TODO: check UCAN and CSC for more reasonable variables
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "title", title)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "comment", comment)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "institute_run_id", institute_run_id)
 
@@ -1415,12 +1479,16 @@ DO ifrq = 1, 1, 1
               ! https://www.unidata.ucar.edu/software/netcdf/docs/netcdf_perf_chunking.html
               ! compression on/off: 19MB->12MB, 0.1s->0.5s
               ! chunking: needs some careful considerations
-              
-              IF ( height(ivar) /= -999 ) THEN
-                sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, height_dimid, rec_dimid /), x_varid) 
-              ELSE
+
+              ! not sure whether the height/plev dimension this is needed
+              ! with CORDEX only one layer always per variable, see the
+              ! coordinates attribute which makes the association
+              ! this is also better for coding and data reading
+              !IF ( height(ivar) /= -999 ) THEN
+              !  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, height_dimid, rec_dimid /), x_varid)  
+              !ELSE
                 sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, rec_dimid /), x_varid)
-              END IF
+              !END IF
               ! TODO -> determine chunksizes vector beforehand otherwise
               ! this can only make it worse
               !sts = nf90_def_var_chunking(ncid, x_varid, NF90_CHUNKED, XXXchunksizesXXX) 
@@ -1439,8 +1507,12 @@ DO ifrq = 1, 1, 1
                 sts = nf90_put_att(ncid, x_varid, "positive", positive(ivar))
               END IF
               sts = nf90_put_att(ncid, x_varid, "cell_methods", "time: "//TRIM(cell_methods(ivar)))
-              sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat")
-              sts = nf90_put_att(ncid, x_varid, "grid_mapping", "Rotated_Pole")
+              IF ( height(ivar) /= -999 ) THEN
+                sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat height") ! this is needed !!!!
+              ELSE
+                sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat")
+              END IF
+              sts = nf90_put_att(ncid, x_varid, "grid_mapping", "rotated_pole")
               sts = nf90_put_att(ncid, x_varid, "missing_value", mv)
               sts = nf90_put_att(ncid, x_varid, "_FillValue", mv)
 
@@ -1457,35 +1529,24 @@ DO ifrq = 1, 1, 1
                 PRINT *, 'cell_methods:', cell_methods(ivar)
                 PRINT *, TimeRefArraySubset(:,1)
                 sts = NF90_PUT_VAR(ncid, rec_varid, TimeRefArraySubset(:,1) )
-               
-!                print*, 'TimeRefArraySubset(:,1)', TimeRefArraySubset(:,1)
-!                print*, 'TimeRefArraySubset(:,2)', TimeRefArraySubset(:,2)
-!                print*, 'TimeRefArraySubset(:,3)', TimeRefArraySubset(:,3)
-!                print*, 'TimeRefArraySubset(:,4)', TimeRefArraySubset(:,4)
-!                print*, 'TimeRefArraySubset(:,5)', TimeRefArraySubset(:,5)
-  
+
               END IF
-  
+
+              ! TODO, hardcoding! 
               IF ( cell_methods(ivar) == "mean" ) THEN
 
                 ! problem
                 ! https://www.unidata.ucar.edu/mailing_lists/archives/netcdfgroup/2015/msg00071.html  
-                TimeRefArraySubsetMean (:) = TimeRefArraySubset(:,1) + ( 0.5_8 * (1._8 / 24._8))
+                TimeRefArraySubsetMean (:) = TimeRefArraySubset(:,1) + ( 0.5_8 * (1._8 / 24._8)) !dtHours/2._8
                 PRINT *, "cell_methods:", cell_methods(ivar)
                 PRINT *, "dtHours",  dtHours, dtHours/2.
                 PRINT *, "TimeRefArraySubset", TimeRefArraySubset(:,1)
                 PRINT *, "TimeRefArraySubsetMean", TimeRefArraySubsetMean(:)
                 sts = NF90_PUT_VAR(ncid, rec_varid, TimeRefArraySubsetMean(:) )
                 PRINT *, 'sts NF90_PUT_VAR time', sts
-  
-!                print*, 'TimeRefArraySubset(:,1)', TimeRefArraySubset(:,1)
-!                print*, 'TimeRefArraySubset(:,2)', TimeRefArraySubset(:,2)
-!                print*, 'TimeRefArraySubset(:,3)', TimeRefArraySubset(:,3)
-!                print*, 'TimeRefArraySubset(:,4)', TimeRefArraySubset(:,4)
-!                print*, 'TimeRefArraySubset(:,5)', TimeRefArraySubset(:,5)
-  
+    
                 Time_bnds(1,:) = TimeRefArraySubset(:,1)
-                Time_bnds(2,:) = TimeRefArraySubset(:,1) + ( 1.0_8 * (1._8 / 24._8))
+                Time_bnds(2,:) = TimeRefArraySubset(:,1) + ( 1.0_8 * (1._8 / 24._8)) !dtHours
                 PRINT *, "time bnds lower", Time_bnds(1,:)
                 PRINT *, "time bnds upper", Time_bnds(2,:)
                 sts = NF90_PUT_VAR(ncid, recbnds_varid, Time_bnds(:,:), START = (/ 1, 1 /) , COUNT = (/ 2, SIZE(Time_bnds(1,:)) /) )

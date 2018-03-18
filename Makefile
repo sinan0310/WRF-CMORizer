@@ -2,15 +2,15 @@
 # Name        : Makefile
 # Author      : Klaus GOERGEN, k.goergen@fz-juelich.de 
 # Version     : See the git log
-# License     : MIT
-# Description : Makefile for WRF_CMORizer.f90
-# Comment     : See the preamble of WRF_CMORizer.f90 
+# License     : MIT, see license.txt
+# Description : Makefile for WRF_CMORizer.f90, more compile options in preamble
+# WARNING     : veryclean for testing of the code, remove to avoid any mistakes!
 # ==============================================================================
 
 # JSC/JURECA HPC system (easybuild + modules software environment)
-# load environment first, compatible with multiple stages and toolchains
+# load environment first; tool is compatible with multiple stages and toolchains
 #FC = $(EBROOTIFORT)/bin/ifort
-#FCFLAGS = -O3
+#FCFLAGS = -O2
 #FCFLAGS += -warn all
 #FCFLAGS += -I$(EBROOTNETCDFMINFORTRAN)/include
 #LDFLAGS = -L$(EBROOTNETCDFMINFORTRAN)/lib -lnetcdff -lnetcdf
@@ -19,10 +19,8 @@
 FC = /usr/bin/gfortran
 FCFLAGS = -O2
 FCFLAGS += -Wall
-#FCFLAGS += -std=f95
 FCFLAGS += -ffree-line-length-none
 FCFLAGS += -Wno-tabs
-#FCFLAGS += -fall-intrinsics
 FCFLAGS += -I/usr/include
 LDFLAGS = -L/usr/lib -lnetcdff -lnetcdf
 
@@ -42,4 +40,4 @@ clean:
 	rm -f *.o *.mod *.MOD *_genmod.f90 tmpfile* log
 
 veryclean: clean
-	rm -rf *~ $(PROGRAMS) /home/kgo/Documents/sandbox/cmorization_testing/CORDEX
+	rm -rf *~ $(PROGRAMS) /home/kgo/Documents/sandbox/cmorization_testing/CORDEX-FPSCEM-CMWL
