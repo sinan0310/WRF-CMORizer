@@ -5,8 +5,8 @@
 ! ***                                                                      ***
 ! ***      SEE THE LICENSE INFORMATION AT THE END OF THE PREAMBLE          ***
 ! ***                                                                      ***  
-! ***       THIS PREAMBLE THE ONLY DOCUMENTATION OF THIS PROGRAM           ***
-! ***     BEFORE ATTEMPTING TO USE THIS PROGRAM, READ THIS PREAMBLE        ***
+! ***      THIS PREAMBLE IS THE ONLY DOCUMENTATION OF THIS PROGRAM         ***
+! ***          BEFORE USING THIS PROGRAM, READ THIS PREAMBLE               ***
 ! ***                                                                      ***
 ! ****************************************************************************
 !
@@ -18,7 +18,7 @@
 !   see git tags and log for revision details, history, and versions
 !
 ! STATUS:
-!   under development -- not yet fit for purpose, see ToDos below
+!   under development -- not yet fit for purpose, see below
 !
 ! CURRENT CODE MAINTAINER:
 !   - Klaus GOERGEN | k.goergen@fz-juelich.de | KGo | FZJ/IBG-3
@@ -59,42 +59,44 @@
 !   of WRF EUR-11 evaluation and projection simulaitons very tedious; it would
 !   mean lots of scripting and lots of I/O. The idea of the F95 tool is to be 
 !   simple and by doing a single pass, with as few I/O operations as possible
-!   and a low memory footprint, and produce fully compliant data.
+!   and a low memory footprint, produce fully compliant ESGF-ready data.
 !   Nearly every dataset in ESGF is in detail somewhat contradicting the spec.
 !   also, because the spec. changed over time; with a one-stop tool, e.g. the
 !   defintion of attributes etc. is very robust and transparent.
 !   
 ! DISSEMINATION:
-!   https://www.github.com/kgoergen 
+!   https://www.github.com/kgoergen
 !
 ! CODING STANDARD / CONVENTIONS:
-!   - http://fortranwiki.org/fortran/show/Style
-!   - http://jules-lsm.github.io/coding_standards/
+!   - No systematic standard follows, tries to adhere to
+!     * http://fortranwiki.org/fortran/show/Style
+!     * http://jules-lsm.github.io/coding_standards/
 !   - Tries to be F95 ISO FORTRAN but has "SYSTEM" intrinsic function) 
-!   - also -std=f95 raises errors
+!   - Also -std=f95 raises errors
 !
 ! PRG.-LANGUAGE / ENVIRONMENT:
 !   - >=F95 compiler
-!   - Used for development and testing:
+!   - Used for development and testing (latest development, should be backward
+!     compatible):
 !     * gfortran 7.2.0
-!     * ifort 11.1??????????
+!     * ifort 17.0.2
 !   - Linux/UNIX OS (-> system calls)
 !
 ! REQUIREMENTS:
 !   - FORTRAN95 compiler
 !   - netCDF F90 library (http://www.unidata.ucar.edu/software/netcdf/)
 !     v4.x, used: v4.1.1 and 4.2.1.1 incl. HDF5 -> write netCDF-4 classic model
-!     format
+!     format, incl. compression
 !   - make (https://www.gnu.org/software/make/)
 !   - date (http://man7.org/linux/man-pages/man1/date.1.html)
-!   - uuidgen *nix console application (http://www.uuidgen.com/)
+!   - uuidgen (http://www.uuidgen.com/)
 !
 ! BUILDING:
 !   Two options:
-!   a) command line, e.g.
-!      gfortran -I/usr/include <prg>.f90 -L/usr/lib -lnetcdff -lnetcdf
-!   b) Makefile (recommended)
-!      make
+!   a) command line, e.g.:
+!        gfortran -I/usr/include <prg>.f90 -L/usr/lib -lnetcdff -lnetcdf
+!   b) Makefile (recommended):
+!        make
 !
 ! CATEGORY:
 !   PostPro.RCM.WRF.
@@ -102,17 +104,19 @@
 ! CALLING SEQUENCE EXAMPLES:
 !   - ./postpro_model_WRF_to_ESGcompliancy
 !   - ./postpro_model_WRF_to_ESGcompliancy > log
-!   - nohup time ./postpro_model_WRF_to_ESGcompliancy > log 2>&1 &
+!   - ./postpro_model_WRF_to_ESGcompliancy > log 2>&1
 !   - ./postpro_model_WRF_to_ESGcompliancy 2>&1 | tee output.log
+!   - nohup time <any_command_from_above> &
 ! 
 ! GETTING STARTED:
 !   1. Read this preamble as a user guide and technical description
-!   2. Use a single or a few smaller WRF standard outputs
+!   2. Use a single or a few smaller WRF standard outputs from a single exp.
 !   3. Adjust the main central namelist (just setup the input and output dirs.)
-!   4. Start by using one variable namelist and specify a single variable: tas
+!   4. Start by using one variable namelist and specify a single variable: tas 
 !
 ! CALLED FROM:
-!   Standalone command-line tool.
+!   Standalone command-line tool. Can ideally be combined with any processing
+!   chain.
 !
 ! LOCAL VARIABLES:
 !   See the variable declarations at the beginning of the code.
@@ -123,10 +127,7 @@
 !   - WRF outputs (wrfout*)
 !   - WRF outputs extremes (wrfxtrm*)
 !   No optional inputs, no keyword parameters. The tool is controlled by the
-!   namelists.
-!
-! FILES USED:
-!   - See inputs.
+!   namelists entirely.
 !
 ! OUTPUTS:
 !   - netCDF files according to standard specification.
@@ -173,7 +174,7 @@
 !     even not temporally ordered.
 !   - The tool is not takling care of the file handling of the wrf files before 
 !     or after the processing.
-!   - Different ways of date/time handling:
+!   - Different ways of temporal aggregation, output storage file structure:
 !     (A)
 !     With CORDEX archive protocol, at 3hr resolution, data is stored annually; 
 !     daily data is stored 5-yearly. A file is automatically created if it does
@@ -231,6 +232,7 @@
 !   was decided to split the namelists according to variable groups. 
 !
 !   The looping structure is as follows:
+!
 !   ifrq (loop over temporal output and aggregation frequencies) 
 !     ivarnml (namelists with different variable combinations)
 !       ivar (variables from the namelists)
@@ -268,34 +270,36 @@
 !   data, 1h or 3h, e.g.; all tier-1 or core vars are derived by averaging from
 !   this tier-2 dataset.
 !
-! EXAMPLE:
-!   ./postpro_model_WRF_to_ESGcompliancy > log
+!   In the variable namelists, there is not distinction between height and plev;
+!   the pressure levels can also be entered into the height field. During 
+!   runtime there is a distinction: everything > 10 is considered a pressure 
+!   level.
 !
 ! RESTRICTIONS:
 !   - No side effects.
 !   - If the WRF output filenames are non-standard, the file list pattern 
 !     matching may have to be adjusted
 !   - Hardcoded time vector name 'Times', etc. so some work to adjust for other
-!     RCMs.
+!     RCMs. Some rae places where stuff is hardcoded.
 !   - The highest temporal resolution possible is 1h at the moment, because of 
-!     how the time matching is coded.
+!     how the time matching is coded. Higher is possible.
 !   - A maximum of 13 variables per namlist is currently hardcoded. Could be 
 !     expanded, there is not limit.
-!   - The number of vars per namelist is hardcoded, has to be adjusted if a 
-!   - namelist is to be expanded.
 !   - Currently only one input root directory is possible. If data is stored at
 !     different locations, symbolic links might have to be done beforehand.
 !   - With files with an individually created time-coverage (non standard) only 
-!     one pass is possible, i.e. the file is created coverign a certain timespan
-!     and data from the netCDF files in the filelist are tranbsferred according 
+!     one pass is possible, i.e. the file is created covering a certain timespan
+!     and data from the netCDF files in the filelist are transferred according 
 !     to the variable namelist.
 !   - If a storage file exists and wrf data for a date/time is read a second 
-!     time the data alreday stored wil be overwritten; there is no warning;
-!     in case the input data is the same original WRF output file, there is no 
+!     time the data already stored will be overwritten; there is no warning;
+!     in case the input data is from same original WRF output file, there is no 
 !     damage done except for lost efficiency; if for some reason the data 
-!     handling is upside down, this corrupts the data.
-!   - With many variables not data_in, there is an inflation of the RAM used
-!     they are not dealllocated again after usage...
+!     handling is messed up and the data is from a different experiment, the
+!     stored data is corrupted.
+!   - With many variables not transferred from reading to processing within the
+!     data_in array, there is an inflation of the RAM used with further vars 
+!     processed as they are not deallocated again after usage... nearly a bug.
 !
 ! BUGS:
 !   - In case of average variables, like pr, for the very last timestep in an 
@@ -312,15 +316,20 @@
 !     time.
 !   - Precipitation does not include graupel etc., just rainnc and rainc.
 !
+!   NEWLY INTRODUCED OR DISCOVERED / URGENT
+!   - Refilling does not work anymore..., something is broken... !!!!!!!!!!
+!
 ! TODO / PLANNED EXTENSIONS
-! **see TODO and CHECK markers in the code**
-!   - Add levels: lvl_bnds, lvl
-!   - Use of wrfxtrm, wrfpress aside from wrfout
+! **see "TODO" and "CHECK" markers in the code**
+!   - Add levels: plev, plev_bnds > half done
+!   - Use of wrfxtrm, wrfpress aside from wrfout > easy, just add more filelists
+!     control variable is contained in the nml files already
 !   - Aside from mean, also have min/max
 !   - Static fields processing, fx > seperate namelist
-!   - All variables/diagnostics -> extensions of namelist
-!   - Temporal aggregations, i.e. 6hr, day, mon, seas
-!   - Spatial averaging EUR-11i grid...
+!   - Cover ALL REQUIRED variables/diagnostics + ADDITIONAL -> extensions nml
+!   - Temporal aggregations, i.e. 6hr, day, mon, seas > controlled by nml and 
+!     realized within loops
+!   - Spatial averaging -> EUR-11i grid...
 !   - Run output via the compliancy checker
 !   - Registation of naming schemes with CORDEX (institude_id, model_id)
 !   - Add CMIP "realm" as new attribute -> important for TerrSysMP
@@ -330,7 +339,7 @@
 !   - ((Adjust to other model system)) > TerrSysMP
 !
 ! QUESTIONS:
-!   - Do we need time_bnds also with point data, like tas?
+!   - -/-
 !
 ! ONGOING DEVELOPMENTS (March 2018):
 !   - Currently merging forks from different contributors, complete check of the
@@ -339,26 +348,28 @@
 !     considered: take the latest heads from various git branches and merge old-
 !     school locally without git
 !   - Walk through the code, contnuously building and checking using gfortran
-!
-!   * [X] master totally out of date > Knist+Truhetz+Kartsios worked from here
-!         most versions were running, but not ideal, just doing a fraction
-!   * [X] start with Knist version as new base, know this version most
-!   * [X] Truhetz merge file 1, start
-!   * [X] fix (!) and check overall, document, and implement the flexible time 
-!         span for the storage file > have some proper output which can be 
-!         viewed with ncview also
-!   * [X] fix preamble
-!   * [X] check w/ FPS new nomenclature, also my runs...
-!   * [X] check w/ protocol: definition + ESGF archive + CD convention
-!   * [X] check the ESGF UCAN and CSC for reasonable additional global vars
-!   * [ ] variable inventory, what is needed? ICTP + CORDEX + FPS
-!   * [ ] Truhetz merge file 1, cont., u + v on mass grid!!!
-!   * [ ] Truhetz merge file 2
-!   * [ ] process data for the ICTP paper
-!   * [ ] Aris, temporal averaging merge
-!   * [ ] adjustment for different RCMs < see CCLM code from Heimo 
-!         (not yet included in merge file 1 or 2)
-!   * [ ] register new institute ID and model name with O.B. Christensen at DMI.
+!   - Mid March 2018:
+!     * [X] master totally out of date > Knist+Truhetz+Kartsios worked from here
+!           most versions were running, but not ideal, just doing a fraction
+!     * [X] start with Knist version as new base, know this version most
+!     * [X] Truhetz merge file 1, start
+!     * [X] fix (!) and check overall, document, and implement the flexible time 
+!           span for the storage file > have some proper output which can be 
+!           viewed with ncview also
+!     * [X] fix preamble
+!     * [X] check w/ FPS new nomenclature, also my runs...
+!     * [X] check w/ protocol: definition + ESGF archive + CD convention
+!     * [X] check the ESGF UCAN and CSC for reasonable additional global vars
+!     * [ ] variable inventory, what is needed? ICTP + CORDEX + FPS
+!     * [ ] Truhetz merge file 1, cont., u + v on mass grid!!!
+!     * [ ] Truhetz merge file 2
+!     * [ ] process data for the ICTP paper
+!   - Later:
+!     * [ ] Aris, temporal averaging merge
+!     * [ ] adjustment for different RCMs < see CCLM code from Heimo 
+!           (not yet included in merge file 1 or 2)
+!     * [ ] register new institute ID and model name with O.B. Christensen at 
+!           DMI.
 !
 ! DOUBLE-CHECKING OF FUNCTIONALITY (March 2018):
 ! * tier-2 (1hr, 3hr): tas, pr
@@ -373,37 +384,39 @@
 !   See either git log for details.
 !
 ! CALLED PROCEDURES:
-!   System calls: uuidgen, date
+!   System calls: uuidgen, date, mkdir
 !
 ! RELATED TOOLS:
-!   - Lluis FITA, WRF in-situ plugin module to write CMORized output
+!   - Lluis FITA-BORELL, WRF in-situ plugin module to write CMORized output
 !   - Jesus FERNANDEZ, Python
 !   - cdo
-!   Often do not do everythign required. Too complicated to use. Cannot be used
+!   - NCL
+!   - CMOR
+!   Often do not do everything required. Too complicated to use. Cannot be used
 !   on large existing datasets. Sometimes do not scale with very large model 
-!   domains as they may treat too many time steps at a time.
+!   domains as they may treat too many time steps at a time. Development started
+!   earlier in mid 2013.
 !
 ! ACKNOWLEDGEMENTS:
 !   Thanks from K.GOERGEN as the originator of the tool goes to all who willing-
 !   ly helped to further develop and improve the code, namely, Sebastian, Heimo,
 !   and Aris.
 !   Thanks for testing goes to: Kirsten WARRACH-SAGI from University of Hohen-
-!   heim, Germany, and Eleni KATRAGKOU
+!   heim, Germany, and Eleni KATRAGKOU.
 !
 ! PERFORMANCE:
+!   Single core, Linux workstation, O3 optimisation.
 !   Runtimes:
 !   - EUR-44: 1min/yr > 3hr/150yr OR 1h/1yr65vars... + averaging, after each run
 !
 ! REFERENCES:
-! [1] http://cordex.dmi.dk/joomla/images/CORDEX/cordex_archive_specifications.pdf
+! [1] http://cordex.dmi.dk/joomla/images/CORDEX/cordex_archive_
+!     specifications.pdf
 ! [2] https://www.hymex.org/cordexfps-convection/wiki/doku.php?id=protocol
 ! [3] https://www.unidata.ucar.edu/software/netcdf/conventions.html
 ! ...
 !
 ! LICENSE / COPYING:
-!
-! For explanation see also
-! https://choosealicense.com/, https://opensource.org/licenses/MIT
 !
 ! ******************************************************************************
 !
@@ -431,6 +444,9 @@
 ! SOFTWARE.
 !
 ! ******************************************************************************
+!
+! For explanation see also
+! https://choosealicense.com/, https://opensource.org/licenses/MIT
 !
 ! EOP
 !-------------------------------------------------------------------------------
@@ -478,9 +494,9 @@ MODULE NamelistHandling
   CHARACTER (len = 200) :: Conventions, contact, experiment_id, experiment, &
     driving_experiment, driving_model_id, driving_model_ensemble_member, &
     driving_experiment_name, institution, institute_id, model_id, &
-    rcm_version_id, project_id, CORDEX_domain, product, references, title
+    rcm_version_id, project_id, CORDEX_domain, product, references
 
-  CHARACTER (len = 200) :: comment, institute_run_id
+  CHARACTER (len = 200) :: comment, institute_run_id, title
 
   CHARACTER (LEN = 100), DIMENSION(nvars):: var_wrf, var_cmip, standard_name, &
     long_name, units, filetype, cm1hr, cm3hr, cm6hr, cmDay, cmMon, cmSea, positive
@@ -504,7 +520,7 @@ MODULE NamelistHandling
     driving_experiment_name, institution, institute_id, model_id, &
     rcm_version_id, project_id, CORDEX_domain, product, references
 
-  NAMELIST / globalvars_additional / comment, institute_run_id
+  NAMELIST / globalvars_additional / comment, institute_run_id, title
 
   NAMELIST / vars / var_wrf, var_cmip, standard_name, long_name, units, &
     height, time1hr, time3hr, time6hr, timeDay, timeMon, timeSea, filetype, &
@@ -585,14 +601,14 @@ REAL, PARAMETER :: mv = 1.e20 ! missing value as specified
 ! new netCDF file
 INTEGER :: ncid, ncidin, ncidin0
 INTEGER :: lon_dimid, lat_dimid, rec_dimid, height_dimid, &
-  nb2_dimid, x_dimid, y_dimid
+  nb2_dimid, x_dimid, y_dimid, plev_dimid
 INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, &
   rotated_pole_varid, height_varid, rec_varid, pp_varid, pb_varid, ph_varid, &
   phb_varid, qv_varid, qc_varid, qi_varid, qr_varid, qs_varid, &
   theta_varid, t2_varid, recbnds_varid, rainnc_varid, &
   rainc_varid, snownc_varid, u10_varid, v10_varid, u_varid, v_varid, &
   sfcevp_varid, potevp_varid, sfroff_varid, udroff_varid, acsnom_varid, &
-  sinalpha_varid, cosalpha_varid
+  sinalpha_varid, cosalpha_varid, plev_varid, plevbnds_varid
 
 ! input data general query
 INTEGER :: ncid_in, ndims_in, nvars_in, ngatts_in, unlimdimid_in !!!, formatp_in
@@ -1199,7 +1215,8 @@ DO ifrq = 1, 1, 1
 !            PRINT *,'TimeRefArray(744,2)', TimeRefArray(744,2)
 !            PRINT *,'InDateTimeYear(it)', InDateTimeYear(it)
 
-            ! number of date/time steps in the ref array which match the current year
+            ! number of date/time steps in the ref array which match the current 
+            ! year or month, or individual time span
             ! the TimeRefArray must span the requested subsets
             ALLOCATE( ipos(0) )
             counter = 0
@@ -1254,7 +1271,7 @@ DO ifrq = 1, 1, 1
             ! the TimeRefArraySubset is the time vec of the newly created (or
             ! already existing) file; it may be any size <= the original ref
             ! time vec
-            DO i =1, counter, 1
+            DO i = 1, counter, 1
               j = ipos(i)
               PRINT *, TimeRefArray(j, :)
               TimeRefArraySubset(i,1:5) = TimeRefArray(j,1:5)
@@ -1326,12 +1343,12 @@ DO ifrq = 1, 1, 1
               sts = NF90_DEF_DIM(ncid, "y", yfocus, y_dimid)
               sts = NF90_DEF_DIM(ncid, "rlon", xfocus, lon_dimid)
               sts = NF90_DEF_DIM(ncid, "rlat", yfocus, lat_dimid)
-              IF ( height(ivar) /= -999 ) THEN
+              IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
                 sts = NF90_DEF_DIM(ncid, "height", 1, height_dimid)
               END IF
-!              IF ( ??? ) THEN
-!                sts = NF90_DEF_DIM(ncid, "plev", 1, plev_dimid)
-!              END IF
+              IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
+                sts = NF90_DEF_DIM(ncid, "plev", 1, plev_dimid)
+              END IF
               sts = NF90_DEF_DIM(ncid, "time", NF90_UNLIMITED, rec_dimid)
               IF ( cell_methods(ivar) == "mean" ) THEN
                 sts = NF90_DEF_DIM(ncid, "bnds", 2, nb2_dimid)
@@ -1374,13 +1391,14 @@ DO ifrq = 1, 1, 1
               sts = nf90_put_att(ncid, rlat_varid, "units", "degrees")
               sts = nf90_put_att(ncid, rlat_varid, "axis", "Y")
 
-! additional and useful
-! important for remapping with cdo (conservative remapping only possible with this information)
-!        vertices = 4 ;
-!        float lat_vertices(rlat, rlon, vertices) ;
-!                lat_vertices:units = "degrees_north" ;
-!        float lon_vertices(rlat, rlon, vertices) ;
-!                lon_vertices:units = "degrees_east" ;
+              ! additional and useful
+              ! important for remapping with cdo (conservative remapping only 
+              ! possible with this information)
+              !        vertices = 4 ;
+              !        float lat_vertices(rlat, rlon, vertices) ;
+              !                lat_vertices:units = "degrees_north" ;
+              !        float lon_vertices(rlat, rlon, vertices) ;
+              !                lon_vertices:units = "degrees_east" ;
 
               ! always included, restriction to one domain only
               sts = nf90_def_var(ncid, "rotated_pole", NF90_CHAR, rotated_pole_varid)
@@ -1389,7 +1407,7 @@ DO ifrq = 1, 1, 1
               sts = nf90_put_att(ncid, rotated_pole_varid, "grid_north_pole_longitude", GeoNPLon)
   
               ! depends whether height is set in the nml, all between 1.5 and 10m
-              IF ( height(ivar) /= -999 ) THEN
+              IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
                 sts = nf90_def_var(ncid, "height", NF90_DOUBLE, (/ height_dimid /), height_varid)
                 sts = nf90_put_att(ncid, height_varid, "standard_name", "height")
                 sts = nf90_put_att(ncid, height_varid, "long_name", "Height")
@@ -1400,29 +1418,30 @@ DO ifrq = 1, 1, 1
   
               ! lvl TODO
               ! just level definition, single number, like height
-!              IF ( ??? ) THEN
-!                sts = nf90_def_var(ncid, "plev", NF90_DOUBLE, (/ plev_dimid /), plev_varid)
-!                sts = nf90_put_att(ncid, plev_varid, "standard_name", "air_pressure")
-!                sts = nf90_put_att(ncid, plev_varid, "long_name", "Pressure")
-!                sts = nf90_put_att(ncid, plev_varid, "units", "Pa")
-!                sts = nf90_put_att(ncid, plev_varid, "positive", "down")
-!                sts = nf90_put_att(ncid, plev_varid, "axis", "Z")
-!                IF ( cell_methods(ivar) == "???xxx" ) THEN ! if this is layers over which there has been some everaging
-!                  sts = nf90_put_att(ncid, plev_varid, "bounds", "plev_bnds")
-!                END IF
-!              END IF
+              ! there is no distinction between height and plev in the nml file
+              IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
+                sts = nf90_def_var(ncid, "plev", NF90_DOUBLE, (/ plev_dimid /), plev_varid)
+                sts = nf90_put_att(ncid, plev_varid, "standard_name", "air_pressure")
+                sts = nf90_put_att(ncid, plev_varid, "long_name", "Pressure")
+                sts = nf90_put_att(ncid, plev_varid, "units", "Pa")
+                sts = nf90_put_att(ncid, plev_varid, "positive", "down")
+                sts = nf90_put_att(ncid, plev_varid, "axis", "Z")
+                IF ( cell_methods(ivar) == "vmean" ) THEN ! if this is layers over which there has been some everaging
+                  sts = nf90_put_att(ncid, plev_varid, "bounds", "plev_bnds")
+                END IF
+              END IF
 
               ! for vertically averaged variables need the plev bounds
               ! plev_bnds(2), always just single field per file: this is just two numbers 
-!              IF ( cell_methods(ivar) == "???xxx" ) THEN
-!                sts = nf90_def_var(ncid, "plev_bnds", NF90_DOUBLE, (/ nb2_dimid /), plevbnds_varid)
-!              END IF
+              IF ( cell_methods(ivar) == "vmean" ) THEN
+                sts = nf90_def_var(ncid, "plev_bnds", NF90_DOUBLE, (/ nb2_dimid /), plevbnds_varid)
+              END IF
   
               ! always included
               sts = nf90_def_var(ncid, "time", NF90_DOUBLE, (/ rec_dimid /), rec_varid)
               sts = nf90_put_att(ncid, rec_varid, "standard_name", "time")
               sts = nf90_put_att(ncid, rec_varid, "long_name", "Time")
-              sts = nf90_put_att(ncid, rec_varid, "units", "days since " // tstot(1:10) // "T" // tstot(12:19)) // "Z"
+              sts = nf90_put_att(ncid, rec_varid, "units", "days since " // tstot(1:10) // "T" // tstot(12:19) // "Z" )
               sts = nf90_put_att(ncid, rec_varid, "calendar", "standard")
               sts = nf90_put_att(ncid, rec_varid, "axis", "T")
               IF ( cell_methods(ivar) == "mean" ) THEN
@@ -1430,14 +1449,9 @@ DO ifrq = 1, 1, 1
               END IF
   
               ! for mean variables need the time bounds
-              ! no further attributes, like plev_bnds
+              ! no further attributes, like plev_bnds > confirmed
               IF ( cell_methods(ivar) == "mean" ) THEN
                 sts = nf90_def_var(ncid, "time_bnds", NF90_DOUBLE, (/ nb2_dimid, rec_dimid /), recbnds_varid)
-!                sts = nf90_put_att(ncid, recbnds_varid, "standard_name", "time_bnds")
-!                sts = nf90_put_att(ncid, recbnds_varid, "long_name", "Time_bnds")
-!                sts = nf90_put_att(ncid, recbnds_varid, "units", "days since " // tstot(1:10) // "T" // tstot(12:19)) // "Z"
-!                sts = nf90_put_att(ncid, recbnds_varid, "calendar", "standard")
-!                sts = nf90_put_att(ncid, recbnds_varid, "axis", "T")
               END IF
 
               !-----------------------------------------------------------------
@@ -1489,6 +1503,7 @@ DO ifrq = 1, 1, 1
               !ELSE
                 sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, rec_dimid /), x_varid)
               !END IF
+
               ! TODO -> determine chunksizes vector beforehand otherwise
               ! this can only make it worse
               !sts = nf90_def_var_chunking(ncid, x_varid, NF90_CHUNKED, XXXchunksizesXXX) 
@@ -1507,8 +1522,10 @@ DO ifrq = 1, 1, 1
                 sts = nf90_put_att(ncid, x_varid, "positive", positive(ivar))
               END IF
               sts = nf90_put_att(ncid, x_varid, "cell_methods", "time: "//TRIM(cell_methods(ivar)))
-              IF ( height(ivar) /= -999 ) THEN
-                sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat height") ! this is needed !!!!
+              IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
+                sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat height")
+              ELSE IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
+                sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat plev") 
               ELSE
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat")
               END IF
@@ -1555,8 +1572,11 @@ DO ifrq = 1, 1, 1
               END IF
               !print *,'TimeRefArraySubset(:,1)', TimeRefArraySubset(:,1)
 
+              ! TODO
+              ! define plev_bnds
+
               !-----------------------------------------------------------------
-              ! write coordinates and height information
+              ! write coordinates and height/level information
               
               ! add non-rotated coordinate fields
               sts = NF90_PUT_VAR(ncid, lon_varid, GeoInLonLat(:,:,1), &
@@ -1569,8 +1589,13 @@ DO ifrq = 1, 1, 1
               sts = NF90_PUT_VAR(ncid, rlat_varid, GeoInRLat )
     
               ! add height from NML
-              IF ( height(ivar) /= -999 ) THEN
+              IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
                 sts = NF90_PUT_VAR(ncid, height_varid, height(ivar) )
+              END IF
+
+              ! add plev from NML
+              IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
+                sts = NF90_PUT_VAR(ncid, plev_varid, height(ivar) )
               END IF
 
               !-----------------------------------------------------------------
@@ -2360,7 +2385,7 @@ DO ifrq = 1, 1, 1
 ! some analysis of the data
   
           PRINT *, "*** STATISTICS BEFORE PROCESSING OF VARIABLES ***"
-          PRINT *, "useless if more data is stored in "
+          PRINT *, "(useless if more data is stored in other vars)"
 
           print *, "shape of array" , SHAPE(data_in)
           print *, "size of array" , SIZE(data_in)
@@ -2803,13 +2828,15 @@ DO ifrq = 1, 1, 1
             PRINT *, 'xfocus', xfocus
             PRINT *, 'yfocus', yfocus
     
-            IF ( height(ivar) /= -999 ) THEN
-              sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
-                START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1, 1 /) )
-            ELSE
+            ! not needed anymore, always store 3D only, have height information
+            ! in the coordinates
+            !IF ( height(ivar) /= -999 ) THEN
+            !  sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
+            !    START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1, 1 /) )
+            !ELSE
               sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
                 START=(/ 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1 /) )
-            END IF
+            !END IF
     
             PRINT *, 'NF90_PUT_VAR', sts
             PRINT *, 'ncid', ncid

@@ -8,44 +8,44 @@
    driving_model_ensemble_member = "r1i1p1",
    driving_experiment_name = "evaluation",
    institution = "Institute of Bio- and Geosciences (IBG-3, Agrosphere), Research Centre Juelich (FZJ), GERMANY",
-   institute_id = "FZJ-IBG3", ! must be registered with CORDEX
-   model_id = "FZJ-IBG3-WRF381AA", ! must be registered with CORDEX ! here: ClimDyn paper, CPRDEX FPS CEM
-   rcm_version_id = "v01", ! free string
-   project_id = "CORDEX-FPSCEM-CMWL", ! default: CORDEX
-   CORDEX_domain = "EUR-11", ! ALP-3
+   institute_id = "FZJ-IBG3",                             ! must be registered with CORDEX
+   model_id = "FZJ-IBG3-WRF381AA",                        ! must be registered with CORDEX ! here: ClimDyn paper, CPRDEX FPS CEM
+   rcm_version_id = "v01",                                ! free string
+   project_id = "CORDEX-FPSCEM-CMWL",                     ! default: CORDEX
+   CORDEX_domain = "EUR-11",                              ! ALP-3
    product = "output",
    references = "http://www.fz-juelich.de",
 /
 &globalvars_additional
    comment = "data production: k.goergen@fz-juelich.de; postprocessing: WRF_CMORizer.f90 vX.X",
    institute_run_id = "rv054r05_JURECAcpu_val_CdxFpsCpcmHiResNWPtestCb00tsInitCMx", ! WLx should be: fzj-ibg3_id
-   title = "WRF381AA RCM model output for CORDEX FPS CEM WL/CM study with reanalysis forcing",
+   title = "WRF381AA RCM model runs for CORDEX FPS CEM WL/CM study, reanalysis forcing",
 /
 &filesystem
    DirInputSimResRoot = "/home/kgo/Documents/sandbox/cmorization_testing/simres.INITWL",
    DirOutputPostProRoot = "/home/kgo/Documents/sandbox/cmorization_testing",
-   domain = "d01", ! for filename generation needed
+   domain = "d01",                        ! for filename generation needed
 /
 &model_config
-   ts = '2009', ! unused
-   te = '2009', ! unused
-   nx = 444, ! raw output x-dim, incl. relaxation zone
-   ny = 432, ! raw output x-dim, incl. relaxation zone
-   nz = 50, ! number of vertical levels
-   xoffset = 10, ! zone to be cut away in x-dir. (e.g., boundary relax zone)
-   yoffset = 10, ! zone to be cut away in y-dir. (e.g., boundary relax zone)
-   xfocus = 424, ! official grid x-dim, unknown from geo_em file
-   yfocus = 412, ! official grid y-dim, unknown from geo_em file
-   tstot = '1949-12-01_00:00:00', ! start of the main time vector, per protocol
-   tetot = '2100-12-31_21:00:00', ! end of the main time vector, do not change
+   ts = '2009',                           ! unused
+   te = '2009',                           ! unused
+   nx = 444,                              ! raw output x-dim, incl. relaxation zone
+   ny = 432,                              ! raw output x-dim, incl. relaxation zone
+   nz = 50,                               ! number of vertical levels
+   xoffset = 10,                          ! zone to be cut away in x-dir. (e.g., boundary relax zone)
+   yoffset = 10,                          ! zone to be cut away in y-dir. (e.g., boundary relax zone)
+   xfocus = 424,                          ! official grid x-dim, unknown from geo_em file
+   yfocus = 412,                          ! official grid y-dim, unknown from geo_em file
+   tstot = '1949-12-01_00:00:00',         ! start of the main time vector, per protocol
+   tetot = '2100-12-31_21:00:00',         ! end of the main time vector, do not change
 /
 &static_fields
    PnFnGeo = '/home/kgo/Documents/sandbox/cmorization_testing/geo_em.d01.nc'
 /
 &tool_config
-   aggregation_yearly = .F., ! for tier-2 / initial processing, default CMOR, 1hr 3hr data are stored in yearly files, data controls files created
-   aggregation_monthly = .F., ! data controls monthly files created
-   aggregation_individually = .T., ! individual file is created, for the timespan as defined below
-   tsact = '2009-06-18_00:00:00', ! only needed if aggregation_individually = .TRUE.,
-   teact = '2009-06-22_00:00:00', ! see above
+   aggregation_yearly = .F.,              ! for tier-2 / initial processing, default CMOR, 1hr 3hr data are stored in yearly files, data controls files created
+   aggregation_monthly = .F.,             ! data controls monthly files created
+   aggregation_individually = .T.,        ! individual file is created, for the timespan as defined below
+   tsact = '2009-06-18_00:00:00',         ! only needed if aggregation_individually = .TRUE.,
+   teact = '2009-06-22_00:00:00',         ! see above
 /
