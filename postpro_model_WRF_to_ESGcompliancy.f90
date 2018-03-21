@@ -14,7 +14,7 @@
 !   WRF_CMORizer.f90
 !
 ! VERSION:
-!   vX.X as of 2018-03-19
+!   vX.X as of 2018-03-21
 !   see git tags and log for revision details, history, and versions
 !
 ! STATUS:
@@ -361,9 +361,10 @@
 !     * [X] check the ESGF UCAN and CSC for reasonable additional global vars
 !     * [X] variable inventory, what is needed? ICTP + CORDEX + FPS
 !     * [X] Truhetz merge file 1, cont., u + v on mass grid!!! > DESTAGGERING!!!
-!     * [ ] Truhetz merge file 2, compare HTr1 w/ HTr2
+!     * [X] Truhetz merge file 2, compare HTr1 w/ HTr2
 !     * [ ] TESTING and REFINEMENTS / inventory what is not yet included
 !     * [ ] process data for the ICTP paper
+!     * [ ] get Truhetz new SLP scheme based on ECMWF
 !   - Later:
 !     * [ ] Aris, temporal averaging merge
 !     * [ ] adjustment for different RCMs < see CCLM code from Heimo 
