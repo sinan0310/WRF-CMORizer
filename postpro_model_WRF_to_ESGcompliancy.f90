@@ -213,6 +213,15 @@
 !   - The tool is not hardcoded to any specific CORDEX domain, this is
 !     determined by the main namelist settings and by the geo_em file, which has
 !     to be read.
+!   - Variables do not depend on each other, except ofr the CAPE and CIN calc.;
+!     i.e. there is no mandatory namelist selection or any sequence which has to 
+!     be considered in processing. Each variable is treated seperately.
+!   - Pressure variables are all calculated. They might also be read form 
+!     wrfpress. Three filetypes can be specified; the filename search patterns 
+!     are hardcoded:
+!     * (s)tandard = wrfout*
+!     * e(x)tremes = wrfxtrm*
+!     * (p)ress = wrfpress*
 !
 ! PROCEDURE:
 !   The tool may be called as part of a processing chain. It is meant as an all-
@@ -275,6 +284,8 @@
 !   runtime there is a distinction: everything > 10 is considered a pressure 
 !   level.
 !
+!   CORDEX_ID from the variable namelists remains unused.
+!
 ! RESTRICTIONS:
 !   - No side effects.
 !   - If the WRF output filenames are non-standard, the file list pattern 
@@ -319,14 +330,12 @@
 ! TODO / PLANNED EXTENSIONS
 ! **see "TODO" and "CHECK" markers in the code**
 !   - Add levels: plev, plev_bnds > half done
-!   - Use of wrfxtrm, wrfpress aside from wrfout > easy, just add more filelists
-!     control variable is contained in the nml files already
 !   - Aside from mean, also have min/max
-!   - Static fields processing, fx > seperate namelist
+!   - Static fields processing, fx > seperate namelist; pass through
 !   - Cover ALL REQUIRED variables/diagnostics + ADDITIONAL -> extensions nml
-!   - Temporal aggregations, i.e. 6hr, day, mon, seas > controlled by nml and 
-!     realized within loops
-!   - Spatial averaging -> EUR-11i grid...
+!   - !! Temporal aggregations, i.e. 6hr, day, mon, seas > controlled by nml and 
+!        realized within loops
+!   - !! Spatial averaging -> EUR-11i grid...
 !   - Run output via the compliancy checker
 !   - Registation of naming schemes with CORDEX (institude_id, model_id)
 !   - Add CMIP "realm" as new attribute -> important for TerrSysMP
@@ -362,9 +371,13 @@
 !     * [X] variable inventory, what is needed? ICTP + CORDEX + FPS
 !     * [X] Truhetz merge file 1, cont., u + v on mass grid!!! > DESTAGGERING!!!
 !     * [X] Truhetz merge file 2, compare HTr1 w/ HTr2
-!     * [ ] TESTING and REFINEMENTS / inventory what is not yet included
+!     * [ ] TESTING and REFINEMENTS
+!           o staggering test > uw
+!           o all new pressure level calcs
+!           o bucket fct check > pr
+!     * [ ] Truhetz add/merge 2018-03-21 stuff, changed slp calc
 !     * [ ] process data for the ICTP paper
-!     * [ ] get Truhetz new SLP scheme based on ECMWF
+!     * [ ] test all other tier-2 variables
 !   - Later:
 !     * [ ] Aris, temporal averaging merge
 !     * [ ] adjustment for different RCMs < see CCLM code from Heimo 
@@ -461,8 +474,11 @@ MODULE FilelistHandling
   SAVE
 
   CHARACTER (len = 200):: tmpfileFL
-  CHARACTER (len = 200), DIMENSION(:), ALLOCATABLE :: fl_wrfout
-  CHARACTER (len = 200), DIMENSION(:), ALLOCATABLE :: fl_wrfxtr
+  CHARACTER (len = 200), DIMENSION(:), ALLOCATABLE :: &
+    fl_wrfout   , &
+    fl_wrfxtr   , & 
+    fl_wrfpres  , &
+    fl_input
   INTEGER :: ft
 
 END MODULE FilelistHandling
@@ -490,7 +506,7 @@ MODULE NamelistHandling
   IMPLICIT NONE
   SAVE
 
-  INTEGER, PARAMETER :: nvars = 13 
+  INTEGER, PARAMETER :: nvars = 13 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   CHARACTER (len = 200) :: Conventions, contact, experiment_id, experiment, &
     driving_experiment, driving_model_id, driving_model_ensemble_member, &
@@ -646,14 +662,14 @@ REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   phb_in      , &
   qv_in       , &
   qvs         , &
-  qc_in,      , &
-  qr_in,      , &
-  qi_in,      , &
-  qs_in,      , &
+  qc_in       , &
+  qr_in       , &
+  qi_in       , &
+  qs_in       , &
   theta_in    , &
-  t_in,       , &
-  ph_fl,      , &
-  p_in,       , &
+  t_in        , &
+  ph_fl       , &
+  p_in        , &
   cldfra_in   , &
   u_in        , &
   v_in        , &
@@ -662,7 +678,7 @@ REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   var_pl      , &
   potevp_in   , &
   rainnc_in   , &
-  rainc_in,   , &
+  rainc_in    , &
   rad_in      , &
   t_p         , &
   snownc_in   , &
@@ -686,7 +702,10 @@ REAL(KIND=8), DIMENSION(:), ALLOCATABLE :: &
   TimeRefArraySubsetMean
 
 ! bucket system
-INTEGER, DIMENSION(:,:,:), ALLOCATABLE :: i_rainnc_in, i_rainc_in, i_rad_in
+INTEGER, DIMENSION(:,:,:), ALLOCATABLE :: &
+  i_rainnc_in , &
+  i_rainc_in  , &
+  i_rad_in
 REAL :: bucket_mm, bucket_J
 
 ! (het): base state temperature is made flexible in newer versions of WRF. The
@@ -724,6 +743,7 @@ CHARACTER (LEN=2) :: tsactMonthStr, tsactDayStr, tsactHourStr, tsactMinuteStr, &
   teactSecondStr
 
 CHARACTER (LEN = 100), DIMENSION(nvars) :: cell_methods
+LOGICAL, DIMENSION(nvars) :: procflag
 
 !-------------------------------------------------------------------------------
 ! statistics
@@ -872,6 +892,8 @@ fnNMLvar(11) = "runctrl.vars.nml_psl" ! new from HTr
 ! individual vars contain information on whether they are treated or not, i.e.
 ! the tool may loop over all frequencies and the namelist controls what is to 
 ! be done
+! this is the outer loop as it also controls the averaging; the main processing
+! is done during the 1st pass, i.e., the tier-2 processing at dt=1h or 3h
 !DO ifrq = 1, SIZE(frequency), 1 
 DO ifrq = 1, 1, 1
 
@@ -879,34 +901,47 @@ DO ifrq = 1, 1, 1
   PRINT *, "freq = ", frequency(ifrq)
 
 !-------------------------------------------------------------------------------
-! get a file list of all wrfout and wrfxtrm files
+! get a file list of all wrfout, wrfxtrm and wrfpress files -- if they exist
 ! use regex to refine the ls output and the filelist
 ! non-std, works for gfortran (fct & subroutine) + ifort
+! to not always check the filesystem, this is done at this point
+! also the search results might be limited
   
   PRINT *, "============================================================"
   PRINT *, "*** FILELIST CREATION ***"
   
   tmpfileFL = "tmpfileFL"
+
+  ! creates a year range, acan be expanded also to use months
+  IF ( (ts == "0000") .AND. (te == "0000") ) THEN
+    fl_filter = "*{" // ts // ".." // te // "}"
+  ELSE
+    fl_filter = ""
+  END IF
   
-  !PRINT *, "filelist search pattern = ", TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // "*/*wrfout*nc"
-  !CALL SYSTEM("ls -1 " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfout*{" // ts // ".." // te // "}*nc > " // tmpfileFL)
-  !PRINT *, "filelist search pattern = ", TRIM(DirInputSimResRoot) // "/*wrfout*" // TRIM(domain) // "*"
-  !CALL SYSTEM("ls -1 " // TRIM(DirInputSimResRoot) // "/*wrfout*" // TRIM(domain) // "* > " // tmpfileFL)
-  PRINT *, "filelist search pattern = ", TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // "*/*wrfout*nc"
-  CALL SYSTEM("ls -1 " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfout*nc > " // tmpfileFL)
+  PRINT *, "filelist search pattern = ", TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfout" // TRIM(fl_filter) // "*nc"
+  CALL SYSTEM("ls -1                " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfout" // TRIM(fl_filter) // "*nc > " // tmpfileFL)
   ft = 0 ! file type
   CALL GenerateFilelist
   
-  PRINT *, "filelist search pattern = ", TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // "*/*wrfxtrm*nc"
-  CALL SYSTEM("ls -1 " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfxtrm*{" // ts // ".." // te // "}*nc > " // tmpfileFL)
+  PRINT *, "filelist search pattern = ", TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfxtrm" // TRIM(fl_filter) // "*nc"
+  CALL SYSTEM("ls -1                " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfxtrm" // TRIM(fl_filter) // "*nc > " // tmpfileFL)
   ft = 1
   CALL GenerateFilelist
-  
+
+  PRINT *, "filelist search pattern = ", TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfpress" // TRIM(fl_filter) // "*nc"
+  CALL SYSTEM("ls -1                " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfpress" // TRIM(fl_filter) // "*nc > " // tmpfileFL)
+  ft = 2
+  CALL GenerateFilelist
+ 
   DO i=1,SIZE(fl_wrfout(:)),1
     PRINT '(100A)', fl_wrfout(i)
   END DO
   DO i=1,SIZE(fl_wrfxtr(:)),1
       PRINT '(100A)', fl_wrfxtr(i)
+  END DO
+  DO i=1,SIZE(fl_wrfpres(:)),1
+      PRINT '(100A)', fl_wrfpres(i)
   END DO
   
 !-------------------------------------------------------------------------------
@@ -948,19 +983,25 @@ DO ifrq = 1, 1, 1
     SELECT CASE (frequency(ifrq))
     CASE ('1hr')
       cell_methods(:) = cm1hr(:)
+      procflag(:) = time1hr(:)
       dtHours = 1.
     CASE ('3hr')
       cell_methods(:) = cm3hr(:)
+      procflag(:) = time3hr(:)
       dtHours = 3.
     CASE ('6hr')
       cell_methods(:) = cm6hr(:)
+      procflag(:) = time6hr(:)
       dtHours = 6.
     CASE ('day')
       cell_methods(:) = cmDay(:)
+      procflag(:) = timeDay(:)
     CASE ('mon')
       cell_methods(:) = cmMon(:)
+      procflag(:) = timeMon(:)
     CASE ('sem')
       cell_methods(:) = cmSea(:)
+      procflag(:) = timeSea(:)
     CASE DEFAULT
       PRINT *, "invalid time interval specified"
       STOP
@@ -985,16 +1026,16 @@ DO ifrq = 1, 1, 1
     CASE ("runctrl.vars.nml_radiation_alternative")
       nvar_nml = 9
     CASE ("runctrl.vars.nml_cape")
-      nvar_nml = 1
+      nvar_nml = 2
     CASE ("runctrl.vars.nml_pr_tas_1hr_test") ! used right now for testing
-      nvar_nml = 3
+      nvar_nml = 10 
     CASE ("runctrl.vars.nml_weathertyping")
       nvar_nml = 6
     CASE ("runctrl.vars.nml_psl")
       nvar_nml = 1
     END SELECT
   
-    print*, "number of vars inside current namelist: nvar_nml = ", nvar_nml
+    PRINT *, "number of vars inside current namelist: nvar_nml = ", nvar_nml
   
 !-------------------------------------------------------------------------------
 ! loop over all vars in the individual namelist
@@ -1006,33 +1047,48 @@ DO ifrq = 1, 1, 1
     DO ivar = 1, 2, 1 ! testing
   
       PRINT *,"============================================================"
-      PRINT *, "*** ", TRIM(var_cmip(ivar)), " ***"
-  
+      PRINT *, "*** ", TRIM(var_cmip(ivar)), procflag(ivar), " ***"
+ 
+      ! shall this variable be processed at all?
+      ! either control by including/excluding from namelist or by setting to T/F
+      IF (procflag(ivar)) THEN
+ 
 !-------------------------------------------------------------------------------
 ! loop over the filelist
 ! content of filelist is defined by filename patterns in system call
-! two filelists: fl_wrfout, fl_wrfxtr
+! three types of filelists: fl_wrfout, fl_wrfxtr (all depends on the variable
+! which filelist shall be used)
 ! the filelist loops does not care whether (a) the filelist spans multiple
 ! simulated years or just a single day or hour, neither does it care (b) how
 ! many files are contained and (c) whether a single file is oerlapping a 
 ! beginnning or end of the desired temporal unit (year, month, individual, etc.)
 
+      IF ( filetype(ivar) == "s" ) THEN ! variable is in "s"tandard wrfout file
+        IF (ALLOCATED(fl_input)) DEALLOCATE( fl_input )
+        ALLOCATE( fl_input ( SIZE(fl_wrfout) ), STAT=sts )
+        fl_input = fl_wrfout
+      ELSE IF ( filetype(ivar) == "x" ) THEN ! variable is in e"x"tremes wrfxtrm file
+        IF (ALLOCATED(fl_input)) DEALLOCATE( fl_input )
+        ALLOCATE( fl_input ( SIZE(fl_wrfxtr) ), STAT=sts )
+        fl_input = fl_wrfxtr
+      ELSE IF ( filetype(ivar) == "p" ) THEN ! variable is in "p"ress wrfpress file
+        IF (ALLOCATED(fl_input)) DEALLOCATE( fl_input )
+        ALLOCATE( fl_input ( SIZE(fl_wrfpres) ), STAT=sts )
+        fl_input = fl_wrfpres
+      END IF
+
       !DO ifl = 1, 1, 1 ! testing: loop over specific entry in filelist (e.g. just January)
-      DO ifl = 1, SIZE(fl_wrfout), 1 ! operational: loop over complete filelist
+      DO ifl = 1, SIZE(fl_input), 1 ! operational: loop over complete filelist
 
         PRINT *,"============================================================"
-        PRINT *, "# files to process = ", SIZE(fl_wrfout)
+        PRINT *, "filelist filetype = ", filetype(ivar) 
+        PRINT *, "# files to process = ", SIZE(fl_input)
 
         ! measure CPU time for 1 variable and file, including all timesteps
         CALL CPU_TIME(cpuTs)
         PRINT *, "-----------------------------------------------------------"
-  
-        IF ( filetype(ivar) == "s" ) THEN ! variable is in "s"tandard wrfout file
-          iflWRFin = fl_wrfout(ifl)
-        ELSE IF ( filetype(ivar) == "x" ) THEN ! variable is in e"x"tremes wrfxtrm file
-          iflWRFin = fl_wrfxtr(ifl)
-        END IF
 
+        iflWRFin = fl_input(ifl)
         PRINT *, "this is the file to work on now:"
         PRINT '(100A)', TRIM(iflWRFin)
   
@@ -1932,7 +1988,7 @@ DO ifrq = 1, 1, 1
                 COUNT = (/ xfocus, yfocus, 2 /) )
 
             ! if the successor file exists, get the data from that file
-            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
 
               PRINT *, "get data from the subsequent file"
 
@@ -1952,7 +2008,7 @@ DO ifrq = 1, 1, 1
                 COUNT = (/ xfocus, yfocus, 1 /) )
 
               ! just get the next input file
-              iflWRFin = fl_wrfout(ifl+1)
+              iflWRFin = fl_input(ifl+1)
   
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
   
@@ -1971,7 +2027,7 @@ DO ifrq = 1, 1, 1
               sts = NF90_CLOSE(ncidin0)
 
               ! set to the current wrfout file again
-              iflWRFin = fl_wrfout(ifl) 
+              iflWRFin = fl_input(ifl) 
 
             ! no further file, nothing can be done
             ! just pass missing values on
@@ -2012,14 +2068,14 @@ DO ifrq = 1, 1, 1
                   START = (/ xoffset, yoffset, it /), &
                   COUNT = (/ xfocus, yfocus, 2/) ) 
   
-              ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN 
+              ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN 
   
                 sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
                 sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,1), &
                   START = (/ xoffset, yoffset, it /), &
                   COUNT = (/ xfocus, yfocus, 1/))
   
-                iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfout file 
+                iflWRFin = fl_input(ifl+1) ! set to the previous wrfout file 
                                             ! if it is not the first
   
                 sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
@@ -2031,7 +2087,7 @@ DO ifrq = 1, 1, 1
    
                 sts = NF90_CLOSE(ncidin0)
   
-                iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+                iflWRFin = fl_input(ifl)  !set to the current wrfout file again
   
               END IF
   
@@ -2050,14 +2106,14 @@ DO ifrq = 1, 1, 1
               sts = NF90_GET_VAR(ncidin, snownc_varid, snownc_in(:,:,:), &
                 START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
            
-            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
   
               sts = NF90_INQ_VARID(ncidin, "SNOWNC", snownc_varid)
               sts = NF90_GET_VAR(ncidin, snownc_varid, snownc_in(:,:,1), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus, 1/))
   
-              iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfoutfile 
+              iflWRFin = fl_input(ifl+1) ! set to the previous wrfoutfile 
                                           ! if it is not the first
   
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
@@ -2069,7 +2125,7 @@ DO ifrq = 1, 1, 1
   
               sts = NF90_CLOSE(ncidin0)
   
-              iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+              iflWRFin = fl_input(ifl)  !set to the current wrfout file again
   
             END IF
   
@@ -2089,14 +2145,14 @@ DO ifrq = 1, 1, 1
   
               print*, sts
   
-            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
   
               sts = NF90_INQ_VARID(ncidin, "ACSNOM", acsnom_varid)
               sts = NF90_GET_VAR(ncidin, acsnom_varid, acsnom_in(:,:,1), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus,1/))
   
-              iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfoutfile 
+              iflWRFin = fl_input(ifl+1) ! set to the previous wrfoutfile 
                                           ! if it is not the first
   
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
@@ -2108,7 +2164,7 @@ DO ifrq = 1, 1, 1
             
               sts = NF90_CLOSE(ncidin0)
             
-              iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+              iflWRFin = fl_input(ifl)  !set to the current wrfout file again
               
             END IF
   
@@ -2127,14 +2183,14 @@ DO ifrq = 1, 1, 1
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus, 2 /) )
             
-            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
   
               sts = NF90_INQ_VARID(ncidin, "SFCEVP", sfcevp_varid)
               sts = NF90_GET_VAR(ncidin, sfcevp_varid, sfcevp_in(:,:,1), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus,1/))
   
-              iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfoutfile 
+              iflWRFin = fl_input(ifl+1) ! set to the previous wrfoutfile 
                                           ! if it is not the first 
   
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
@@ -2146,7 +2202,7 @@ DO ifrq = 1, 1, 1
   
               sts = NF90_CLOSE(ncidin0)
   
-              iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+              iflWRFin = fl_input(ifl)  !set to the current wrfout file again
   
             END IF 
   
@@ -2164,14 +2220,14 @@ DO ifrq = 1, 1, 1
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus, 2 /) )
   
-            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
   
               sts = NF90_INQ_VARID(ncidin, "POTEVP", potevp_varid)
               sts = NF90_GET_VAR(ncidin, potevp_varid, potevp_in(:,:,1), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus,1/))
   
-              iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfoutfile 
+              iflWRFin = fl_input(ifl+1) ! set to the previous wrfoutfile 
                                           ! if it is not the first
   
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
@@ -2183,7 +2239,7 @@ DO ifrq = 1, 1, 1
   
               sts = NF90_CLOSE(ncidin0)
   
-              iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+              iflWRFin = fl_input(ifl)  !set to the current wrfout file again
   
             END IF 
   
@@ -2200,14 +2256,14 @@ DO ifrq = 1, 1, 1
               sts = NF90_GET_VAR(ncidin, sfroff_varid, sfroff_in(:,:,:), &
                 START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
   
-            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
   
               sts = NF90_INQ_VARID(ncidin, "SFROFF", sfroff_varid)
               sts = NF90_GET_VAR(ncidin, sfroff_varid, sfroff_in(:,:,1), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus,1/))
   
-              iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfoutfile 
+              iflWRFin = fl_input(ifl+1) ! set to the previous wrfoutfile 
                                           ! if it is not the first
   
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
@@ -2220,7 +2276,7 @@ DO ifrq = 1, 1, 1
               sts = NF90_CLOSE(ncidin0)
   
   
-              iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+              iflWRFin = fl_input(ifl)  !set to the current wrfout file again
   
             END IF
   
@@ -2244,7 +2300,7 @@ DO ifrq = 1, 1, 1
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus, 2 /) )
   
-            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
   
               sts = NF90_INQ_VARID(ncidin, "SFROFF", sfroff_varid)
               sts = NF90_GET_VAR(ncidin, sfroff_varid, sfroff_in(:,:,1), &
@@ -2256,7 +2312,7 @@ DO ifrq = 1, 1, 1
                 START = (/ xoffset, yoffset, it /), &
                 COUNT =(/xfocus,yfocus,1 /) )
   
-              iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfoutfile 
+              iflWRFin = fl_input(ifl+1) ! set to the previous wrfoutfile 
                                           ! if it is not the first
   
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
@@ -2274,7 +2330,7 @@ DO ifrq = 1, 1, 1
   
               sts = NF90_CLOSE(ncidin0)
   
-              iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+              iflWRFin = fl_input(ifl)  !set to the current wrfout file again
   
             END IF
   
@@ -2308,8 +2364,8 @@ DO ifrq = 1, 1, 1
             sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_J", bucket_J)
             IF ( bucket_J > 0. ) THEN
 
-              IF (TRIM(fnNMLvar(varnml)) == "runctrl.vars.nml_radiation_alternative") & 
-                STOP 'bucket_J AND runctrl.vars.nml_radiation_alternative not implemented yet'
+              IF (TRIM(fnNMLvar(ivarnml)) == "runctrl.vars.nml_radiation_alternative") & 
+                STOP "bucket_J AND runctrl.vars.nml_radiation_alternative not implemented yet"
 
               IF (.not. ALLOCATED(i_rad_in)) ALLOCATE( i_rad_in ( xfocus, yfocus, 2 ), STAT=sts )
 
@@ -2331,14 +2387,14 @@ DO ifrq = 1, 1, 1
                   START = (/ xoffset, yoffset, it /), &
                   COUNT = (/ xfocus, yfocus, 2 /) )
   
-              ELSE IF ( (it == InDimLenRec) .AND. (ifl /= SIZE(fl_wrfout)) ) THEN
+              ELSE IF ( (it == InDimLenRec) .AND. (ifl /= SIZE(fl_input)) ) THEN
   
                 sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
                 sts = NF90_GET_VAR(ncidin, varid, rad_in(:,:,1), &
                   START = (/ xoffset, yoffset, it /), &
                   COUNT = (/ xfocus, yfocus,1/))
   
-                iflWRFin = fl_wrfout(ifl+1) ! set to the previous wrfoutfile 
+                iflWRFin = fl_input(ifl+1) ! set to the previous wrfoutfile 
                                             ! if it is not the first
   
                 sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
@@ -2350,7 +2406,7 @@ DO ifrq = 1, 1, 1
   
                 sts = NF90_CLOSE(ncidin0)
   
-                iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+                iflWRFin = fl_input(ifl)  !set to the current wrfout file again
   
               END IF
   
@@ -2384,14 +2440,14 @@ DO ifrq = 1, 1, 1
                 START = (/ xoffset, yoffset, 1, it /), &
                 COUNT = (/ xfocus, yfocus, 4, 2 /) )
   
-            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_wrfout)) ) THEN
+            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
   
               sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
               sts = NF90_GET_VAR(ncidin, varid, smois_in(:,:,:,1), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus,1/))
   
-              iflWRFin = fl_wrfout(ifl) ! set to the previous wrfoutfile 
+              iflWRFin = fl_input(ifl) ! set to the previous wrfoutfile 
                                         ! if it is not the first 
   
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
@@ -2403,7 +2459,7 @@ DO ifrq = 1, 1, 1
   
               sts = NF90_CLOSE(ncidin0)
   
-              iflWRFin = fl_wrfout(ifl)  !set to the current wrfout file again
+              iflWRFin = fl_input(ifl)  !set to the current wrfout file again
   
             END IF
   
@@ -2559,11 +2615,11 @@ DO ifrq = 1, 1, 1
 
             var_pl(:,:,:) = mv
 
-            IF ( (var_cmip(ivar) == "ta1000") .OR.
-                 (var_cmip(ivar) == "ta925") .OR.
-                 (var_cmip(ivar) == "ta850") .OR.
-                 (var_cmip(ivar) == "ta700") .OR.
-                 (var_cmip(ivar) == "ta500") .OR.
+            IF ( (var_cmip(ivar) == "ta1000") .OR. &
+                 (var_cmip(ivar) == "ta925") .OR.  &
+                 (var_cmip(ivar) == "ta850") .OR.  &
+                 (var_cmip(ivar) == "ta700") .OR.  &
+                 (var_cmip(ivar) == "ta500") .OR.  &
                  (var_cmip(ivar) == "ta200") ) THEN
               var3d_in(:,:,:) = t_in(:,:,:)
               ! linear in zg
@@ -2581,11 +2637,11 @@ DO ifrq = 1, 1, 1
                   END DO
                 END DO
               END DO
-            ELSE IF ( (var_cmip(ivar) == "hus1000") .OR.
-                 (var_cmip(ivar) == "hus925") .OR.
-                 (var_cmip(ivar) == "hus850") .OR.
-                 (var_cmip(ivar) == "hus700") .OR.
-                 (var_cmip(ivar) == "hus500") .OR.
+            ELSE IF ( (var_cmip(ivar) == "hus1000") .OR. &
+                 (var_cmip(ivar) == "hus925") .OR.       &
+                 (var_cmip(ivar) == "hus850") .OR.       &
+                 (var_cmip(ivar) == "hus700") .OR.       &
+                 (var_cmip(ivar) == "hus500") .OR.       &
                  (var_cmip(ivar) == "hus200") ) THEN
               var3d_in(:,:,:) = qv_in(:,:,:)
               ! linear in log(p)
@@ -2599,11 +2655,11 @@ DO ifrq = 1, 1, 1
                   END DO
                 END DO
               END DO
-            ELSE IF ( (var_cmip(ivar) == "ua1000") .OR.
-                 (var_cmip(ivar) == "ua925") .OR.
-                 (var_cmip(ivar) == "ua850") .OR.
-                 (var_cmip(ivar) == "ua700") .OR.
-                 (var_cmip(ivar) == "ua500") .OR.
+            ELSE IF ( (var_cmip(ivar) == "ua1000") .OR. &
+                 (var_cmip(ivar) == "ua925") .OR.       &
+                 (var_cmip(ivar) == "ua850") .OR.       &
+                 (var_cmip(ivar) == "ua700") .OR.       &
+                 (var_cmip(ivar) == "ua500") .OR.       &
                  (var_cmip(ivar) == "ua200") ) THEN
               DO i = 1,xfocus
                 var3d_in(i,:,:) = (u_in(i,:,:)+u_in(i+1,:,:))/2.*cosalpha_in(:,:) - (v_in(i,:,:)+v_in(i+1,:,:))/2.*sinalpha_in(:,:) ! rotate to earth grid
@@ -2623,11 +2679,11 @@ DO ifrq = 1, 1, 1
                   END DO
                 END DO
               END DO
-            ELSE IF ( (var_cmip(ivar) == "va1000") .OR.
-                 (var_cmip(ivar) == "va925") .OR.
-                 (var_cmip(ivar) == "va850") .OR.
-                 (var_cmip(ivar) == "va700") .OR.
-                 (var_cmip(ivar) == "va500") .OR.
+            ELSE IF ( (var_cmip(ivar) == "va1000") .OR. &
+                 (var_cmip(ivar) == "va925") .OR.       &
+                 (var_cmip(ivar) == "va850") .OR.       &
+                 (var_cmip(ivar) == "va700") .OR.       &
+                 (var_cmip(ivar) == "va500") .OR.       &
                  (var_cmip(ivar) == "va200") ) THEN
               DO j = 1,yfocus
                 var3d_in(:,j,:) = (v_in(:,j,:)+v_in(:,j+1,:))/2.*cosalpha_in(:,:) + (u_in(i,:,:)+u_in(i+1,:,:))/2.*sinalpha_in(:,:) ! rotate to earth grid
@@ -2647,11 +2703,11 @@ DO ifrq = 1, 1, 1
                   END DO
                 END DO
               END DO
-            ELSE IF ( (var_cmip(ivar) == "wa1000") .OR.
-                 (var_cmip(ivar) == "wa925") .OR.
-                 (var_cmip(ivar) == "wa850") .OR.
-                 (var_cmip(ivar) == "wa700") .OR.
-                 (var_cmip(ivar) == "wa500") .OR.
+            ELSE IF ( (var_cmip(ivar) == "wa1000") .OR. &
+                 (var_cmip(ivar) == "wa925") .OR.       &
+                 (var_cmip(ivar) == "wa850") .OR.       &
+                 (var_cmip(ivar) == "wa700") .OR.       &
+                 (var_cmip(ivar) == "wa500") .OR.       &
                  (var_cmip(ivar) == "wa200") ) THEN
               var3d_in(:,:,:) = w_in(:,:,:)
               ! logarithmic in zg
@@ -2669,11 +2725,11 @@ DO ifrq = 1, 1, 1
                   END DO
                 END DO
               END DO              
-            ELSE IF ( (var_cmip(ivar) == "zg1000") .OR.
-                 (var_cmip(ivar) == "zg925") .OR.
-                 (var_cmip(ivar) == "zg850") .OR.
-                 (var_cmip(ivar) == "zg700") .OR.
-                 (var_cmip(ivar) == "zg500") .OR.
+            ELSE IF ( (var_cmip(ivar) == "zg1000") .OR. &
+                 (var_cmip(ivar) == "zg925") .OR.       &
+                 (var_cmip(ivar) == "zg850") .OR.       &
+                 (var_cmip(ivar) == "zg700") .OR.       &
+                 (var_cmip(ivar) == "zg500") .OR.       &    
                  (var_cmip(ivar) == "zg200") ) THEN
               var3d_in(:,:,:) = ph_fl(:,:,:)
               ! linear in log(p)
@@ -2876,10 +2932,10 @@ DO ifrq = 1, 1, 1
               END DO
             END DO
 
-            IF ( (var_cmip(ivar) == "cape") THEN
+            IF ( var_cmip(ivar) == "cape") THEN
               data_in(:,:) = cape(:,:)
             END IF
-            IF ( (var_cmip(ivar) == "cin") THEN
+            IF ( var_cmip(ivar) == "cin") THEN
               data_in(:,:) = cin(:,:)
             END IF
   
@@ -3116,7 +3172,8 @@ DO ifrq = 1, 1, 1
           PRINT *, TRIM(pn_out) // "/" // TRIM(fn_out)
           PRINT *, TRIM(var_cmip(ivar)), xfocus, yfocus, counter, ncid, x_varid
   
-          sts = NF90_OPEN( TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) // "/" // TRIM(fn_out), NF90_WRITE, ncid )
+          sts = NF90_OPEN( TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) &
+            // "/" // TRIM(fn_out), NF90_WRITE, ncid )
 
           ! file must exist, just from the logic of the code, nevertheless: test
           IF (sts/=0) EXIT
@@ -3132,7 +3189,7 @@ DO ifrq = 1, 1, 1
             PRINT *, 'yfocus', yfocus
     
             ! not needed anymore, always store 3D only, have height information
-            ! in the coordinates
+            ! in the coordinates, this was before a standard 'violation'
             !IF ( height(ivar) /= -999 ) THEN
             !  sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
             !    START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1, 1 /) )
@@ -3144,7 +3201,8 @@ DO ifrq = 1, 1, 1
             PRINT *, 'NF90_PUT_VAR', sts
             PRINT *, 'ncid', ncid
             PRINT *, 'x_varid', x_varid
-            PRINT *, 'some exmple output in the middle of the domain', data_in(xfocus/2:(xfocus/2+2),yfocus/2:(yfocus/2+2))
+            PRINT *, 'some exmple output in the middle of the domain', &
+              data_in(xfocus/2:(xfocus/2+2),yfocus/2:(yfocus/2+2))
 
           sts = NF90_CLOSE(ncid)
           PRINT *, "NF90_CLOSE",  sts
@@ -3190,6 +3248,8 @@ DO ifrq = 1, 1, 1
       InDateTimeYearPrev = 0
       InDateTimeMonthPrev = 0
       prevpass = 0 ! ?????????????????????? one level inside????
+
+      ENDIF ! procflag T/F
 
     END DO ! ivar - variable loop
 
@@ -3351,7 +3411,10 @@ END IF
 IF (ft == 1) THEN
   ALLOCATE(fl_wrfxtr(nfl), STAT=AllocateStatus)
 END IF
-IF (AllocateStatus /= 0) STOP "*** Not enough memory ***"
+IF (ft == 2) THEN
+  ALLOCATE(fl_wrfpres(nfl), STAT=AllocateStatus)
+END IF
+!IF (AllocateStatus /= 0) STOP "*** Not enough memory ***"
 
 REWIND(2)
 DO i = 1,nfl
@@ -3360,6 +3423,9 @@ DO i = 1,nfl
   END IF
   IF (ft == 1) THEN
     READ(2,FMT='(a)') fl_wrfxtr(i)
+  END IF
+  IF (ft == 2) THEN
+    READ(2,FMT='(a)') fl_wrfpres(i)
   END IF
 END DO
 

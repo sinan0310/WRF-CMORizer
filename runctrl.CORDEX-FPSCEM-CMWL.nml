@@ -12,7 +12,7 @@
    model_id = "FZJ-IBG3-WRF381AA",                        ! must be registered with CORDEX ! here: ClimDyn paper, CPRDEX FPS CEM
    rcm_version_id = "v01",                                ! free string
    project_id = "CORDEX-FPSCEM-CMWL",                     ! default: CORDEX
-   CORDEX_domain = "EUR-11",                              ! ALP-3
+   CORDEX_domain = "EUR-11",                              ! ALP-3 EUR-11 EUR-15
    product = "output",
    references = "http://www.fz-juelich.de",
 /
@@ -27,8 +27,8 @@
    domain = "d01",                        ! for filename generation needed
 /
 &model_config
-   ts = '2009',                           ! unused
-   te = '2009',                           ! unused
+   ts = '2009',                           ! can be used for pattern matching with filenames, set to '0000' to use all files that are found
+   te = '2009',                           ! can be used for pattern matching with filenames, set to '0000' to use all files that are found
    nx = 444,                              ! raw output x-dim, incl. relaxation zone
    ny = 432,                              ! raw output x-dim, incl. relaxation zone
    nz = 50,                               ! number of vertical levels
