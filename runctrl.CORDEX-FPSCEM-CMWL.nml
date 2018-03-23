@@ -29,13 +29,13 @@
 &model_config
    ts = '2009',                           ! can be used for pattern matching with filenames, set to '0000' to use all files that are found
    te = '2009',                           ! can be used for pattern matching with filenames, set to '0000' to use all files that are found
-   nx = 444,                              ! raw output x-dim, incl. relaxation zone
-   ny = 432,                              ! raw output x-dim, incl. relaxation zone
-   nz = 50,                               ! number of vertical levels
+   nx = 444,                              ! raw output x-dim, incl. relaxation zone, unstaggered
+   ny = 432,                              ! raw output x-dim, incl. relaxation zone, umstaggered
+   nz = 49,                               ! number of vertical levels, unstaggered
    xoffset = 10,                          ! zone to be cut away in x-dir. (e.g., boundary relax zone)
    yoffset = 10,                          ! zone to be cut away in y-dir. (e.g., boundary relax zone)
-   xfocus = 424,                          ! official grid x-dim, unknown from geo_em file
-   yfocus = 412,                          ! official grid y-dim, unknown from geo_em file
+   xfocus = 424,                          ! official grid x-dim, unknown from geo_em file, nx-2*xoffset
+   yfocus = 412,                          ! official grid y-dim, unknown from geo_em file, ny-2*yoffset
    tstot = '1949-12-01_00:00:00',         ! start of the main time vector, per protocol
    tetot = '2100-12-31_21:00:00',         ! end of the main time vector, do not change
 /
