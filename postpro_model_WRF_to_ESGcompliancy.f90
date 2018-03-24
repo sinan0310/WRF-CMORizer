@@ -391,7 +391,7 @@
 !           o staggering test > uw, PH PHB
 !           x psl integrate and also new stuff from heimo
 !           o all new pressure level calcs
-!           o bucket fct checking > radiation () and precipitation (ok)
+!           o bucket fct checking > radiation () and precipitation (OK)
 !           o variable grouping: 3D vars: improve
 !     * [X] Truhetz add/merge 2018-03-21 stuff, changed slp calc > combine above
 !     * [ ] process data for the ICTP paper
@@ -1887,36 +1887,36 @@ DO ifrq = 1, 1, 1
             sts = NF90_INQ_VARID(ncidin, "T2", t2_varid)
             sts = NF90_GET_VAR(ncidin, t2_varid, t2_in(:,:), &
               START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-            
-            IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) ) THEN
+           
+            IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) .OR. ( height(ivar) > 10  ) ) THEN
               IF (.not. ALLOCATED(pp_in)) ALLOCATE( pp_in( xfocus, yfocus, nz ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "P", pp_varid)
               sts = NF90_GET_VAR(ncidin, pp_varid, pp_in(:,:,:), &
                 START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )          
             END IF
 
-            IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) ) THEN
+            IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) .OR. ( height(ivar) > 10  ) ) THEN
               IF (.not. ALLOCATED(pb_in)) ALLOCATE( pb_in( xfocus, yfocus, nz ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "PB", pb_varid)
               sts = NF90_GET_VAR(ncidin, pb_varid, pb_in(:,:,:), &
                 START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
             END IF  
 
-            IF ( ( var_cmip(ivar) == "prw" )  .OR. ( var_cmip(ivar) == "psl" ) ) THEN
+            IF ( ( var_cmip(ivar) == "prw" )  .OR. ( var_cmip(ivar) == "psl" ) .OR. ( height(ivar) > 10  ) ) THEN
               IF (.not. ALLOCATED(ph_in)) ALLOCATE( ph_in( xfocus, yfocus, nz+1 ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "PH", ph_varid)
               sts = NF90_GET_VAR(ncidin, ph_varid, ph_in(:,:,:), &
                 START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz+1, 1 /) )
             END IF
   
-            IF ( ( var_cmip(ivar) == "prw" )  .OR. ( var_cmip(ivar) == "psl" ) ) THEN
+            IF ( ( var_cmip(ivar) == "prw" )  .OR. ( var_cmip(ivar) == "psl" ) .OR. ( height(ivar) > 10  ) ) THEN
               IF (.not. ALLOCATED(phb_in)) ALLOCATE( phb_in( xfocus, yfocus, nz+1 ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "PHB", phb_varid)
               sts = NF90_GET_VAR(ncidin, phb_varid, phb_in(:,:,:), &
                 START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz+1, 1 /) )
             END IF
   
-            IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) ) THEN
+            IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) .OR. ( height(ivar) > 10  ) ) THEN
               IF (.not. ALLOCATED(theta_in)) ALLOCATE( theta_in( xfocus, yfocus, nz ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "T", theta_varid)
               sts = NF90_GET_VAR(ncidin, theta_varid, theta_in(:,:,:), &
@@ -2674,7 +2674,10 @@ DO ifrq = 1, 1, 1
             ELSE IF (height(ivar) == 200) THEN
               np = 6
             END IF
-  
+ 
+            ! vars needed: 3x int.: t_in, p_in, ph_fl; need: ph_in, phb_in, theta_in, pp_in, pb_in
+            ! var_pl, var3d_in
+            ! pout, slope, zg_pout
             IF ( (var_cmip(ivar) == "ta1000") .OR. &
                  (var_cmip(ivar) == "ta925") .OR.  &
                  (var_cmip(ivar) == "ta850") .OR.  &
