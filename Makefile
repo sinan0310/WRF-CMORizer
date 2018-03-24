@@ -15,7 +15,7 @@
 #FCFLAGS += -I$(EBROOTNETCDFMINFORTRAN)/include
 #LDFLAGS = -L$(EBROOTNETCDFMINFORTRAN)/lib -lnetcdff -lnetcdf
 
-# Ubuntu Desktop
+# Ubuntu Desktopi, -g
 FC = /usr/bin/gfortran
 FCFLAGS = -O2
 FCFLAGS += -Wall

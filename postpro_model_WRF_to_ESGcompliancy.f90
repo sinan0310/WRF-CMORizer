@@ -1,10 +1,10 @@
-!===============================================================================
+! ===============================================================================
 ! BOP
 !
 ! ****************************************************************************
 ! ***                                                                      ***
 ! ***      SEE THE LICENSE INFORMATION AT THE END OF THE PREAMBLE          ***
-! ***                                                                      ***  
+! ***                                                                      ***
 ! ***      THIS PREAMBLE IS THE ONLY DOCUMENTATION OF THIS PROGRAM         ***
 ! ***          BEFORE USING THIS PROGRAM, READ THIS PREAMBLE               ***
 ! ***                                                                      ***
@@ -14,7 +14,7 @@
 !   WRF_CMORizer.f90
 !
 ! VERSION:
-!   vX.X as of 2018-03-23
+!   vX.X as of 2018-03-24
 !   see git tags and log for revision details, history, and versions
 !
 ! STATUS:
@@ -345,7 +345,8 @@
 !
 ! TODO / PLANNED EXTENSIONS
 ! **see "TODO" and "CHECK" markers in the code**
-!   - Add levels: plev, plev_bnds > half done
+!   - Add: debug option in Makefile.
+!   - Add levels: plev_bnds > half done
 !   - Aside from mean, also have min/max
 !   - Static fields processing, fx > seperate namelist; pass through
 !   - Cover ALL REQUIRED variables/diagnostics + ADDITIONAL -> extensions nml
@@ -396,6 +397,7 @@
 !     * [X] Truhetz add/merge 2018-03-21 stuff, changed slp calc > combine above
 !     * [ ] process data for the ICTP paper
 !     * [ ] test all other tier-2 variables
+!     * [ ] compare pressure calcs with wrfpress
 !   - Later:
 !     * [ ] Aris, temporal averaging merge
 !     * [ ] adjustment for different RCMs < see CCLM code from Heimo 
@@ -446,6 +448,7 @@
 !     specifications.pdf
 ! [2] https://www.hymex.org/cordexfps-convection/wiki/doku.php?id=protocol
 ! [3] https://www.unidata.ucar.edu/software/netcdf/conventions.html
+! [4] http://www2.mmm.ucar.edu/wrf/users/utilities/util.htm
 ! ...
 !
 ! LICENSE / COPYING:
@@ -533,7 +536,7 @@ MODULE NamelistHandling
 
   CHARACTER (len = 200) :: comment, institute_run_id, title
 
-  CHARACTER (LEN = 100), DIMENSION(nvars):: var_wrf, var_cmip, standard_name, &
+  CHARACTER (LEN = 100), DIMENSION(nvars) :: var_wrf, var_cmip, standard_name, &
     long_name, units, filetype, cm1hr, cm3hr, cm6hr, cmDay, cmMon, cmSea, positive
   INTEGER, DIMENSION(nvars):: height, cordexID
   LOGICAL, DIMENSION(nvars):: time1hr, time3hr, time6hr, timeDay, timeMon, timeSea, &
@@ -653,7 +656,7 @@ INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, &
   rotated_pole_varid, height_varid, rec_varid, pp_varid, pb_varid, ph_varid, &
   phb_varid, qv_varid, qc_varid, qi_varid, qr_varid, qs_varid, &
   theta_varid, t2_varid, recbnds_varid, rainnc_varid, &
-  rainc_varid, snownc_varid, u10_varid, v10_varid, u_varid, v_varid, &
+  rainc_varid, snownc_varid, u10_varid, v10_varid, u_varid, v_varid, w_varid, &
   sfcevp_varid, potevp_varid, sfroff_varid, udroff_varid, acsnom_varid, &
   sinalpha_varid, cosalpha_varid, plev_varid, plevbnds_varid, psfc_varid
 
@@ -686,6 +689,7 @@ REAL, DIMENSION(:,:), ALLOCATABLE :: &
   clivi       , &
   sinalpha_in , &
   cosalpha_in , &
+  var_pl      , &
   psfc_in
 REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   pp_in       , &
@@ -707,7 +711,7 @@ REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   v_in        , &
   w_in        , &
   var3d_in    , &
-  var_pl      , &
+  !var_pl      , &
   potevp_in   , &
   rainnc_in   , &
   rainc_in    , &
@@ -723,8 +727,10 @@ REAL, DIMENSION(:,:,:,:), ALLOCATABLE :: &
   smois_in
 REAL, DIMENSION(:), ALLOCATABLE :: &
   GeoInRLat   , &
-  GeoInRLon   , &
-  pout
+  GeoInRLon
+
+! target pressure levels [Pa]
+REAL, DIMENSION(6) :: pout = (/100000.,92500.,85000.,70000.,50000.,20000./)
 
 ! time vec stuff
 REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: &
@@ -790,7 +796,8 @@ INTEGER :: i, sts, ivar, ifrq, ifl, it, counter, j, np, nl, ii, ivarnml, &
 LOGICAL :: FileExists, newpass, time_match, calc = .TRUE.
 REAL :: cpuTs, cpuTe
 INTEGER, ALLOCATABLE :: ipos(:)
-INTEGER :: calc_slp_type = 2 ! choose how psl is calculated, 0 OK, 1 OK, 2 OK
+! choose how psl is calculated, 0 OK, 1 OK, 2 OK, no not change throughout
+INTEGER :: calc_slp_type = 2 
 
 !-------------------------------------------------------------------------------
 ! system calls
@@ -1412,16 +1419,16 @@ DO ifrq = 1, 1, 1
             INQUIRE( FILE=TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) // "/" // TRIM(fn_out), EXIST=FileExists )
 
             IF ( FileExists ) THEN
-  
+
               PRINT *, "++++ path and file exist, continue filling"
 
             ELSE
 
               PRINT *, "++++ path and file do not yet exist, create path and netCDF file first"
               PRINT '(150A)', "path = ", TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out)
-  
+
               CALL SYSTEM("mkdir -p " // TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) )
-  
+
 !-------------------------------------------------------------------------------
 ! the SYSTEM call is non-std Fortran95, works for gfortran (fct & subroutine) 
 ! and ifort
@@ -1429,26 +1436,27 @@ DO ifrq = 1, 1, 1
 ! turn standard checking in Makefile off
 ! trackingID = "xxxxxxxx-xxxx-Mxxx-Nxxx-xxxxxxxxxxxx"
 ! creationDate = "YYYY-MM-DD-THH:MM:SSZ"
-  
+
               CALL SYSTEM(cmdUUID)
               OPEN(1,FILE="tmpfileUUID",STATUS='old')
               READ(1,*) trackingID
               CLOSE(1)
               PRINT *, "uuidgen externally generated trackingID = ", trackingID
-  
+
               CALL SYSTEM(cmdDate)
               OPEN(1,FILE="tmpfileDate",STATUS='old')
               READ(1,*) creationDate
               CLOSE(1)
               PRINT *, "date externally generated creation date = ", creationDate
-  
+
 !-------------------------------------------------------------------------------
 ! create netCDF file, must be NetCDF4 'classic data model' and compression lvl=1
 ! NF90_CLASSIC_MODEL = NetCDF4_classic
 ! NF90_HDF5 = NetCDF4 based on HDF5
 ! NF90_CLOBBER = old netCDF
-  
+
               !https://www.unidata.ucar.edu/software/netcdf/docs/netcdf-f90/NF90_005fCREATE.html
+              PRINT *, "create netCDF file"
               sts = NF90_CREATE(TRIM(DirOutputPostProRoot) // "/" // &
                 TRIM(pn_out) // "/" // TRIM(fn_out), IOR(NF90_NETCDF4, &
                 NF90_CLASSIC_MODEL), ncid)
@@ -1533,7 +1541,6 @@ DO ifrq = 1, 1, 1
                 sts = nf90_put_att(ncid, height_varid, "axis", "Z")
               END IF
   
-              ! lvl TODO
               ! just level definition, single number, like height
               ! there is no distinction between height and plev in the nml file
               IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
@@ -1710,9 +1717,9 @@ DO ifrq = 1, 1, 1
                 sts = NF90_PUT_VAR(ncid, height_varid, height(ivar) )
               END IF
 
-              ! add plev from NML
+              ! add plev from NML, [hPa] -> [Pa]
               IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
-                sts = NF90_PUT_VAR(ncid, plev_varid, height(ivar) )
+                sts = NF90_PUT_VAR(ncid, plev_varid, height(ivar)*100. )
               END IF
 
               !-----------------------------------------------------------------
@@ -1773,7 +1780,7 @@ DO ifrq = 1, 1, 1
             counter
   
 !-------------------------------------------------------------------------------
-! read orig WRF outpouts
+! read orig WRF outputs
 ! there is always a corresponding time-slot in the NC file
 ! extracted time from above
 ! "it" controls it all: timestep in the individual WRF file
@@ -1802,6 +1809,8 @@ DO ifrq = 1, 1, 1
             sts = NF90_GET_VAR(ncidin, p00_varid, P00(:), &
               START = (/ it /), COUNT = (/ 1 /) )
           END IF
+          
+          PRINT *, T00(1), P00(1)
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! data handling here is inefficient
@@ -1826,6 +1835,12 @@ DO ifrq = 1, 1, 1
 ! cape [J kg-1] i 2-D Maximum convective available potential energy
 ! cin [J kg-1] i 2-D Maximum convective inhibition
 ! CONSIDER GRID STAGGERING
+! keeping the code compact and avoiding unnecessary allocations is sometimes 
+! tricky and may lead to unallocated variables during processing
+! if changes are made here, it must be tested with each variable seperate (all 
+! others OFF in the variable namelist) whether it works, otherwise the 
+! allocation may still persist from a previous pass of the code with a different
+! variable
 
           IF ( (var_cmip(ivar) == "psl") &
                 .OR. (height(ivar) == 1000) &
@@ -1839,9 +1854,9 @@ DO ifrq = 1, 1, 1
                 .OR. (var_cmip(ivar) == "clivi") &
                 .OR. (var_cmip(ivar) == "cape") &
                 .OR. (var_cmip(ivar) == "cin") ) THEN
-  
+
             PRINT *,'read 3D vars'
- 
+
 ! sort in still 
             IF (.not. ALLOCATED(t_p)) ALLOCATE( t_p( xfocus, yfocus, nz ), STAT=sts )
             IF (.not. ALLOCATED(qvs)) ALLOCATE( qvs( xfocus, yfocus, nz ), STAT=sts )
@@ -1853,10 +1868,10 @@ DO ifrq = 1, 1, 1
             !-------------------------------------------------------------------
             ! internal vars needed in the 3D processing section
 
-            IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) ) THEN
-              IF (.not. ALLOCATED(t_in)) ALLOCATE( t_in( xfocus, yfocus, nz ), STAT=sts )
-              IF (.not. ALLOCATED(p_in)) ALLOCATE( p_in( xfocus, yfocus, nz ), STAT=sts )
-            END IF
+            PRINT *, "allocate t_in, p_in, ph_fl" 
+            IF (.not. ALLOCATED(t_in)) ALLOCATE( t_in( xfocus, yfocus, nz ), STAT=sts )
+            IF (.not. ALLOCATED(p_in)) ALLOCATE( p_in( xfocus, yfocus, nz ), STAT=sts )
+            IF (.not. ALLOCATED(ph_fl)) ALLOCATE( ph_fl( xfocus, yfocus, nz ), STAT=sts )
 
             IF ( var_cmip(ivar) == "prw" ) THEN
               IF (.not. ALLOCATED(prw)) ALLOCATE( prw( xfocus, yfocus ), STAT=sts )
@@ -1864,7 +1879,6 @@ DO ifrq = 1, 1, 1
 
             IF ( var_cmip(ivar) == "psl" ) THEN
               IF (.not. ALLOCATED(psl_in)) ALLOCATE( psl_in ( xfocus, yfocus ), STAT=sts )
-              IF (.not. ALLOCATED(ph_fl)) ALLOCATE( ph_fl( xfocus, yfocus, nz ), STAT=sts )
             END IF
 
             IF ( (var_cmip(ivar) == "cape" ) .OR. (var_cmip(ivar) == "cin" ) ) THEN
@@ -1872,12 +1886,18 @@ DO ifrq = 1, 1, 1
               IF (.not. ALLOCATED(cin)) ALLOCATE( cin( xfocus, yfocus ), STAT=sts )
             END IF
 
-            IF (height(ivar) > 10 ) THEN
-              IF (.not. ALLOCATED(var_pl)) ALLOCATE( var_pl( xfocus, yfocus, 6 ), STAT=sts )
-              var_pl(:,:,:) = mv
+            ! PROBLEM to make this efficient: selection of vars via height
+            ! is not really efficient; if one defines a list of concrete
+            ! variable names this list has to always be expanded if a new 
+            ! variable is needed
+            IF ( height(ivar) > 10 ) THEN
+              PRINT *, "prep. int. 3D pres. level vars"
+              ! IF (.not. ALLOCATED(var_pl)) ALLOCATE( var_pl( xfocus, yfocus, 6 ), STAT=sts ) ! working on one variable at a time
+              IF (.not. ALLOCATED(var_pl)) ALLOCATE( var_pl( xfocus, yfocus ), STAT=sts )
+              ! var_pl(:,:,:) = mv
+              var_pl(:,:) = mv
               IF (.not. ALLOCATED(var3d_in)) ALLOCATE( var3d_in( xfocus, yfocus, nz ), STAT=sts )
-              IF (.not. ALLOCATED(pout)) ALLOCATE( pout( 6 ), STAT=sts ) ! # pressure levels
-              pout = (/100000.,92500.,85000.,70000.,50000.,20000./)
+              !!!IF (.not. ALLOCATED(pout)) ALLOCATE( pout( SIZE(pout) ), STAT=sts ) ! # pressure levels can be removed
             END IF
 
             !-------------------------------------------------------------------
@@ -1887,8 +1907,10 @@ DO ifrq = 1, 1, 1
             sts = NF90_INQ_VARID(ncidin, "T2", t2_varid)
             sts = NF90_GET_VAR(ncidin, t2_varid, t2_in(:,:), &
               START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-           
+          
+            ! these 5 vars are always calculated
             IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) .OR. ( height(ivar) > 10  ) ) THEN
+              PRINT *, "read P"
               IF (.not. ALLOCATED(pp_in)) ALLOCATE( pp_in( xfocus, yfocus, nz ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "P", pp_varid)
               sts = NF90_GET_VAR(ncidin, pp_varid, pp_in(:,:,:), &
@@ -1896,6 +1918,7 @@ DO ifrq = 1, 1, 1
             END IF
 
             IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) .OR. ( height(ivar) > 10  ) ) THEN
+              PRINT *, "read PB"
               IF (.not. ALLOCATED(pb_in)) ALLOCATE( pb_in( xfocus, yfocus, nz ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "PB", pb_varid)
               sts = NF90_GET_VAR(ncidin, pb_varid, pb_in(:,:,:), &
@@ -1903,6 +1926,7 @@ DO ifrq = 1, 1, 1
             END IF  
 
             IF ( ( var_cmip(ivar) == "prw" )  .OR. ( var_cmip(ivar) == "psl" ) .OR. ( height(ivar) > 10  ) ) THEN
+              PRINT *, "read PH"
               IF (.not. ALLOCATED(ph_in)) ALLOCATE( ph_in( xfocus, yfocus, nz+1 ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "PH", ph_varid)
               sts = NF90_GET_VAR(ncidin, ph_varid, ph_in(:,:,:), &
@@ -1910,6 +1934,7 @@ DO ifrq = 1, 1, 1
             END IF
   
             IF ( ( var_cmip(ivar) == "prw" )  .OR. ( var_cmip(ivar) == "psl" ) .OR. ( height(ivar) > 10  ) ) THEN
+              PRINT *, "read PHB"
               IF (.not. ALLOCATED(phb_in)) ALLOCATE( phb_in( xfocus, yfocus, nz+1 ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "PHB", phb_varid)
               sts = NF90_GET_VAR(ncidin, phb_varid, phb_in(:,:,:), &
@@ -1917,13 +1942,15 @@ DO ifrq = 1, 1, 1
             END IF
   
             IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) .OR. ( height(ivar) > 10  ) ) THEN
+              PRINT *, "read T" ! perturbation potential temperature (theta-t0)
               IF (.not. ALLOCATED(theta_in)) ALLOCATE( theta_in( xfocus, yfocus, nz ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "T", theta_varid)
               sts = NF90_GET_VAR(ncidin, theta_varid, theta_in(:,:,:), &
                 START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
             END IF
   
-            IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) ) THEN
+            IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) .OR. ( SCAN(var_cmip(ivar),"hus") == 1 ) ) THEN
+              PRINT *, "read QVAPOR"
               IF (.not. ALLOCATED(qv_in)) ALLOCATE( qv_in( xfocus, yfocus, nz  ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "QVAPOR", qv_varid)
               sts = NF90_GET_VAR(ncidin, qv_varid, qv_in(:,:,:), &
@@ -1950,30 +1977,40 @@ DO ifrq = 1, 1, 1
             sts = NF90_GET_VAR(ncidin, qs_varid, qs_in(:,:,:), &
               START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )          
   
-            IF (.not. ALLOCATED(u_in)) ALLOCATE( u_in( xfocus+1, yfocus, nz ), STAT=sts )
-            sts = NF90_INQ_VARID(ncidin, "U", u_varid)
-            sts = NF90_GET_VAR(ncidin, u_varid, u_in(:,:,:), &
-              START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus+1, yfocus, nz, 1 /) )
+            IF ( (SCAN(var_cmip(ivar),"ua") == 1) .OR. (SCAN(var_cmip(ivar),"va") == 1) ) THEN
+              IF (.not. ALLOCATED(u_in)) ALLOCATE( u_in( xfocus+1, yfocus, nz ), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "U", u_varid)
+              sts = NF90_GET_VAR(ncidin, u_varid, u_in(:,:,:), &
+                START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus+1, yfocus, nz, 1 /) )
+            END IF
   
-            IF (.not. ALLOCATED(v_in)) ALLOCATE( v_in( xfocus, yfocus+1, nz ), STAT=sts )
-            sts = NF90_INQ_VARID(ncidin, "V", v_varid)
-            sts = NF90_GET_VAR(ncidin, v_varid, v_in(:,:,:), &
-              START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus+1, nz, 1 /) )
+            IF ( (SCAN(var_cmip(ivar),"ua") == 1) .OR. (SCAN(var_cmip(ivar),"va") == 1) ) THEN
+              IF (.not. ALLOCATED(v_in)) ALLOCATE( v_in( xfocus, yfocus+1, nz ), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "V", v_varid)
+              sts = NF90_GET_VAR(ncidin, v_varid, v_in(:,:,:), &
+                START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus+1, nz, 1 /) )
+            END IF
             
-            IF (.not. ALLOCATED(w_in)) ALLOCATE( w_in( xfocus, yfocus, nz+1 ), STAT=sts )
-            sts = NF90_INQ_VARID(ncidin, "W", v_varid)
-            sts = NF90_GET_VAR(ncidin, v_varid, v_in(:,:,:), &
-              START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus+1, nz+1, 1 /) )
+            IF ( (SCAN(var_cmip(ivar),"wa") == 1) ) THEN
+              IF (.not. ALLOCATED(w_in)) ALLOCATE( w_in( xfocus, yfocus, nz+1 ), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "W", w_varid)
+              sts = NF90_GET_VAR(ncidin, w_varid, w_in(:,:,:), &
+                START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz+1, 1 /) )
+            END IF
 
-            IF (.not. ALLOCATED(sinalpha_in)) ALLOCATE( sinalpha_in( xfocus, yfocus ), STAT=sts )
-            sts = NF90_INQ_VARID(ncidin, "SINALPHA", sinalpha_varid)
-            sts = NF90_GET_VAR(ncidin, sinalpha_varid, sinalpha_in(:,:), &
-              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+            IF ( (SCAN(var_cmip(ivar),"ua") == 1) .OR. (SCAN(var_cmip(ivar),"va") == 1) ) THEN
+              IF (.not. ALLOCATED(sinalpha_in)) ALLOCATE( sinalpha_in( xfocus, yfocus ), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "SINALPHA", sinalpha_varid)
+              sts = NF90_GET_VAR(ncidin, sinalpha_varid, sinalpha_in(:,:), &
+                START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+            END IF
   
-            IF (.not. ALLOCATED(cosalpha_in)) ALLOCATE( cosalpha_in( xfocus, yfocus ), STAT=sts )
-            sts = NF90_INQ_VARID(ncidin, "COSALPHA", cosalpha_varid)
-            sts = NF90_GET_VAR(ncidin, cosalpha_varid, cosalpha_in(:,:), &
-              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+            IF ( (SCAN(var_cmip(ivar),"ua") == 1) .OR. (SCAN(var_cmip(ivar),"va") == 1) ) THEN
+              IF (.not. ALLOCATED(cosalpha_in)) ALLOCATE( cosalpha_in( xfocus, yfocus ), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "COSALPHA", cosalpha_varid)
+              sts = NF90_GET_VAR(ncidin, cosalpha_varid, cosalpha_in(:,:), &
+                START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+            END IF
   
             IF ( var_cmip(ivar) == "psl" ) THEN
               IF (.not. ALLOCATED(psfc_in)) ALLOCATE( psfc_in( xfocus, yfocus ), STAT=sts )
@@ -2642,7 +2679,7 @@ DO ifrq = 1, 1, 1
 ! zg
 ! levels needed CORDEX:            850       500  200
 ! levels needed FPS   : 1000  925   "   700   "    "
-  
+
           IF ( (var_cmip(ivar) == "psl") .OR. &
                (height(ivar) == 1000) .OR. &
                (height(ivar) == 925) .OR. &
@@ -2650,16 +2687,29 @@ DO ifrq = 1, 1, 1
                (height(ivar) == 700) .OR. &
                (height(ivar) == 500) .OR. &
                (height(ivar) == 200) ) THEN
-  
+
+            PRINT *, var_cmip(ivar), height(ivar)
+
             ! PH and PHB are on nz+1 levels
             ! vertically destaggering
+            ! total geopotential height [m]
+            ! see: http://www2.mmm.ucar.edu/wrf/users/docs/user_guide_V3.8/users_guide_chap5.htm
             DO nl = 1,nz 
               ph_fl(:,:,nl) = ((ph_in(:,:,nl)+phb_in(:,:,nl))+ &
                               (ph_in(:,:,nl+1)+phb_in(:,:,nl+1)))/2./gr
             END DO
-            t_in(:,:,:) = (theta_in(:,:,:)+T00(1))*((pp_in(:,:,:)+ &
-                          pb_in(:,:,:))/P00(1))**(R/cp)
-            p_in = pp_in+pb_in
+
+            ! total pressure [Pa]
+            ! perturbation pressure + base state pressure
+            ! see: http://www2.mmm.ucar.edu/wrf/users/docs/user_guide_V3.8/users_guide_chap5.htm
+            p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
+
+            ! transfer theta-t0 to total potential temperature [K]
+            ! and then convert potential temperature theta to absolute temperature
+            ! this is the correct version, using 290K as base temp
+            ! wrfpress contains data that are still calculated with 300K
+            t_in(:,:,:) = ( theta_in(:,:,:) + T00(1) ) * &
+                          ( (pp_in(:,:,:) + pb_in(:,:,:)) / P00(1) )**(R/cp)
   
             IF (height(ivar) == 1000) THEN
               np = 1
@@ -2675,147 +2725,222 @@ DO ifrq = 1, 1, 1
               np = 6
             END IF
  
-            ! vars needed: 3x int.: t_in, p_in, ph_fl; need: ph_in, phb_in, theta_in, pp_in, pb_in
+            ! vars needed: 3x int.: t_in, p_in, ph_fl 
+            !              -> need: ph_in, phb_in, theta_in, pp_in, pb_in
             ! var_pl, var3d_in
             ! pout, slope, zg_pout
+            ! comparison with wrfpress, same time: distribution OK, but ours is
+            ! much colder, old vs new scheme about identical, ta500
             IF ( (var_cmip(ivar) == "ta1000") .OR. &
                  (var_cmip(ivar) == "ta925") .OR.  &
                  (var_cmip(ivar) == "ta850") .OR.  &
                  (var_cmip(ivar) == "ta700") .OR.  &
                  (var_cmip(ivar) == "ta500") .OR.  &
                  (var_cmip(ivar) == "ta200") ) THEN
+              PRINT *, "calc ta..."
               var3d_in(:,:,:) = t_in(:,:,:)
               ! linear in zg
               DO i = 1,xfocus 
                 DO j = 1,yfocus
                   DO nl = 1,nz - 1
-                    IF (pout(np).le.p_in(i,j,nl) .and. pout(np).gt.p_in(i,j,nl+1)) then
+                    IF (pout(np).LE.p_in(i,j,nl) .AND. pout(np).GT.p_in(i,j,nl+1)) THEN
                       ! HTr: calculate zg at pout, first (linear in log(p)
-                      slope = (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))/ (LOG(p_in(i,j,nl))-LOG(p_in(i,j,nl+1)))
-                      zg_pout = ph_fl(i,j,nl+1) + slope* (LOG(pout(np))-LOG(p_in(i,j,nl+1)))
+                      !slope = (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))/ (LOG(p_in(i,j,nl))-LOG(p_in(i,j,nl+1)))
+                      !zg_pout = ph_fl(i,j,nl+1) + slope* (LOG(pout(np))-LOG(p_in(i,j,nl+1)))
                       ! HTr: interpolate linearly in zg
-                      slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))
-                      var_pl(i,j,np) = var3d_in(i,j,nl+1) + slope* (zg_pout-ph_fl(i,j,nl+1))
+                      !slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ &
+                      !        (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))
+                      !var_pl(i,j) = var3d_in(i,j,nl+1) + &
+                      !              slope*(zg_pout-ph_fl(i,j,nl+1))
+                      slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/&
+                              (p_in(i,j,nl)-p_in(i,j,nl+1))
+                      var_pl(i,j) = var3d_in(i,j,nl+1) + &
+                                    slope*(pout(np)-p_in(i,j,nl+1))
                     END IF
                   END DO
                 END DO
               END DO
+
+            ! vars needed: int.: p_in (> in: pp_in, pb_in)
+            !              out: var_pl, var3d_in
+            !              tmp: pout, slope, zg_pout
+            !              in: qv_in
+            ! comparison with wrfpress, same time: about identical, also old and 
+            ! new scheme, simple vs. sophisticated, hus500
             ELSE IF ( (var_cmip(ivar) == "hus1000") .OR. &
                  (var_cmip(ivar) == "hus925") .OR.       &
                  (var_cmip(ivar) == "hus850") .OR.       &
                  (var_cmip(ivar) == "hus700") .OR.       &
                  (var_cmip(ivar) == "hus500") .OR.       &
                  (var_cmip(ivar) == "hus200") ) THEN
+              PRINT *, "calc hus..."
               var3d_in(:,:,:) = qv_in(:,:,:)
               ! linear in log(p)
-              DO i = 1,xfocus 
+              DO i = 1,xfocus
                 DO j = 1,yfocus
                   DO nl = 1,nz - 1
-                    IF (pout(np).le.p_in(i,j,nl) .and. pout(np).gt.p_in(i,j,nl+1)) then               
-                      slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/(LOG(p_in(i,j,nl))-LOG(p_in(i,j,nl+1)))
-                      var_pl(i,j,np) = var3d_in(i,j,nl+1) + slope*(LOG(pout(np))-LOG(p_in(i,j,nl+1)))
+                    IF (pout(np).LE.p_in(i,j,nl) .AND. pout(np).GT.p_in(i,j,nl+1)) THEN
+                      !slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ &
+                      !        (LOG(p_in(i,j,nl))-LOG(p_in(i,j,nl+1)))
+                      !var_pl(i,j) = var3d_in(i,j,nl+1) + &
+                      !              slope*(LOG(pout(np))-LOG(p_in(i,j,nl+1)))
+                      slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/&
+                              (p_in(i,j,nl)-p_in(i,j,nl+1))
+                      var_pl(i,j) = var3d_in(i,j,nl+1) + &
+                                    slope*(pout(np)-p_in(i,j,nl+1))
                     END IF
                   END DO
                 END DO
               END DO
+
+            ! check as is: strange data holes, all negative speeds are affected
+            ! compare with wrfpress orig run, looks good, distribution OK
+            ! compare with heimo old, identical
+            ! insert SKn routine, simplified interpolation: looks OK
+            ! could also compare with p_interp: processeding and code: not done
+            ! comparison with wrfpress, same time: apart from the holes where
+            ! negative values are with the more sophisticated scheme, all three
+            ! datasets about identical: pattern and range, wrfpress, old scheme,
+            ! new scheme
             ELSE IF ( (var_cmip(ivar) == "ua1000") .OR. &
                  (var_cmip(ivar) == "ua925") .OR.       &
                  (var_cmip(ivar) == "ua850") .OR.       &
                  (var_cmip(ivar) == "ua700") .OR.       &
                  (var_cmip(ivar) == "ua500") .OR.       &
                  (var_cmip(ivar) == "ua200") ) THEN
+              ! rotate to earth grid and destagger
+              PRINT *, "calc ua..."
               DO i = 1,xfocus
-                var3d_in(i,:,:) = (u_in(i,:,:)+u_in(i+1,:,:))/2.*cosalpha_in(:,:) - (v_in(i,:,:)+v_in(i+1,:,:))/2.*sinalpha_in(:,:) ! rotate to earth grid
+                var3d_in(i,:,:) = ((u_in(i,:,:)+u_in(i+1,:,:))/2.)*cosalpha_in(:,:) - &
+                                  ((v_in(i,:,:)+v_in(i+1,:,:))/2.)*sinalpha_in(:,:) 
               END DO
               ! logarithmic in zg
               DO i = 1,xfocus 
                 DO j = 1,yfocus
                   DO nl = 1,nz - 1
-                    IF (pout(np).le.p_in(i,j,nl) .AND. pout(np).gt.p_in(i,j,nl+1)) then                
+                    IF (pout(np).LE.p_in(i,j,nl) .AND. pout(np).GT.p_in(i,j,nl+1)) THEN
                       ! HTr: calculate zg at pout, first (linear in log(p)
-                      slope = (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))/ (LOG(p_in(i,j,nl))-LOG(p_in(i,j,nl+1)))
-                      zg_pout = ph_fl(i,j,nl+1) + slope* (LOG(pout(np))-LOG(p_in(i,j,nl+1)))
+                      !slope = (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))/ &
+                      !        (LOG(p_in(i,j,nl))-LOG(p_in(i,j,nl+1)))
+                      !zg_pout = ph_fl(i,j,nl+1) + slope* &
+                      !          (LOG(pout(np))-LOG(p_in(i,j,nl+1)))
                       ! HTr: interpolate logarithmic in zg
-                      slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))
-                      var_pl(i,j,np) = var3d_in(i,j,nl) * EXP( (zg_pout - ph_fl(i,j,nl)) * (LOG(var3d_in(i,j,nl+1)) - LOG(var3d_in(i,j,nl))) / (ph_fl(i,j,nl+1)-ph_fl(i,j,nl)))
+                      !slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ &
+                      !        (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))
+                      !var_pl(i,j) = var3d_in(i,j,nl) * &
+                      !                 EXP( (zg_pout - ph_fl(i,j,nl)) * &
+                      !                      (LOG(var3d_in(i,j,nl+1)) - &
+                      !                       LOG(var3d_in(i,j,nl))) / &
+                      !                 (ph_fl(i,j,nl+1)-ph_fl(i,j,nl)))
+                      slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/&
+                              (p_in(i,j,nl)-p_in(i,j,nl+1))
+                      var_pl(i,j) = var3d_in(i,j,nl+1) + &
+                                    slope*(pout(np)-p_in(i,j,nl+1))
                     END IF
                   END DO
                 END DO
               END DO
+
+            ! comparison with wrfpress, same time: simple scheme about the same
+            ! results
             ELSE IF ( (var_cmip(ivar) == "va1000") .OR. &
                  (var_cmip(ivar) == "va925") .OR.       &
                  (var_cmip(ivar) == "va850") .OR.       &
                  (var_cmip(ivar) == "va700") .OR.       &
                  (var_cmip(ivar) == "va500") .OR.       &
                  (var_cmip(ivar) == "va200") ) THEN
+              ! rotate to earth grid and destagger
               DO j = 1,yfocus
-                var3d_in(:,j,:) = (v_in(:,j,:)+v_in(:,j+1,:))/2.*cosalpha_in(:,:) + (u_in(i,:,:)+u_in(i+1,:,:))/2.*sinalpha_in(:,:) ! rotate to earth grid
+                var3d_in(:,j,:) = (v_in(:,j,:)+v_in(:,j+1,:))/2.*cosalpha_in(:,:) + &
+                                  (u_in(:,j,:)+u_in(:,j+1,:))/2.*sinalpha_in(:,:) 
               END DO
               ! logarithmic in zg
               DO i = 1,xfocus 
                 DO j = 1,yfocus
-                  DO nl = 1,nz ! CHECK nz
-                    IF (pout(np).le.p_in(i,j,nl) .and. pout(np).gt.p_in(i,j,nl+1)) then                
+                  DO nl = 1,nz - 1
+                    IF (pout(np).LE.p_in(i,j,nl) .AND. pout(np).GT.p_in(i,j,nl+1)) THEN                
                       ! HTr: calculate zg at pout, first (linear in log(p)
-                      slope = (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))/ (LOG(p_in(i,j,nl))-LOG(p_in(i,j,nl+1)))
-                      zg_pout = ph_fl(i,j,nl+1) + slope* (LOG(pout(np))-LOG(p_in(i,j,nl+1)))
+                      !slope = (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))/ (LOG(p_in(i,j,nl))-LOG(p_in(i,j,nl+1)))
+                      !zg_pout = ph_fl(i,j,nl+1) + slope* (LOG(pout(np))-LOG(p_in(i,j,nl+1)))
                       ! HTr: interpolate logarithmic in zg
-                      slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))
-                      var_pl(i,j,np) = var3d_in(i,j,nl) * EXP( (zg_pout - ph_fl(i,j,nl)) * (LOG(var3d_in(i,j,nl+1)) - LOG(var3d_in(i,j,nl))) / (ph_fl(i,j,nl+1)-ph_fl(i,j,nl)))
+                      !slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))
+                      !var_pl(i,j) = var3d_in(i,j,nl) * EXP( (zg_pout - ph_fl(i,j,nl)) * (LOG(var3d_in(i,j,nl+1)) - LOG(var3d_in(i,j,nl))) / (ph_fl(i,j,nl+1)-ph_fl(i,j,nl)))
+                      slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/&
+                              (p_in(i,j,nl)-p_in(i,j,nl+1))
+                      var_pl(i,j) = var3d_in(i,j,nl+1) + &
+                                    slope*(pout(np)-p_in(i,j,nl+1))
                     END IF
                   END DO
                 END DO
               END DO
+
+            ! comparison with orig model data between level 16 and 17
+            ! OK
             ELSE IF ( (var_cmip(ivar) == "wa1000") .OR. &
                  (var_cmip(ivar) == "wa925") .OR.       &
                  (var_cmip(ivar) == "wa850") .OR.       &
                  (var_cmip(ivar) == "wa700") .OR.       &
                  (var_cmip(ivar) == "wa500") .OR.       &
                  (var_cmip(ivar) == "wa200") ) THEN
-              var3d_in(:,:,:) = w_in(:,:,:)
-              ! logarithmic in zg
+              ! vertically destagger:
+              DO nl = 1,nz
+                var3d_in(:,:,nl) = ( w_in(:,:,nl) + w_in(:,:,nl+1) ) / 2.
+              END DO
               DO i = 1,xfocus 
                 DO j = 1,yfocus
                   DO nl = 1,nz - 1
                     IF (pout(np).le.p_in(i,j,nl) .and. pout(np).gt.p_in(i,j,nl+1)) then                
-                      ! HTr: calculate zg at pout, first (linear in log(p)
-                      slope = (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))/ (LOG(p_in(i,j,nl))-LOG(p_in(i,j,nl+1)))
-                      zg_pout = ph_fl(i,j,nl+1) + slope* (LOG(pout(np))-LOG(p_in(i,j,nl+1)))
-                      ! HTr: interpolate logarithmic in zg
-                      slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))
-                      var_pl(i,j,np) = var3d_in(i,j,nl) * EXP( (zg_pout - ph_fl(i,j,nl)) * (LOG(var3d_in(i,j,nl+1)) - LOG(var3d_in(i,j,nl))) / (ph_fl(i,j,nl+1)-ph_fl(i,j,nl)))
+                      slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/&
+                              (p_in(i,j,nl)-p_in(i,j,nl+1))
+                      var_pl(i,j) = var3d_in(i,j,nl+1) + &
+                                    slope*(pout(np)-p_in(i,j,nl+1))
                     END IF
                   END DO
                 END DO
               END DO              
+
+            ! vars needed: int.: ph_fl (> in: ph_in, phb_in); p_in (> in: pp_in, pb_in)
+            !              out: var_pl, var3d_in
+            !              tmp: pout, slope
+            ! comparison with wrfpress, same time: wrfpress, old and new scheme
+            ! about identical
             ELSE IF ( (var_cmip(ivar) == "zg1000") .OR. &
                  (var_cmip(ivar) == "zg925") .OR.       &
                  (var_cmip(ivar) == "zg850") .OR.       &
                  (var_cmip(ivar) == "zg700") .OR.       &
                  (var_cmip(ivar) == "zg500") .OR.       &    
                  (var_cmip(ivar) == "zg200") ) THEN
+              PRINT *, "calc zg..."
               var3d_in(:,:,:) = ph_fl(:,:,:)
               ! linear in log(p)
               DO i = 1,xfocus 
                 DO j = 1,yfocus
                   DO nl = 1,nz - 1
-                    IF (pout(np).le.p_in(i,j,nl) .and. pout(np).gt.p_in(i,j,nl+1)) then               
-                      slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/(LOG(p_in(i,j,nl))-LOG(p_in(i,j,nl+1)))
-                      var_pl(i,j,np) = var3d_in(i,j,nl+1) + slope*(LOG(pout(np))-LOG(p_in(i,j,nl+1)))
+                    IF (pout(np).LE.p_in(i,j,nl) .AND. pout(np).GT.p_in(i,j,nl+1)) THEN               
+                      !slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ &
+                      !        (LOG(p_in(i,j,nl))-LOG(p_in(i,j,nl+1)))
+                      !var_pl(i,j) = var3d_in(i,j,nl+1) + &
+                      !              slope*(LOG(pout(np))-LOG(p_in(i,j,nl+1)))
+                      slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/&
+                              (p_in(i,j,nl)-p_in(i,j,nl+1))
+                      var_pl(i,j) = var3d_in(i,j,nl+1) + &
+                                    slope*(pout(np)-p_in(i,j,nl+1))
                     END IF
                   END DO
                 END DO
               END DO
             END IF
 
-            !alternative: use one routine for all
+            ! alternative: use one routine for all
+            ! using np here is rubbish and wrong > originally trickeled up as well...
 !            DO i = 1,xfocus 
 !              DO j = 1,yfocus
 !                DO nl = 1,nz - 1
 !                  IF (pout(np).le.p_in(i,j,nl) .and. pout(np).gt.p_in(i,j,nl+1)) then                
-!                    ! HTr: change interpolation to be linear in log(p)
+!                    ! SKn: original version
 !                    !slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ (p_in(i,j,nl)-p_in(i,j,nl+1))
-!                    !var_pl(i,j,np) = var3d_in(i,j,nl+1) + slope* (pout(np)-p_in(i,j,nl+1))
+!                    !var_pl(i,j,np) = var3d_in(i,j,nl+1) + slope*(pout(np)-p_in(i,j,nl+1))
+!                    ! HTr: change interpolation to be linear in log(p)
 !                    slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ (LOG(p_in(i,j,nl))-LOG(p_in(i,j,nl+1)))
 !                    var_pl(i,j,np) = var3d_in(i,j,nl+1) + slope*(LOG(pout(np))-LOG(p_in(i,j,nl+1)))
 !                  END IF
@@ -2823,7 +2948,7 @@ DO ifrq = 1, 1, 1
 !              END DO
 !            END DO
 
-            data_in(:,:) = var_pl(:,:,np)
+            data_in(:,:) = var_pl(:,:) ! superfluous, remove var_pl TODO was some old idea of someone but does not fit into the overall concept
 
             ! several options to calculate slp, either from formula
             ! internal vars needed: ph_fl, t_in, p_in
@@ -2869,24 +2994,22 @@ DO ifrq = 1, 1, 1
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! CORDEX [X], FPS CEM [X]
 ! prw [kg m-2] i Water Vapor Path
-  
-          IF ( (var_cmip(ivar) == "prw") ) THEN     
- 
-            !                 total pot temp         *           total pressure mb
-            !        pert pot temp + base state temp *  pert_pressure + base_state_pressure)/base state pressure **poisson constant (gas constant/specific heat at constant pressure, dry air)
+
+          IF ( (var_cmip(ivar) == "prw") ) THEN
+
             t_in(:,:,:) = ( theta_in(:,:,:)+T00(1) ) * ( (pp_in(:,:,:)+pb_in(:,:,:))/P00(1) )**(R/cp)
-            p_in = pp_in+pb_in
+            p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
 
             prw(:,:) = 0.
             DO nl = 1, nz
               prw(:,:) = prw(:,:) + &
                 (qv_in(:,:,nl) * p_in(:,:,nl)/(R*t_in(:,:,nl)) * &
                 ((ph_in(:,:,nl+1)+phb_in(:,:,nl+1)) - (ph_in(:,:,nl)+phb_in(:,:,nl)))/gr)
-              data_in(:,:) = prw(:,:)            
             END DO
-  
+            data_in(:,:) = prw(:,:)
+
           END IF
-  
+
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! CORDEX [X], FPS CEM [X]
 ! clwvi [kg m-2] i Condensed Water Path  
@@ -2894,17 +3017,12 @@ DO ifrq = 1, 1, 1
           IF ( (var_cmip(ivar) == "clwvi") ) THEN
   
             t_in(:,:,:) = (theta_in(:,:,:)+T00(1))*((pp_in(:,:,:)+pb_in(:,:,:))/P00(1))**(R/cp)
-
-            p_in = pp_in+pb_in          
+            p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
   
             clwvi(:,:) = 0.
-  
             DO nl = 1,nz - 1
-  
               clwvi(:,:) = clwvi(:,:) + (qc_in(:,:,nl) + qi_in(:,:,nl) + qr_in(:,:,nl) + qs_in(:,:,nl) ) * p_in(:,:,nl)/(R*t_in(:,:,nl)) * ((ph_in(:,:,nl+1)+phb_in(:,:,nl+1)) - (ph_in(:,:,nl)+phb_in(:,:,nl)))/gr
-              
             END DO
-  
             data_in(:,:) = clwvi(:,:) 
   
           END IF
@@ -2916,17 +3034,12 @@ DO ifrq = 1, 1, 1
           IF ( (var_cmip(ivar) == "clivi")) THEN
   
             t_in(:,:,:) = (theta_in(:,:,:)+T00(1))*((pp_in(:,:,:)+pb_in(:,:,:))/P00(1))**(R/cp)
-
-            p_in = pp_in+pb_in
+            p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
   
             clivi(:,:) = 0.
-  
             DO nl = 1,nz - 1
-  
               clivi(:,:) = clivi(:,:) + (qi_in(:,:,nl) + qs_in(:,:,nl)) * p_in(:,:,nl)/(R*t_in(:,:,nl)) * ((ph_in(:,:,nl+1)+phb_in(:,:,nl+1)) - (ph_in(:,:,nl)+phb_in(:,:,nl)))/gr
-              
             END DO
-  
             data_in(:,:) = clivi(:,:)
   
           END IF
@@ -2939,7 +3052,6 @@ DO ifrq = 1, 1, 1
           IF ( (var_cmip(ivar) == "cape") .OR. (var_cmip(ivar) == "cin") ) THEN
   
             t_in(:,:,:) = (theta_in(:,:,:)+T00(1))*((pp_in(:,:,:)+pb_in(:,:,:))/P00(1))**(R/cp)
-  
             p_in = pp_in+pb_in          
   
             t_p(:,:,1) = t_in(:,:,1)
@@ -3143,7 +3255,6 @@ DO ifrq = 1, 1, 1
           IF (var_cmip(ivar) == "evspsblpot") THEN
   
             data_in(:,:) = (potevp_in(:,:,2) - (potevp_in(:,:,1)))/L
-  
   
           END IF
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
