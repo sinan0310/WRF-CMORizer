@@ -14,7 +14,7 @@
 !   WRF_CMORizer.f90
 !
 ! VERSION:
-!   vX.X (= git tag) as of 2018-03-25
+!   v0.1 (= git tag) as of 2018-03-25
 !   see git tags and log for revision details, history, and versions
 !
 ! STATUS:
@@ -35,14 +35,20 @@
 !     * Fixed fields (based on geo_em files), easy to implement via namelist and
 !       search path -> part of the structure of the code
 !     * Spatial interpolation to common regular grid EUR-11i
-!   - Tested and refined namelists with their respective variables:
+!   - Double-checked, tested and refined namelists with their respective
+!     variables and diagnostics, after code merge and refactoring, all needs
+!     checking and fixing:
 !     * [X] runctrl.current.nml (runctrl.CORDEX-FPSCEM-CMWL.nml)
 !     * [X] runctrl.vars.nml_pr_tas_1hr_test (special testing table)
+!     * [X] runctrl.vars.nml_vars_on_plevels
+!     * [X] runctrl.vars.nml (standard table with common vars)
 !     * [X] runctrl.vars.nml_water_column
 !     * [X] runctrl.vars.nml_cape
-!     * [X] runctrl.vars.nml_vars_on_plevels
-!     * [ ] runctrl.vars.nml (standard table with common vars)
-!     * ...
+!     * [X] runctrl.vars.nml_pr_mrso
+!     * [ ] runctrl.vars.nml_evp_roff
+!     * [ ] runctrl.vars.nml_radiation
+!     * [ ] runctrl.vars.nml_snow
+!     * [ ] runctrl.vars.nml_minmax (not yet created, uses 'wrfxtrm')
 !   - Variables not yet implemented (from most recent protocol versions):
 !     CORDEX (some will be added via reading of wrfxtrm files at daily basis):
 !     * tasmin
@@ -68,7 +74,8 @@
 !     * ic_lightning
 !     * cg_lightning
 !     * total_lightning
-!     All other variables are implemented.
+!     All other variables are covered by namelists and implemented.
+!
 !   - Desired additional diagnostics (not yet implemented):
 !     * vorticity
 !     * ...
@@ -80,8 +87,10 @@
 ! *** MOST THINGS ARE DONE FOR A CERTAIN REASON, IF YOU DO NOT UNDERSTAND  ***
 ! ***      THE FULL CONCEPT AND STRUCTURE, CHECK WITH THE DEVELOPERS BEFORE***
 ! ***      MOFIFYING THE CODE, THIS INCREASES THE CHANCE THAT MODIFICATIONS***
-! ***      MAKE IT TO THE MAIN BRANCH                                      ***
+! ***      CAN MAKE IT TO THE MAIN BRANCH WITHOUT TOO MUCH EFFORT          ***
 ! *** DESPITE THE LICENSE, PLEASE DO NOT DISTRIBUTE AT THE PRESENT STAGE   ***
+! *** IF ANYTHING IS NOT OK, IT IT MERELY DUE TO LACK OF TIME              ***
+! *** THIS DOCUMENTATION CONTAINS MANY THINGS REDUNDANT                    ***
 !
 ! CURRENT CODE MAINTAINER:
 !   - Klaus GOERGEN | k.goergen@fz-juelich.de | KGo | FZJ/IBG-3
@@ -205,17 +214,18 @@
 !     classic data model format is written immediately, no later conversion
 !     needed.
 !   - 3h/1h data is produced first. This is closest to outputs most groups have
-!     anyway. It is possible to produce more 3hr output than needed, i.e. for
+!     anyway. It is possible to produce more 1/3hr output than needed, i.e. for
 !     all variables specified plus more vertical levels. Thereby the tool might
 !     also be used for a general data volume reduction after a model run.
 !   - The application loops over various averaging intervals, then over
-!     variables and then over the existing WRF data files.
+!     variables and then over the existing WRF data files, see PROCEDURE below.
 !   - Very large WRF outputs and/or even larger model domains than used in
 !     CORDEX can be handled as the tool is working on individual output
 !     intervals only. The tradeoff is a more I/O overhead but lower RAM
-!     requirements.
-!   - The FORTRAN code is ISO FORTRAN95-compliant except for the "SYSTEM" calls.
-!     Hence the tool should be portable easily.
+!     requirements. At the same time there is in absolute numbers little I/O as
+!     most things are done in one pass.
+!   - The FORTRAN code tries to be ISO F95-compliant except for "SYSTEM" calls.
+!     The tool shall be portable easily.
 !   - The tool has minimum requirements in terms of libraries or external tools.
 !   - FORTRAN was chosen for its fast execution speed, suitable for the
 !     large datasets and the possibility to use the tool in HPC environments as
@@ -235,23 +245,29 @@
 !     However these searches are on subsets only and therefore fairly efficient.
 !     It also means that the WRF outputs may cover any timespan, daily, monthly,
 !     or any overlap of months and/or years and that they may come in filelists
-!     even not temporally ordered.
-!   - The tool is not takling care of the file handling of the wrf files before 
+!     even not temporally ordered. The tool is entirely relying on time
+!     information inside the netCDF files, no filename is analyzed.
+!   - The tool is not taking care of the file handling of the wrf files before 
 !     or after the processing.
-!   - Different ways of temporal aggregation, output storage file structure:
-!     (A)
+!
+!   - Different temporal aggregations, i.e., output storage file structure:
+!     ==(A)==
 !     With CORDEX archive protocol, at 3hr resolution, data is stored annually; 
-!     daily data is stored 5-yearly. A file is automatically created if it does
-!     not exist, based on the time information in the raw model output. Then 
-!     data is sorted in.
-!     (B)
+!     daily data is stored 5-yearly. A storage file is automatically created if 
+!     is does not exist, based on the time information in the raw model output.
+!     Then data is then sorted in. 1hr data from high-resolution runs can also
+!     be stored annually.
+!     ==(B)==
 !     If the tool is used for general postprocessing, then sometimes timespans 
-!     of less than a year are simulated; for this case timespan in the general
-!     namelist maye specified. The overall length of the simulation time-span, 
-!     is independent of this.
-!     (C)
+!     of less than a year are simulated; for this case an arbitray timespan in
+!     the general namelist maye specified. The overall length of the simulation
+!     time-span, is independent of this. I.e., even if WRF outputs covers a
+!     longer time-span, the tool wiull sort everything in correctly and discard
+!     the overlapping dates and times.
+!     ==(C)==
 !     A monthly option, which works like the annual default options has also 
-!     been added.
+!     been added. Here the month is auto-generated, if not existing already.
+!
 !     With month and annual: the files are generated according to the content of
 !     the input data; with individual storage files, the file is generated 
 !     according to timespan and all wrf data which does not fit is left out;
@@ -262,26 +278,32 @@
 !     variables.
 !   - The static fields are treated independently by the tool.
 !   - Currently the namelists are split into several parts but they may also 
-!     be combined. 
+!     be combined into one single large monolithic namelist. Albeit does this
+!     not have any advantage.
 !   - The tool is also intended to reduce WRF model output data volume. This
 !     means that original raw model outputs are likely to be erased afterwards.
 !     Therefore the tool generates slightly more variables than required by the
 !     CORDEX data protocol: e.g. CAPE, ....
 !   - To fully understand the structure and possibilities of the code, take a 
-!     look at the code itself, it is rich in comments and explanations.
-!   - Tries to have minimum hardcoded.
+!     look at the code itself, it tries to be rich in comments and explanations.
+!   - Tries to have minimum hardcoded if at all.
 !   - The tool can be scripted and nml files maybe modified using sed, 
-!     embedding in workflows possible.
-!   - To adjust the tool to a new dataset / experiment, basically only the 
-!     runctrl.current.nml namelist has to be adjusted.
+!     embedding in arbitrary workflows is possible.
+!   - To adjust the tool to a new WRF dataset / experiment, basically only the 
+!     runctrl.current.nml namelist has to be adjusted. Also if only a subset
+!     of variables is to be generated for a soecific study, all these variables
+!     may be added to a single dedicated namelist.
 !   - The tool is not hardcoded to any specific CORDEX domain, this is
 !     determined by the main namelist settings and by the geo_em file, which has
 !     to be read.
-!   - Variables do not depend on each other, except ofr the CAPE and CIN calc.;
+!   - Variables do not depend on each other, except for the CAPE and CIN calc.;
 !     i.e. there is no mandatory namelist selection or any sequence which has to 
 !     be considered in processing. Each variable is treated seperately.
+!     This may be at some point a bit more inefficient, but everything else
+!     would make the tool too complicated.
 !   - Pressure variables are all calculated. They might also be read form 
-!     wrfpress. Three filetypes can be specified; the filename search patterns 
+!     wrfpress.
+!   - Three filetypes can be specified; the filename search patterns 
 !     are hardcoded:
 !     * (s)tandard = wrfout*
 !     * e(x)tremes = wrfxtrm*
@@ -297,29 +319,29 @@
 !   The tool may be called as part of a processing chain. It is meant as an all-
 !   in-one tool. It basically reads data, controlled by a namelist, checks the
 !   dates in the input file, starts looping over the input file, one variable or
-!   diagnostic at a time, checks whether th storage file exists, and if not 
+!   diagnostic at a time, checks whether the storage file exists, and if not 
 !   creates the storage file based on the data reference syntax and all. No 
 !   ancilliary files except the basic namelists are needed, no libraries except 
 !   netCDF. No fancy compiler functionalities are used. The tool always checks 
 !   the model data time information and sorts in the data based on a reference
-!   time vector. It handles a timestep at a time, to keep memory footprint very 
-!   low. The namelists determine whether the variables are to be prepared for a 
+!   time vector. It handles one timestep at a time during initial CMORization.
+!   The namelists determine whether the variables are to be prepared for a 
 !   certain resolution or averaged or regridded, based on the protocol variable
 !   lists. They also contain the standard names. Namelists may be modified by
-!   adding or removing vars, but thir processing may also be just switched off.
+!   adding or removing vars, but their processing may also be just switched off.
 !   Originally all was meant to go into a single monolithic namelist, then it
-!   was decided to split the namelists according to variable groups. 
+!   was decided to split the namelists according to "variable groups". 
 !
 !   The looping structure is as follows:
 !
-!   ifrq (loop over temporal output and aggregation frequencies) 
-!     ivarnml (namelists with different variable combinations)
-!       ivar (variables from the namelists)
-!         ifl (all files in the search path)
-!           it (all timesteps per file)
+!   'ifrq' (loop over temporal output and aggregation frequencies) 
+!     'ivarnml' (namelists with different variable combinations)
+!       'ivar' (variables from the namelists)
+!         'ifl' (all files in the search path)
+!           'it' (all timesteps per file)
 !             **processing**
 !
-!   WRF standard output means: Data as written based on a standard unmodified 
+!   "WRF standard output" means: Data as written based on a standard unmodified 
 !   registry. The tool works on one experiment at a time (e.g. 'CORDEX'), and on
 !   one resolution at a time (e.g. EUR-11). There is no relationship between 
 !   different domains or experiments during processing.
@@ -331,18 +353,19 @@
 !   in auto-mode, i.e. creating annual files for tier-2 storage, it will always
 !   create as many files as needed according to the time information in the WRF
 !   outputs. Fields can be sorted in as they appear. No matter whether it is in 
-!   the middle of the storage file or at the very beginning, in chronoilogicl 
-!   order.
+!   the middle of the storage file or at the very beginning, a proper
+!   chronoilogical order is by design always be retained.
 !
 !   To be resource efficient and fast, the tool tries to check whether a 
 !   certain operation is nedded or not, like whether it is on a second pass 
-!   through a file or variable, then ther eis no need to setup the time vecs 
-!   etc. again. Though temporally very fine-grained, this improves efficieny.
+!   through a file or variable, then there is no need to setup the time vecs 
+!   etc. again. Though temporally very fine-grained, this improves efficiency.
+!   For each new variable though all is nicely set up again.
 !
 !   This is pure research code, there is literally no error trapping.
 !
 !   There is one master namelist, which contains information on the experiment
-!   this one is usually modified if and linked to runctrl.current.nml. The other
+!   this one is usually modified and linked to runctrl.current.nml. The other
 !   namelists are usually kept as is.
 !
 !   The tier-2 processing is usually done first, i.e. the highest resolution
@@ -352,9 +375,12 @@
 !   In the variable namelists, there is not distinction between height and plev;
 !   the pressure levels can also be entered into the height field. During 
 !   runtime there is a distinction: everything > 10 is considered a pressure 
-!   level.
+!   level. This might be an issue with FPS CEM height 100m, but then only "10"
+!   had to be increased to 100, as long as it is below the highest plev there is
+!   no problem.
 !
-!   CORDEX_ID from the variable namelists remains unused.
+!   CORDEX_ID from the variable namelists remains unused. Often set to 999;
+!   a code legacy.
 !
 !   Dimensions are usually given unstaggered in the runctrl.current.nml file;
 !   we try to have all data, unstaggered and rotated to true geographic North.
@@ -373,40 +399,45 @@
 !     RCMs. Some rae places where stuff is hardcoded.
 !   - The highest temporal resolution possible is 1h at the moment, because of 
 !     how the time matching is coded. Shorter is possible.
-!   - A maximum of 13 variables per namlist is currently hardcoded. Could be 
+!   - A maximum of 36 variables per namlist is currently hardcoded. Could be 
 !     expanded, there is not limit.
 !   - Currently only one input root directory is possible. If data is stored at
 !     different locations, symbolic links might have to be done beforehand.
 !   - Storage files with individually created time-coverage (non standard) only 
 !     one pass is possible, i.e. the file is created covering a certain timespan
 !     and data from the netCDF files in the filelist are transferred according 
-!     to the variable namelist.
+!     to the variable namelist. No second storage file is created depending on
+!     the time coverage of the original WRF outputs.
 !   - If a storage file exists and wrf data for a date/time is read a second 
 !     time the data already stored will be overwritten; there is no warning;
-!     in case the input data is from same original WRF output file, there is no 
+!     in case the input data is from SAME original WRF output file, there is no 
 !     damage done except for lost efficiency; if for some reason the data 
 !     handling is messed up and the data is from a different experiment, the
 !     stored data is corrupted.
 !   - With many variables not transferred from reading to processing within the
 !     data_in array, there is an inflation of the RAM used with further vars 
-!     processed as they are not deallocated again after usage... nearly a bug.
+!     processed as specific vars for specific ESGF variables are not deallocated
+!     again after usage... nearly a bug.
 !   - There is no extrapolation like in the p_interp tool for pressure levels
 !     such as 1000hPa, this results in extensive missing value fields.
+!   - There is no error trapping.
 !
 ! BUGS:
 !   - In case of average variables, like pr, for the very last timestep in an 
 !     storage file, there is one timestep too much. like 00:30, when then 
 !     timespan ends at 00:00, no fields are written in there. Usually an issue
-!     at the very end of the simulation timespan. As the dimensions do not
-!     change, this has no effect.
+!     at the very end of the simulation timespan. But as the dimensions do not
+!     change in the output, this has no effect. It is mainly in the time vec and
+!     is is after all correct behaviour. Just not beautiful.
 !   - When calculating the average time vec: e.g. 05:29:60 is shown with ncdump,
 !     should be 05:30:00, even with double precision calc no chance. cdo is OK,
 !     ncview too. Seems more a ncdump issue. Others have this issue too.
 !   - In the Makefile, there is a 'veryclean' option: remove that, it is killing 
-!     the data also. In there for testing.
+!     the data also,hardcoded path though on KGo notebook. In there for testing.
 !   - Filename: timespan information: point data, tier-2, e.g. 2100123123;
 !     average data: 2101010100, end of the time_bnds block, if 23:30 is midpoint
-!     time.
+!     time. This is not so beatiful but not wrong according to standard and
+!     same in all files.
 !   - Precipitation does not include graupel etc., just rainnc and rainc.
 !
 ! TODO / PLANNED EXTENSIONS
@@ -432,16 +463,18 @@
 ! TEST PROCEDURE:
 !   - Per variable and namelist.
 !   - Implement variables and test via the special testing namelist.
-!   - Check one namelist after the other. No overlapping variables between nmls.
-!   - Per namelist check each variable seperately.
-!   - Per namelist check all variables in one go.
+!   - Check one namelist after the other. There are no overlapping variables
+!     between nmls.
+!   - Per namelist: check processing of each variable seperately.
+!   - Per namelist: check processing of all variables in one go.
 !   - Checking: (i) log, (ii) ncdump, (iii) ncview.
 !
 ! QUESTIONS:
-!   - theta_in(:,:,:) + T00(1) (should be this) OR theta_in(:,:,:) + 300 (see
-!     www2.mmm.ucar.edu/wrf/users/docs/user_guide_V3.8/users_guide_chap5.htm)
-!     if not 300 is used, then conflict between wrfpres diagnostics and the
-!     WRF_CMORizer.
+!   - "theta_in(:,:,:) + T00(1)" (correct, right?) OR "theta_in(:,:,:) + 300" 
+!     (www2.mmm.ucar.edu/wrf/users/docs/user_guide_V3.8/users_guide_chap5.htm)
+!     if not 300K is used, then there is a conflict between wrfpress diagnostics
+!     and the WRF_CMORizer. Is wrfpress wrong with built-in diagnostics or the \
+!     WRF_CMORizer?
 !
 ! ONGOING DEVELOPMENTS (March 2018):
 !   - Currently merging forks from different contributors, complete check of the
@@ -473,7 +506,7 @@
 !           X all new pressure level calcs
 !           x variable grouping: 3D vars: improve
 !           o bucket fct checking > radiation () and precipitation (OK)
-!     * [ ] test all other tier-2 variables
+!     * [ ] test ALL other tier-2 variables
 !     * [ ] process data for the ICTP paper
 !     * [ ] !!! xtrm
 !     * [ ] !!! fx
@@ -492,6 +525,7 @@
 !   - sorting in perfect (cdo, ncdump, ncview...)
 !   - compression OK, format OK
 !   - alternative timespans work
+!   - ...
 !
 ! MODIFICATION / REVISION HISTORY:
 !   See either git log for details.
@@ -510,8 +544,9 @@
 !   Thanks from K.GOERGEN as the originator of the tool goes to all who willing-
 !   ly helped to further develop and improve the code, namely, Sebastian, Heimo,
 !   and Aris.
-!   Thanks for testing goes to: Kirsten WARRACH-SAGI from University of Hohen-
-!   heim, Germany, and Eleni KATRAGKOU.
+!   Thanks for testing and support to: Kirsten WARRACH-SAGI from University of
+!   Hohenheim, Germany, and Eleni KATRAGKOU from University of Thessaloniki,
+!   Greece.
 !
 ! PERFORMANCE:
 !   Single core, Linux workstation, O3 optimisation.
@@ -771,7 +806,8 @@ REAL, DIMENSION(:,:), ALLOCATABLE :: &
   sinalpha_in , &
   cosalpha_in , &
   !!var_pl      , &
-  psfc_in
+  psfc_in     , &
+  tmp_2d
 REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   pp_in       , &
   pb_in       , &
@@ -787,7 +823,6 @@ REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   t_in        , &
   ph_fl       , &
   p_in        , &
-  cldfra_in   , &
   u_in        , &
   v_in        , &
   w_in        , &
@@ -803,8 +838,10 @@ REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   GeoInLonLat , &
   sfcevp_in   , &
   sfroff_in   , &
-  udroff_in
+  udroff_in   , &
+  tmp_3d
 REAL, DIMENSION(:,:,:,:), ALLOCATABLE :: &
+  cldfra_in   , &
   smois_in
 REAL, DIMENSION(:), ALLOCATABLE :: &
   GeoInRLat   , &
@@ -872,12 +909,13 @@ REAL :: stat_mean, slope
 !-------------------------------------------------------------------------------
 ! general
 
-INTEGER :: i, sts, ivar, ifrq, ifl, it, counter, j, np, nl, ii, ivarnml, &
+INTEGER :: i, j, k, sts, ivar, ifrq, ifl, it, counter, np, nl, ii, ivarnml, &
   prevpass = 0, AllocateStatus, DeAllocateStatus
 LOGICAL :: FileExists, newpass, time_match, calc = .TRUE.
 REAL :: cpuTs, cpuTe
 INTEGER, ALLOCATABLE :: ipos(:)
 ! choose how psl is calculated, 0 OK, 1 OK, 2 OK, no not change throughout
+! see preamble for detailed information
 INTEGER :: calc_slp_type = 2 
 
 !-------------------------------------------------------------------------------
@@ -996,18 +1034,19 @@ frequency(5) = "mon"
 frequency(6) = "sem"
 frequency(7) = "fx"
 
-ALLOCATE ( fnNMLvar(11) )
-fnNMLvar(1) = "runctrl.vars.nml" ! CHECK ONGOING
-fnNMLvar(2) = "runctrl.vars.nml_evp_roff"
-fnNMLvar(3) = "runctrl.vars.nml_water_column" ! OK
-fnNMLvar(4) = "runctrl.vars.nml_vars_on_plevels" ! OK
-fnNMLvar(5) = "runctrl.vars.nml_pr_mrso"
-fnNMLvar(6) = "runctrl.vars.nml_snow"
-fnNMLvar(7) = "runctrl.vars.nml_radiation_alternative"
-fnNMLvar(8) = "runctrl.vars.nml_cape" ! OK
-fnNMLvar(9) = "runctrl.vars.nml_pr_tas_1hr_test" ! OK
-fnNMLvar(10) = "runctrl.vars.nml_weathertyping" ! new form HTr, not implemented
-fnNMLvar(11) = "runctrl.vars.nml_psl" ! new from HTr, not implemented
+ALLOCATE ( fnNMLvar(12) )
+fnNMLvar(1) = "runctrl.vars.nml_pr_tas_1hr_test" ! OK
+fnNMLvar(2) = "runctrl.vars.nml_vars_on_plevels" ! OK
+fnNMLvar(3) = "runctrl.vars.nml" ! OK
+fnNMLvar(4) = "runctrl.vars.nml_pr_mrso" ! OK
+fnNMLvar(5) = "runctrl.vars.nml_minmax"
+fnNMLvar(6) = "runctrl.vars.nml_evp_roff"
+fnNMLvar(7) = "runctrl.vars.nml_water_column" ! OK
+fnNMLvar(8) = "runctrl.vars.nml_radiation"
+fnNMLvar(9) = "runctrl.vars.nml_snow"
+fnNMLvar(10) = "runctrl.vars.nml_cape" ! OK
+fnNMLvar(11) = "runctrl.vars.nml_weathertyping"  ! new from HTr, not implemented
+fnNMLvar(12) = "runctrl.vars.nml_psl"            ! new from HTr, not implemented
 
 !-------------------------------------------------------------------------------
 ! individual vars contain information on whether they are treated or not, i.e.
@@ -1027,18 +1066,18 @@ DO ifrq = 1, 1, 1
   PRINT *, "freq = ", frequency(ifrq)
 
 !-------------------------------------------------------------------------------
-! get a file list of all wrfout, wrfxtrm and wrfpress files -- if they exist
-! use regex to refine the ls output and the filelist
-! non-std, works for gfortran (fct & subroutine) + ifort
-! to not always check the filesystem, this is done at this point
-! also the search results might be limited
+! - get a file list of all wrfout, wrfxtrm and wrfpress files -- if they exist
+! - use regex to refine the ls output and the filelist
+! - non-std F95, works for gfortran (fct & subroutine) + ifort
+! - to not check the filesystem too often, this is done at this point
+! - also the search results might be limited
   
   PRINT *, "============================================================"
   PRINT *, "*** FILELIST CREATION ***"
   
   tmpfileFL = "tmpfileFL"
 
-  ! creates a year range, acan be expanded also to use months
+  ! creates a year range, can be expanded also to use months
   IF ( (ts == "0000") .AND. (te == "0000") ) THEN
     fl_filter = "*{" // ts // ".." // te // "}"
   ELSE
@@ -1093,8 +1132,9 @@ DO ifrq = 1, 1, 1
 ! you want to postprocess just specific variables or create your own variable 
 ! combinations
   
-  !DO ivarnml = 1, 8, 1 ! loop over all regular namelists
-  DO ivarnml = 4, 4, 1 ! recommended for testing: namelist #9 runctrl.vars.nml_pr_tas_1hr_test
+  !DO ivarnml = 1, 9, 1 ! loop over all regular namelists
+  DO ivarnml = 1, 1, 1 ! recommended to all for first steps and testing: nml #1
+  !DO ivarnml = 1, 2, 1 ! ICTP paper data contrib
   
     PRINT *, "============================================================"
     PRINT *, "var. namelist nr. and name: ", ivarnml, TRIM(fnNMLvar(ivarnml))
@@ -1134,32 +1174,35 @@ DO ifrq = 1, 1, 1
       STOP
     END SELECT
 
-    ! nvar_nnml might be determined through the namelist itself
+    ! nvar_nml might be determined through the namelist itself
+    ! sequence here does noy matter
     SELECT CASE (TRIM(fnNMLvar(ivarnml)))
-    CASE ("runctrl.vars.nml") ! TESTING  ***ONGOING***
+    CASE ("runctrl.vars.nml") ! OK
       nvar_nml = 9
-    CASE ("runctrl.vars.nml_evp_roff")
+    CASE ("runctrl.vars.nml_evp_roff") ! TESTING PENDING
       nvar_nml = 4
     CASE ("runctrl.vars.nml_water_column") ! OK
       nvar_nml = 3
     CASE ("runctrl.vars.nml_vars_on_plevels") ! OK
       nvar_nml = 36
-    CASE ("runctrl.vars.nml_pr_mrso")
+    CASE ("runctrl.vars.nml_pr_mrso") ! OK
       nvar_nml = 4
-    CASE ("runctrl.vars.nml_snow")
+    CASE ("runctrl.vars.nml_snow") ! TESTING PENDING
       nvar_nml = 6 
-    CASE ("runctrl.vars.nml_radiation")
+    CASE ("runctrl.vars.nml_radiation") ! TESTING PENDING
       nvar_nml = 9
-    CASE ("runctrl.vars.nml_radiation_alternative")
+    CASE ("runctrl.vars.nml_radiation_alternative") ! do not use the inst. values
       nvar_nml = 9
     CASE ("runctrl.vars.nml_cape") ! OK
       nvar_nml = 2
     CASE ("runctrl.vars.nml_pr_tas_1hr_test") ! OK
       nvar_nml = 10 
-    CASE ("runctrl.vars.nml_weathertyping") ! new stuff from HTr, no seperate nml
+    CASE ("runctrl.vars.nml_weathertyping") ! new stuff from HTr, no nml yet available
       nvar_nml = 6
-    CASE ("runctrl.vars.nml_psl") ! new stuff from HTr, no seperate nml
+    CASE ("runctrl.vars.nml_psl") ! new stuff from HTr, no nml yet available
       nvar_nml = 1
+    CASE ("runctrl.vars.nml_minmax") ! TESTING PENDING
+      nvar_nml = 4
     END SELECT
   
     PRINT *, "number of vars inside current namelist: nvar_nml = ", nvar_nml
@@ -2043,7 +2086,9 @@ DO ifrq = 1, 1, 1
 
             !-------------------------------------------------------------------
 
-            IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) .OR. ( SCAN(var_cmip(ivar),"hus") == 1 ) .OR. ( var_cmip(ivar) == "cape" ) .OR. ( var_cmip(ivar) == "cin" ) ) THEN
+            IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) .OR. &
+                 ( SCAN(var_cmip(ivar),"hus") == 1 ) .OR. ( var_cmip(ivar) == "cape" ) .OR. &
+                 ( var_cmip(ivar) == "cin" ) ) THEN
               PRINT *, "read QVAPOR"
               IF (.not. ALLOCATED(qv_in)) ALLOCATE( qv_in( xfocus, yfocus, nz  ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "QVAPOR", qv_varid)
@@ -2135,19 +2180,52 @@ DO ifrq = 1, 1, 1
 ! clt [%] a Total Cloud Fraction
   
           ELSE IF (var_cmip(ivar) == "clt") THEN
+
+            IF (.not. ALLOCATED(cldfra_in)) ALLOCATE( cldfra_in( xfocus, yfocus, nz, 2 ), STAT=sts )   
   
-            IF (.not. ALLOCATED(cldfra_in)) ALLOCATE( cldfra_in( xfocus, yfocus, nz ), STAT=sts )     
+            IF (it /= InDimLenRec) THEN
+
+              sts = NF90_INQ_VARID(ncidin, "CLDFRA", varid)
+              sts = NF90_GET_VAR(ncidin, varid, cldfra_in(:,:,:,:), &
+                START = (/ xoffset, yoffset, 1, it /), &
+                COUNT = (/ xfocus, yfocus, nz, 2 /) )
   
-            sts = NF90_INQ_VARID(ncidin, "CLDFRA", varid)
-            sts = NF90_GET_VAR(ncidin, varid, cldfra_in(:,:,:), &
-              START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
+            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
+
+              sts = NF90_INQ_VARID(ncidin, "CLDFRA", varid)
+              sts = NF90_GET_VAR(ncidin, varid, cldfra_in(:,:,:,1), &
+                START = (/ xoffset, yoffset, 1, it /), &
+                COUNT = (/ xfocus, yfocus, nz, 1 /) )
   
+              iflWRFin = fl_input(ifl+1) ! set to the previous wrfoutfile 
+                                          ! if it is not the first
+  
+              sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
+
+              sts = NF90_INQ_VARID(ncidin0, "CLDFRA", varid)
+              sts = NF90_GET_VAR(ncidin0, varid, cldfra_in(:,:,:,2), &
+                START = (/ xoffset, yoffset, 1, 1 /), &
+                COUNT = (/ xfocus, yfocus, nz, 1 /) )
+  
+              sts = NF90_CLOSE(ncidin0)
+  
+              iflWRFin = fl_input(ifl)  !set to the current wrfout file again
+
+            ELSE
+
+              PRINT *, "no data available for average calculation any more"
+
+              calc = .FALSE.
+
+            END IF
+
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! pr [kg m-2 s-1] a Precipitation 
 ! EURO-CORDEX Jan/2018 meeting, conv+incl. snow graupel, hail, etc.
 ! TODO CHECK !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! always need two adjacent output intervals to calculate the amount of precip
-! between dates
+! between dates and consider whether the bucket_mm has been used:
+! http://www2.mmm.ucar.edu/wrf/users/docs/user_guide_V3.8/users_guide_chap5.htm#bucket
   
           ELSE IF (var_cmip(ivar) == "pr") THEN 
              
@@ -2164,100 +2242,91 @@ DO ifrq = 1, 1, 1
             IF (it < InDimLenRec) THEN 
 
               PRINT *, "read rainc and rainnc two dates from the same file"
-  
-              IF (.not. ALLOCATED(rainnc_in)) ALLOCATE( rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
-              IF (.not. ALLOCATED(rainc_in)) ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
-  
-              sts = NF90_INQ_VARID(ncidin, "RAINNC", rainnc_varid)
-              sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
 
-              ! read two timesteps to calculate difference
+              IF (.not. ALLOCATED(rainnc_in)) ALLOCATE( rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "RAINNC", rainnc_varid)
               sts = NF90_GET_VAR(ncidin, rainnc_varid, rainnc_in(:,:,:), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus, 2 /) )
-  
+
+              IF (.not. ALLOCATED(rainc_in)) ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)  
               sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus, 2 /) )
 
               sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_MM", bucket_mm)
               IF ( bucket_mm > 0. ) THEN
-
                 IF (.not. ALLOCATED(i_rainnc_in)) ALLOCATE( i_rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, "I_RAINNC", varid)
                 sts = NF90_GET_VAR(ncidin, varid, i_rainnc_in(:,:,:), &
-                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )   
-
+                  START = (/ xoffset, yoffset, it /), &
+                  COUNT = (/ xfocus, yfocus, 2 /) )   
                 IF (.not. ALLOCATED(i_rainc_in)) ALLOCATE( i_rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, "I_RAINC", varid)
                 sts = NF90_GET_VAR(ncidin, varid, i_rainc_in(:,:,:), &
-                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
-
+                  START = (/ xoffset, yoffset, it /), &
+                  COUNT = (/ xfocus, yfocus, 2 /) )
               END IF
 
             ! if the successor file exists, get the data from that file
+            ! get the last available field from the current input file
             ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
 
               PRINT *, "read rainc and rainnc from the current and the subsequent file"
 
-              sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_MM", bucket_mm)
-
-              IF ( bucket_mm > 0. ) THEN
-
-                IF (.not. ALLOCATED(i_rainnc_in)) ALLOCATE( i_rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
-                sts = NF90_INQ_VARID(ncidin, "I_RAINNC", varid)
-                sts = NF90_GET_VAR(ncidin, varid, i_rainnc_in(:,:,1), &
-                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )   
-
-                IF (.not. ALLOCATED(i_rainc_in)) ALLOCATE( i_rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
-                sts = NF90_INQ_VARID(ncidin, "I_RAINC", varid)
-                sts = NF90_GET_VAR(ncidin, varid, i_rainc_in(:,:,1), &
-                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-
-              END IF
-
               IF (.not. ALLOCATED(rainnc_in)) ALLOCATE( rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )        
-              IF (.not. ALLOCATED(rainc_in)) ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
-
-              ! get the last available field from the current input file
               sts = NF90_INQ_VARID(ncidin, "RAINNC", rainnc_varid)
-              sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
-  
               sts = NF90_GET_VAR(ncidin, rainnc_varid, rainnc_in(:,:,1), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus,yfocus, 1 /) )
-  
+
+              IF (.not. ALLOCATED(rainc_in)) ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
               sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,1), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus, 1 /) )
 
+              sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_MM", bucket_mm)
+              IF ( bucket_mm > 0. ) THEN
+                IF (.not. ALLOCATED(i_rainnc_in)) ALLOCATE( i_rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "I_RAINNC", varid)
+                sts = NF90_GET_VAR(ncidin, varid, i_rainnc_in(:,:,1), &
+                  START = (/ xoffset, yoffset, it /), &
+                  COUNT = (/ xfocus, yfocus, 1 /) )   
+                IF (.not. ALLOCATED(i_rainc_in)) ALLOCATE( i_rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "I_RAINC", varid)
+                sts = NF90_GET_VAR(ncidin, varid, i_rainc_in(:,:,1), &
+                  START = (/ xoffset, yoffset, it /), &
+                  COUNT = (/ xfocus, yfocus, 1 /) )
+              END IF
+
               ! just get the next input file
+              ! read the first timestep of the subsequent wrfout file
               iflWRFin = fl_input(ifl+1)
   
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
   
               sts = NF90_INQ_VARID(ncidin0, "RAINNC", rainnc_varid)
-              sts = NF90_INQ_VARID(ncidin0, "RAINC", rainc_varid)
-
-              ! read the first timestep of the subsequent wrfout file
               sts = NF90_GET_VAR(ncidin0, rainnc_varid, rainnc_in(:,:,2), &
                 START = (/ xoffset, yoffset, 1 /), &
                 COUNT = (/ xfocus, yfocus,1 /) )
-  
+
+              sts = NF90_INQ_VARID(ncidin0, "RAINC", rainc_varid)  
               sts = NF90_GET_VAR(ncidin0, rainc_varid, rainc_in(:,:,2), &
                 START = (/ xoffset, yoffset, 1 /), &
                 COUNT = (/ xfocus, yfocus,1 /) )
-   
+
+              sts = NF90_GET_ATT(ncidin0, NF90_GLOBAL, "BUCKET_MM", bucket_mm)
               IF ( bucket_mm > 0. ) THEN
-
-                sts = NF90_INQ_VARID(ncidin, "I_RAINNC", varid)
-                sts = NF90_GET_VAR(ncidin, varid, i_rainnc_in(:,:,2), &
-                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )   
-
-                sts = NF90_INQ_VARID(ncidin, "I_RAINC", varid)
-                sts = NF90_GET_VAR(ncidin, varid, i_rainc_in(:,:,2), &
-                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-
+                sts = NF90_INQ_VARID(ncidin0, "I_RAINNC", varid)
+                sts = NF90_GET_VAR(ncidin0, varid, i_rainnc_in(:,:,2), &
+                  START = (/ xoffset, yoffset, 1 /), &
+                  COUNT = (/ xfocus, yfocus, 1 /) )   
+                sts = NF90_INQ_VARID(ncidin0, "I_RAINC", varid)
+                sts = NF90_GET_VAR(ncidin0, varid, i_rainc_in(:,:,2), &
+                  START = (/ xoffset, yoffset, 1 /), &
+                  COUNT = (/ xfocus, yfocus, 1 /) )
               END IF
 
               sts = NF90_CLOSE(ncidin0)
@@ -2277,40 +2346,43 @@ DO ifrq = 1, 1, 1
  
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! prc [kg m-2 s-1] a Convective Precipitation 
-  
+! read two timesteps to calculate 1h or 3h sum  
+
           ELSE IF (var_cmip(ivar) == "prc") THEN
 
             IF (.not. ALLOCATED(rainc_in)) ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
 
-            IF ( bucket_mm > 0. ) THEN
-
+            IF (it /= InDimLenRec) THEN
+  
               sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
               sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
-                START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+                START = (/ xoffset, yoffset, it /), &
+                COUNT = (/ xfocus, yfocus, 2/) ) 
 
-              IF (.not. ALLOCATED(i_rainc_in)) ALLOCATE( i_rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
-              sts = NF90_INQ_VARID(ncidin, "I_RAINC", varid)
-              sts = NF90_GET_VAR(ncidin, varid, i_rainc_in(:,:,:), &
-                START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )   !read two timesteps to calculate 3hr sum
+              sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_MM", bucket_mm)
+              IF ( bucket_mm > 0. ) THEN
+                IF (.not. ALLOCATED(i_rainc_in)) ALLOCATE( i_rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "I_RAINC", varid)
+                sts = NF90_GET_VAR(ncidin, varid, i_rainc_in(:,:,:), &
+                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+              END IF
 
-            ELSE
-
-              IF (it /= InDimLenRec) THEN
-  
-                sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
-                sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
-                  START = (/ xoffset, yoffset, it /), &
-                  COUNT = (/ xfocus, yfocus, 2/) ) 
-  
-              ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN 
+            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN 
   
                 sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
                 sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,1), &
                   START = (/ xoffset, yoffset, it /), &
                   COUNT = (/ xfocus, yfocus, 1/))
-  
-                iflWRFin = fl_input(ifl+1) ! set to the previous wrfout file 
-                                            ! if it is not the first
+
+                sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_MM", bucket_mm)
+                IF ( bucket_mm > 0. ) THEN
+                  IF (.not. ALLOCATED(i_rainc_in)) ALLOCATE( i_rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+                  sts = NF90_INQ_VARID(ncidin, "I_RAINC", varid)
+                  sts = NF90_GET_VAR(ncidin, varid, i_rainc_in(:,:,1), &
+                    START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+                END IF
+
+                iflWRFin = fl_input(ifl+1)
   
                 sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
   
@@ -2318,12 +2390,23 @@ DO ifrq = 1, 1, 1
                 sts = NF90_GET_VAR(ncidin0, rainc_varid, rainc_in(:,:,2), &
                   START = (/ xoffset, yoffset, 1 /), &
                   COUNT = (/ xfocus,yfocus,1 /) ) 
+
+                sts = NF90_GET_ATT(ncidin0, NF90_GLOBAL, "BUCKET_MM", bucket_mm)
+                IF ( bucket_mm > 0. ) THEN
+                  sts = NF90_INQ_VARID(ncidin0, "I_RAINC", varid)
+                  sts = NF90_GET_VAR(ncidin0, varid, i_rainc_in(:,:,2), &
+                    START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /) )
+                END IF
    
                 sts = NF90_CLOSE(ncidin0)
   
                 iflWRFin = fl_input(ifl)  !set to the current wrfout file again
-  
-              END IF
+
+            ELSE
+
+              PRINT *, "no data available for average calculation any more"
+
+              calc = .FALSE.  
   
             END IF
 
@@ -2651,51 +2734,54 @@ DO ifrq = 1, 1, 1
             PRINT *, 'in mean W m-2', (rad_in(xfocus/2,yfocus/2,2) - rad_in(xfocus/2,yfocus/2,1))/ (dtHours*3600.)
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! mrso [kg m-2] i Total Soil Moisture Content 
+! mrso [kg m-2] i Total Soil Moisture Content
+! was beforehand treated as averaged variable, but is defined instantaneous
   
           ELSE IF (var_cmip(ivar) == "mrso") THEN
  
             IF (.not. ALLOCATED(DZS)) ALLOCATE( DZS( 4 ), STAT=sts )
             sts = NF90_INQ_VARID(ncidin, "DZS", varid)
             IF ( sts /= NF90_NOERR ) THEN
-              DZS = (/ 0.1, 0.3, 0.6, 1.0 /)
+              DZS = (/ 0.1, 0.3, 0.6, 1.0 /) ! total with Noah LSM 2m depth
             ELSE
               sts = NF90_GET_VAR(ncidin, varid, DZS, &
               START = (/ 1, it /), COUNT = (/ 4, 1 /) )
               PRINT*,'DZS ', DZS(:)
             END IF
  
-            IF (.not. ALLOCATED(smois_in)) ALLOCATE( smois_in( xfocus, yfocus, 4, 2 ), STAT=sts )
+!            IF (.not. ALLOCATED(smois_in)) ALLOCATE( smois_in( xfocus, yfocus, 4, 2 ), STAT=sts )
+            IF (.not. ALLOCATED(smois_in)) ALLOCATE( smois_in( xfocus, yfocus, 4, 1 ), STAT=sts )
   
-            IF (it /= InDimLenRec) THEN
+!            IF (it /= InDimLenRec) THEN
   
               sts = NF90_INQ_VARID(ncidin, "SMOIS", varid)
               sts = NF90_GET_VAR(ncidin, varid, smois_in(:,:,:,:), &
                 START = (/ xoffset, yoffset, 1, it /), &
-                COUNT = (/ xfocus, yfocus, 4, 2 /) )
+                COUNT = (/ xfocus, yfocus, 4, 1 /) )
+!                COUNT = (/ xfocus, yfocus, 4, 2 /) )
   
-            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
+!            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
   
-              sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
-              sts = NF90_GET_VAR(ncidin, varid, smois_in(:,:,:,1), &
-                START = (/ xoffset, yoffset, it /), &
-                COUNT = (/ xfocus, yfocus,1/))
+!              sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
+!              sts = NF90_GET_VAR(ncidin, varid, smois_in(:,:,:,1), &
+!                START = (/ xoffset, yoffset, it /), &
+!                COUNT = (/ xfocus, yfocus,1/))
   
-              iflWRFin = fl_input(ifl) ! set to the previous wrfoutfile 
-                                        ! if it is not the first 
+!              iflWRFin = fl_input(ifl) ! set to the previous wrfoutfile 
+!                                        ! if it is not the first 
   
-              sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
+!              sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
   
-              sts = NF90_INQ_VARID(ncidin0, TRIM(var_wrf(ivar)), varid)
-              sts = NF90_GET_VAR(ncidin0, varid, smois_in(:,:,:,2), &
-                START = (/ xoffset, yoffset, 1 /), &
-                COUNT =(/xfocus,yfocus,1 /) )
+!              sts = NF90_INQ_VARID(ncidin0, TRIM(var_wrf(ivar)), varid)
+!              sts = NF90_GET_VAR(ncidin0, varid, smois_in(:,:,:,2), &
+!                START = (/ xoffset, yoffset, 1 /), &
+!                COUNT =(/xfocus,yfocus,1 /) )
   
-              sts = NF90_CLOSE(ncidin0)
+!              sts = NF90_CLOSE(ncidin0)
   
-              iflWRFin = fl_input(ifl)  !set to the current wrfout file again
+!              iflWRFin = fl_input(ifl)  !set to the current wrfout file again
   
-            END IF
+!            END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! sfcWind [m s-1] i Near-Surface Wind Speed
@@ -3270,34 +3356,61 @@ DO ifrq = 1, 1, 1
           END IF ! pressure levels processing
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! CORDEX [X], FPS CEM [X]
 ! clt [%] a Total Cloud Fraction
+! not instantaneous, but average, have to recode here
   
           IF (var_cmip(ivar) == "clt") THEN
+
+            IF (calc) THEN
   
-            IF (.not. ALLOCATED(cldfra_inv)) ALLOCATE( cldfra_inv( xfocus, yfocus ), STAT=sts )
+              IF (.not. ALLOCATED(cldfra_inv)) ALLOCATE( cldfra_inv( xfocus, yfocus ), STAT=sts )
+
+              IF (ALLOCATED(tmp_3d)) DEALLOCATE( tmp_3d )
+              ALLOCATE( tmp_3d( xfocus, yfocus, 2 ), STAT=sts )
+
+              DO k =1,2,1
+
+                cldfra_inv(:,:) = 1.
   
-            cldfra_inv(:,:) = 1.
+                DO i = 1,xfocus
+                  DO j = 1,yfocus
+                    IF (maxval(cldfra_in(i,j,:,k)) .lt. 0.99) THEN
+                      cldfra_inv(i,j) = 1.
+                      DO nl = 2,nz
+                        cldfra_inv(i,j) = cldfra_inv(i,j) * &
+                          (1- max(cldfra_in(i,j,nl,k),cldfra_in(i,j,nl-1,k)) / &
+                          (1-cldfra_in(i,j,nl-1,k))) 
+                      END DO
+                    ELSE 
+                      cldfra_inv(i,j) = 0.  
+                    END IF
+                  END DO ! j
+                END DO ! i
   
-            DO i = 1,xfocus
-              DO j = 1,yfocus
-                IF (maxval(cldfra_in(i,j,:)) .lt. 0.99) THEN
-                  cldfra_inv(i,j) = 1.
-                  DO nl = 2,nz
-                    cldfra_inv(i,j) = cldfra_inv(i,j)*(1- max(cldfra_in(i,j,nl),cldfra_in(i,j,nl-1))/(1-cldfra_in(i,j,nl-1))) !unit [%] 
-                  END DO
-                ELSE 
-                  cldfra_inv(i,j) = 0.  
-                END IF
-              END DO
-            END DO
+                tmp_3d(:,:,k) = (1 - cldfra_inv(:,:))*100.
   
-            data_in(:,:) = (1 - cldfra_inv(:,:))*100.
-  
-            WHERE (data_in .GT. 100.) data_in = 100.
-            WHERE (data_in .LT. 0.) data_in = 0.
+              END DO ! k
+
+              WHERE (tmp_3d > 100.) tmp_3d = 100.
+              WHERE (tmp_3d < 0.) tmp_3d = 0.
+
+              data_in(:,:) = ( tmp_3d(:,:,1) + tmp_3d(:,:,2) ) / 2.
+
+              DEALLOCATE(tmp_3d)
+
+            ! this is the last field, i.e. no subsequent field can be found
+            ! any more in the staged data
+            ELSE
+
+                data_in(:,:) = mv
+
+            END IF
+
+            calc = .TRUE.
   
           END IF
- 
+
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! CORDEX [X], FPS CEM [X]
 ! pr [kg m-2 s-1] a Precipitation  
@@ -3314,9 +3427,9 @@ DO ifrq = 1, 1, 1
                 !                (i_rainnc_in(:,:,2) + i_rainc_in(:,:,2) - i_rainnc_in(:,:,1) - i_rainc_in(:,:,1))*bucket_mm)/(dtHours*3600.) 
 
                 data_in(:,:) = (((rainnc_in(:,:,2)+i_rainnc_in(:,:,2)*bucket_mm) + &
-                                 (rainc_in(:,:,2)+i_rainc_in(:,:,2)*bucket_mm)) - &
+                                 (rainc_in(:,:,2)+i_rainc_in(:,:,2)*bucket_mm  )) - &
                                 ((rainnc_in(:,:,1)+i_rainnc_in(:,:,1)*bucket_mm) + &
-                                 (rainc_in(:,:,1)+i_rainc_in(:,:,1)*bucket_mm))) / &
+                                 (rainc_in(:,:,1)+i_rainc_in(:,:,1)*bucket_mm  ))) / &
                                (dtHours*3600.) 
 
               ELSE
@@ -3331,7 +3444,7 @@ DO ifrq = 1, 1, 1
             ! any more in the staged data
             ELSE
 
-                data_in(:,:) = mv
+              data_in(:,:) = mv
 
             END IF
 
@@ -3344,13 +3457,32 @@ DO ifrq = 1, 1, 1
 ! unit [mm/3hr] to [kg m-2 s-1]
   
           IF (var_cmip(ivar) == "prc") THEN
-  
-            IF ( bucket_mm > 0. ) THEN
-              data_in(:,:) = (rainc_in(:,:,2) - rainc_in(:,:,1) + (i_rainc_in(:,:,2) - i_rainc_in(:,:,1))*bucket_mm)/(dtHours*3600.) !unit [mm/3hr] to [kg m-2 s-1]
+
+            IF (calc) THEN
+
+              IF ( bucket_mm > 0. ) THEN
+              
+                data_in(:,:) = ( ( rainc_in(:,:,2)+i_rainc_in(:,:,2)*bucket_mm ) - &
+                                 ( rainc_in(:,:,1)+i_rainc_in(:,:,1)*bucket_mm ) ) / &
+                                 (dtHours*3600.) 
+
+              ELSE
+
+                data_in(:,:) = ( rainc_in(:,:,2) - rainc_in(:,:,1) ) / &
+                               (dtHours*3600.)
+ 
+              END IF
+
+            ! this is the last field, i.e. no subsequent field can be found
+            ! any more in the staged data
             ELSE
-              data_in(:,:) = (rainc_in(:,:,2) - rainc_in(:,:,1))/(dtHours*3600.)
+
+              data_in(:,:) = mv
+
             END IF
-  
+
+            calc = .TRUE.
+
           END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3453,12 +3585,19 @@ DO ifrq = 1, 1, 1
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! mrso [kg m-2] i Total Soil Moisture Content 
-  
+! see comment in the variable aquisition section
+! m3 m-3 -> kg m-2
+
           IF (var_cmip(ivar) == "mrso") THEN
     
-            data_in(:,:) = ((smois_in(:,:,1,1)*DZS(1) + smois_in(:,:,2,1)*DZS(2) + smois_in(:,:,3,1)*DZS(3) + smois_in(:,:,4,1)*DZS(4) ) + &
-                            (smois_in(:,:,1,2)*DZS(1) + smois_in(:,:,2,2)*DZS(2) + smois_in(:,:,3,2)*DZS(3) + smois_in(:,:,4,2)*DZS(4) ))/2.*1000. 
+            !data_in(:,:) = ((smois_in(:,:,1,1)*DZS(1) + smois_in(:,:,2,1)*DZS(2) + smois_in(:,:,3,1)*DZS(3) + smois_in(:,:,4,1)*DZS(4) ) + &
+            !                (smois_in(:,:,1,2)*DZS(1) + smois_in(:,:,2,2)*DZS(2) + smois_in(:,:,3,2)*DZS(3) + smois_in(:,:,4,2)*DZS(4) ))/2.*1000. 
   
+            data_in(:,:) =  (smois_in(:,:,1,1)*DZS(1) + &
+                             smois_in(:,:,2,1)*DZS(2) + &
+                             smois_in(:,:,3,1)*DZS(3) + &
+                             smois_in(:,:,4,1)*DZS(4)) * 1000.
+
           END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

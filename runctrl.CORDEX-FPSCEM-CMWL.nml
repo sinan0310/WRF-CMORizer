@@ -17,7 +17,7 @@
    references = "http://www.fz-juelich.de",
 /
 &globalvars_additional
-   comment = "data production: k.goergen@fz-juelich.de; postprocessing: WRF_CMORizer.f90 vX.X",
+   comment = "data production: k.goergen@fz-juelich.de; postprocessing: WRF_CMORizer.f90 v0.1",
    institute_run_id = "rv054r05_JURECAcpu_val_CdxFpsCpcmHiResNWPtestCb00tsInitWLx", ! CMx WLx, varname might also be: fzj-ibg3_id
    title = "WRF381AA RCM model runs for CORDEX FPS CEM WL/CM study, reanalysis forcing",
 /
