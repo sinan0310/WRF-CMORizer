@@ -14,11 +14,74 @@
 !   WRF_CMORizer.f90
 !
 ! VERSION:
-!   vX.X as of 2018-03-24
+!   vX.X (= git tag) as of 2018-03-25
 !   see git tags and log for revision details, history, and versions
 !
 ! STATUS:
-!   under development -- not yet fit for purpose, see below
+!   under development -- decide whether it is fit for purpose yourself
+!   - PLEASE NOTE: This 1st public version does the highest temporal resolution
+!     pass over all variables, i.e., e.g., at dt=3hr or 1hr. It processes all 
+!     variables during this pass, even those specified only at coarser temporal 
+!     resolution. Thereby the tool (i) CMORizes the WRF outputs and (ii) reduces 
+!     the output data volume. The averages may be computed later on, based on 
+!     the high-resolution CMORized data and fine-grained namelist settings, 
+!     which determine which variable shall be provided at which resolution.
+!     Most ongoing joint FPS studies require a high temporal resolution anyway. 
+!     A drawback is, that variables, which do not need high resolution, are 
+!     stored at high resolution also, albeit only as 2D fields.
+!     Missing:
+!     * Temporal averaging (6hr, day, mon, sesons) (EXISTS, must still be merged)
+!       -> part of the structure of the code.
+!     * Fixed fields (based on geo_em files), easy to implement via namelist and
+!       search path -> part of the structure of the code
+!     * Spatial interpolation to common regular grid EUR-11i
+!   - Tested and refined namelists with their respective variables:
+!     * [X] runctrl.current.nml (runctrl.CORDEX-FPSCEM-CMWL.nml)
+!     * [X] runctrl.vars.nml_pr_tas_1hr_test (special testing table)
+!     * [X] runctrl.vars.nml_water_column
+!     * [X] runctrl.vars.nml_cape
+!     * [X] runctrl.vars.nml_vars_on_plevels
+!     * [ ] runctrl.vars.nml (standard table with common vars)
+!     * ...
+!   - Variables not yet implemented (from most recent protocol versions):
+!     CORDEX (some will be added via reading of wrfxtrm files at daily basis):
+!     * tasmin
+!     * tasmax
+!     * hurs
+!     * sfcWindmax
+!     * sund
+!     * mrfso
+!     * prhmax
+!     * wsgsmax
+!     * tauu
+!     * tauv
+!     * cll
+!     * clm
+!     * clh
+!     Special FPS CEM:
+!     * ua100m
+!     * va100m
+!     * wsgmax100m
+!     * mrsol
+!     * clbvi
+!     * clgvi
+!     * ic_lightning
+!     * cg_lightning
+!     * total_lightning
+!     All other variables are implemented.
+!   - Desired additional diagnostics (not yet implemented):
+!     * vorticity
+!     * ...
+!
+! *** TO USE THE TOOL, NO CODE MODIFICATION SHOULD BE NEEDED               ***
+! *** SOME WARNINGS DURING COMPILATION SHOULD NOT DO ANY HARM              ***
+! *** CONTAINS TOO MANY PRINT STATEMENTS AND DEVELOPMENT NOTES             ***
+! *** CONTAINS STILL MANY INEFFICIENCIES, DUE TO MANY PEOPLE DEVELOPING    ***
+! *** MOST THINGS ARE DONE FOR A CERTAIN REASON, IF YOU DO NOT UNDERSTAND  ***
+! ***      THE FULL CONCEPT AND STRUCTURE, CHECK WITH THE DEVELOPERS BEFORE***
+! ***      MOFIFYING THE CODE, THIS INCREASES THE CHANCE THAT MODIFICATIONS***
+! ***      MAKE IT TO THE MAIN BRANCH                                      ***
+! *** DESPITE THE LICENSE, PLEASE DO NOT DISTRIBUTE AT THE PRESENT STAGE   ***
 !
 ! CURRENT CODE MAINTAINER:
 !   - Klaus GOERGEN | k.goergen@fz-juelich.de | KGo | FZJ/IBG-3
@@ -30,8 +93,8 @@
 !   - NN | ? | LAh | WEGC -- who is this, Heimo?
 ! 
 ! SUPPORT AND TESTING:
-!   - Kirsten WARRACH-SAGI
-!   - Eleni KATRAGKOU
+!   - Kirsten WARRACH-SAGI et al.
+!   - Eleni KATRAGKOU et al.
 !
 ! PURPOSE / DESCRIPTION:
 !   Fortran 95 postprocessing tool to convert raw, standard WRF regional 
@@ -69,7 +132,7 @@
 !   https://www.github.com/kgoergen
 !
 ! CODING STANDARD / CONVENTIONS:
-!   - No systematic standard follows, tries to adhere to
+!   - No systematic standard followed, tries to adhere to
 !     * http://fortranwiki.org/fortran/show/Style
 !     * http://jules-lsm.github.io/coding_standards/
 !   - Tries to be F95 ISO FORTRAN but has "SYSTEM" intrinsic function) 
@@ -228,7 +291,7 @@
 !     * 1 = modified wrf_interp.F90
 !     * 2 = fullpos_cy38 implementation (ERA/IFS/APACHE/ALADIN) (HTr, LAh)
 !           DEFAULT for FPS as decided in Trieste Nov 2017
-!     * 3 = HIRLAM method (Poisson eq.), not yet implemented
+!     * 3 = HIRLAM method (Poisson eq.), not yet implemented, tested by WEGC
 !
 ! PROCEDURE:
 !   The tool may be called as part of a processing chain. It is meant as an all-
@@ -327,12 +390,15 @@
 !   - With many variables not transferred from reading to processing within the
 !     data_in array, there is an inflation of the RAM used with further vars 
 !     processed as they are not deallocated again after usage... nearly a bug.
+!   - There is no extrapolation like in the p_interp tool for pressure levels
+!     such as 1000hPa, this results in extensive missing value fields.
 !
 ! BUGS:
 !   - In case of average variables, like pr, for the very last timestep in an 
 !     storage file, there is one timestep too much. like 00:30, when then 
 !     timespan ends at 00:00, no fields are written in there. Usually an issue
-!     at the very end of the simulation timespan.
+!     at the very end of the simulation timespan. As the dimensions do not
+!     change, this has no effect.
 !   - When calculating the average time vec: e.g. 05:29:60 is shown with ncdump,
 !     should be 05:30:00, even with double precision calc no chance. cdo is OK,
 !     ncview too. Seems more a ncdump issue. Others have this issue too.
@@ -346,25 +412,36 @@
 ! TODO / PLANNED EXTENSIONS
 ! **see "TODO" and "CHECK" markers in the code**
 !   - Add: debug option in Makefile.
-!   - Add levels: plev_bnds > half done
-!   - Aside from mean, also have min/max
+!   - Add levels: plev_bnds, needed for: clh, clm, cll
+!   - Aside from mean, also have min/max > use the daily xtrm files
 !   - Static fields processing, fx > seperate namelist; pass through
 !   - Cover ALL REQUIRED variables/diagnostics + ADDITIONAL -> extensions nml
 !   - !! Temporal aggregations, i.e. 6hr, day, mon, seas > controlled by nml and 
 !        realized within loops
 !   - !! Spatial averaging -> EUR-11i grid...
-!   - Run output via the compliancy checker
+!   - Run output again the compliancy checker
 !   - Registation of naming schemes with CORDEX (institude_id, model_id)
 !   - Add CMIP "realm" as new attribute -> important for TerrSysMP
-!   - (OpenMP parallelism for the processing section), via pre-processor flags
+!   - (OpenMP parallelism for the processing section), via pragmas in the code
 !   - (Parallel netCDF I/O where possible), via pre-processor flags > using all
 !     compressed netCDF, no most likely not even possible
 !   - ((Adjust to other model system)) > TerrSysMP
 !   - (((Refactoring the code to make it more modular using modules and
 !     subroutines. Time-pressed evolution, no time to restruct during v1 devs)))
 !
+! TEST PROCEDURE:
+!   - Per variable and namelist.
+!   - Implement variables and test via the special testing namelist.
+!   - Check one namelist after the other. No overlapping variables between nmls.
+!   - Per namelist check each variable seperately.
+!   - Per namelist check all variables in one go.
+!   - Checking: (i) log, (ii) ncdump, (iii) ncview.
+!
 ! QUESTIONS:
-!   - -/-
+!   - theta_in(:,:,:) + T00(1) (should be this) OR theta_in(:,:,:) + 300 (see
+!     www2.mmm.ucar.edu/wrf/users/docs/user_guide_V3.8/users_guide_chap5.htm)
+!     if not 300 is used, then conflict between wrfpres diagnostics and the
+!     WRF_CMORizer.
 !
 ! ONGOING DEVELOPMENTS (March 2018):
 !   - Currently merging forks from different contributors, complete check of the
@@ -388,22 +465,24 @@
 !     * [X] variable inventory, what is needed? ICTP + CORDEX + FPS
 !     * [X] Truhetz merge file 1, cont., u + v on mass grid!!! > DESTAGGERING!!!
 !     * [X] Truhetz merge file 2, compare HTr1 w/ HTr2
-!     * [ ] TESTING and REFINEMENTS > also related to the data delivery for ICTP
-!           o staggering test > uw, PH PHB
-!           x psl integrate and also new stuff from heimo
-!           o all new pressure level calcs
-!           o bucket fct checking > radiation () and precipitation (OK)
-!           o variable grouping: 3D vars: improve
 !     * [X] Truhetz add/merge 2018-03-21 stuff, changed slp calc > combine above
-!     * [ ] process data for the ICTP paper
+!     * [X] compare pressure calcs with wrfpress
+!     * [ ] TESTING and REFINEMENTS > also related to the data delivery for ICTP
+!           x staggering test > uw, PH PHB
+!           x psl integrate and also new stuff from heimo
+!           X all new pressure level calcs
+!           x variable grouping: 3D vars: improve
+!           o bucket fct checking > radiation () and precipitation (OK)
 !     * [ ] test all other tier-2 variables
-!     * [ ] compare pressure calcs with wrfpress
+!     * [ ] process data for the ICTP paper
+!     * [ ] !!! xtrm
+!     * [ ] !!! fx
 !   - Later:
 !     * [ ] Aris, temporal averaging merge
+!     * [ ] register new institute ID and model name with O.B. Christensen at 
+!           DMI.!     
 !     * [ ] adjustment for different RCMs < see CCLM code from Heimo 
 !           (not yet included in merge file 1 or 2)
-!     * [ ] register new institute ID and model name with O.B. Christensen at 
-!           DMI.
 !
 ! DOUBLE-CHECKING OF FUNCTIONALITY (March 2018):
 ! * tier-2 (1hr, 3hr): tas, pr
@@ -423,13 +502,9 @@
 ! RELATED TOOLS:
 !   - Lluis FITA-BORELL, WRF in-situ plugin module to write CMORized output
 !   - Jesus FERNANDEZ, Python
-!   - cdo
-!   - NCL
-!   - CMOR
-!   Often do not do everything required. Too complicated to use. Cannot be used
-!   on large existing datasets. Sometimes do not scale with very large model 
-!   domains as they may treat too many time steps at a time. Development started
-!   earlier in mid 2013.
+!   - cdo ...
+!   - NCL ...
+!   - CMOR ...
 !
 ! ACKNOWLEDGEMENTS:
 !   Thanks from K.GOERGEN as the originator of the tool goes to all who willing-
@@ -442,6 +517,12 @@
 !   Single core, Linux workstation, O3 optimisation.
 !   Runtimes:
 !   - EUR-44: 1min/yr > 3hr/150yr OR 1h/1yr65vars... + averaging, after each run
+!
+!   ***NOT YET OPTIMIZED, ASIDE FROM SAHRED MEMORY PARALLELISM A LOT NEEDS TO BE 
+!   CHECKED USING PROPER PROFILER***
+!
+!   - revisit variable allocation
+!   - CAPE/CIN split not ideal...
 !
 ! REFERENCES:
 ! [1] http://cordex.dmi.dk/joomla/images/CORDEX/cordex_archive_
@@ -527,7 +608,7 @@ MODULE NamelistHandling
   IMPLICIT NONE
   SAVE
 
-  INTEGER, PARAMETER :: nvars = 13 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  INTEGER, PARAMETER :: nvars = 36 ! maximum number of vars per namelist
 
   CHARACTER (len = 200) :: Conventions, contact, experiment_id, experiment, &
     driving_experiment, driving_model_id, driving_model_ensemble_member, &
@@ -676,7 +757,7 @@ CHARACTER (len = 19), DIMENSION(:), ALLOCATABLE :: InVarDataRec
 REAL, DIMENSION(:,:), ALLOCATABLE :: &
   data_in     , &
   psl_in      , &
-  t2_in       , &
+  !t2_in       , &
   cldfra_inv  , &
   u10_in      , &
   v10_in      , &
@@ -689,7 +770,7 @@ REAL, DIMENSION(:,:), ALLOCATABLE :: &
   clivi       , &
   sinalpha_in , &
   cosalpha_in , &
-  var_pl      , &
+  !!var_pl      , &
   psfc_in
 REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   pp_in       , &
@@ -904,7 +985,7 @@ sts = NF90_CLOSE(ncidin)
 !PRINT *, "lat = ", GeoInLonLat(:,:,2)
 
 !-------------------------------------------------------------------------------
-! main loop over the different variables, namelist controlled
+! setup of loop control vectors
 
 ALLOCATE ( frequency(7) )
 frequency(1) = "1hr"
@@ -916,23 +997,29 @@ frequency(6) = "sem"
 frequency(7) = "fx"
 
 ALLOCATE ( fnNMLvar(11) )
-fnNMLvar(1) = "runctrl.vars.nml"
+fnNMLvar(1) = "runctrl.vars.nml" ! CHECK ONGOING
 fnNMLvar(2) = "runctrl.vars.nml_evp_roff"
-fnNMLvar(3) = "runctrl.vars.nml_water_column"
-fnNMLvar(4) = "runctrl.vars.nml_vars_on_plevels"
+fnNMLvar(3) = "runctrl.vars.nml_water_column" ! OK
+fnNMLvar(4) = "runctrl.vars.nml_vars_on_plevels" ! OK
 fnNMLvar(5) = "runctrl.vars.nml_pr_mrso"
 fnNMLvar(6) = "runctrl.vars.nml_snow"
 fnNMLvar(7) = "runctrl.vars.nml_radiation_alternative"
-fnNMLvar(8) = "runctrl.vars.nml_cape"
-fnNMLvar(9) = "runctrl.vars.nml_pr_tas_1hr_test"
-fnNMLvar(10) = "runctrl.vars.nml_weathertyping" ! new form HTr
-fnNMLvar(11) = "runctrl.vars.nml_psl" ! new from HTr
+fnNMLvar(8) = "runctrl.vars.nml_cape" ! OK
+fnNMLvar(9) = "runctrl.vars.nml_pr_tas_1hr_test" ! OK
+fnNMLvar(10) = "runctrl.vars.nml_weathertyping" ! new form HTr, not implemented
+fnNMLvar(11) = "runctrl.vars.nml_psl" ! new from HTr, not implemented
 
+!-------------------------------------------------------------------------------
 ! individual vars contain information on whether they are treated or not, i.e.
 ! the tool may loop over all frequencies and the namelist controls what is to 
 ! be done
 ! this is the outer loop as it also controls the averaging; the main processing
 ! is done during the 1st pass, i.e., the tier-2 processing at dt=1h or 3h
+! ATTENTION: averaging functionality not it reintegrated
+!            during testing too lazy to set all temporally aggregated vars to 
+!            FALSE
+!            -> just run the outer loop over 1 frequency only
+
 !DO ifrq = 1, SIZE(frequency), 1 
 DO ifrq = 1, 1, 1
 
@@ -996,8 +1083,8 @@ DO ifrq = 1, 1, 1
   
   PRINT *, "size & shape of the TimRefArray = ", SIZE(TimeRefArray), &
     SHAPE(TimeRefArray)
-  PRINT *, "SIZE(TimeRefArray,1)",SIZE(TimeRefArray,1) 
-  PRINT *, "SHAPE(TimeRefArray,1)",  SHAPE(TimeRefArray,1)
+  PRINT *, "SIZE(TimeRefArray,1): ", SIZE(TimeRefArray,1) 
+  PRINT *, "SHAPE(TimeRefArray,1): ", SHAPE(TimeRefArray,1)
 
 !-------------------------------------------------------------------------------
 ! loop over the different namelists, each containing a specific set of related
@@ -1006,7 +1093,8 @@ DO ifrq = 1, 1, 1
 ! you want to postprocess just specific variables or create your own variable 
 ! combinations
   
-  DO ivarnml = 9, 9, 1
+  !DO ivarnml = 1, 8, 1 ! loop over all regular namelists
+  DO ivarnml = 4, 4, 1 ! recommended for testing: namelist #9 runctrl.vars.nml_pr_tas_1hr_test
   
     PRINT *, "============================================================"
     PRINT *, "var. namelist nr. and name: ", ivarnml, TRIM(fnNMLvar(ivarnml))
@@ -1048,14 +1136,14 @@ DO ifrq = 1, 1, 1
 
     ! nvar_nnml might be determined through the namelist itself
     SELECT CASE (TRIM(fnNMLvar(ivarnml)))
-    CASE ("runctrl.vars.nml")
+    CASE ("runctrl.vars.nml") ! TESTING  ***ONGOING***
       nvar_nml = 9
     CASE ("runctrl.vars.nml_evp_roff")
       nvar_nml = 4
-    CASE ("runctrl.vars.nml_water_column")
+    CASE ("runctrl.vars.nml_water_column") ! OK
       nvar_nml = 3
-    CASE ("runctrl.vars.nml_vars_on_plevels")
-      nvar_nml = 12
+    CASE ("runctrl.vars.nml_vars_on_plevels") ! OK
+      nvar_nml = 36
     CASE ("runctrl.vars.nml_pr_mrso")
       nvar_nml = 4
     CASE ("runctrl.vars.nml_snow")
@@ -1064,13 +1152,13 @@ DO ifrq = 1, 1, 1
       nvar_nml = 9
     CASE ("runctrl.vars.nml_radiation_alternative")
       nvar_nml = 9
-    CASE ("runctrl.vars.nml_cape")
+    CASE ("runctrl.vars.nml_cape") ! OK
       nvar_nml = 2
-    CASE ("runctrl.vars.nml_pr_tas_1hr_test") ! used right now for testing
+    CASE ("runctrl.vars.nml_pr_tas_1hr_test") ! OK
       nvar_nml = 10 
-    CASE ("runctrl.vars.nml_weathertyping") ! new stuff from HTr
+    CASE ("runctrl.vars.nml_weathertyping") ! new stuff from HTr, no seperate nml
       nvar_nml = 6
-    CASE ("runctrl.vars.nml_psl") ! new stuff from HTr
+    CASE ("runctrl.vars.nml_psl") ! new stuff from HTr, no seperate nml
       nvar_nml = 1
     END SELECT
   
@@ -1857,20 +1945,12 @@ DO ifrq = 1, 1, 1
 
             PRINT *,'read 3D vars'
 
-! sort in still 
-            IF (.not. ALLOCATED(t_p)) ALLOCATE( t_p( xfocus, yfocus, nz ), STAT=sts )
-            IF (.not. ALLOCATED(qvs)) ALLOCATE( qvs( xfocus, yfocus, nz ), STAT=sts )
-            IF (.not. ALLOCATED(lcl)) ALLOCATE( lcl( xfocus, yfocus ), STAT=sts )
-            IF (.not. ALLOCATED(lfc)) ALLOCATE( lfc( xfocus, yfocus ), STAT=sts )
-            IF (.not. ALLOCATED(clwvi)) ALLOCATE( clwvi( xfocus, yfocus ), STAT=sts )
-            IF (.not. ALLOCATED(clivi)) ALLOCATE( clivi( xfocus, yfocus ), STAT=sts )
-! -------------
             !-------------------------------------------------------------------
-            ! internal vars needed in the 3D processing section
+            ! internal vars needed in the pressure level / 3D processing section
 
-            PRINT *, "allocate t_in, p_in, ph_fl" 
+            PRINT *, "allocate p_in, t_in, ph_fl" 
+            IF (.not. ALLOCATED(p_in)) ALLOCATE( p_in( xfocus, yfocus, nz ), STAT=sts ) ! always needed
             IF (.not. ALLOCATED(t_in)) ALLOCATE( t_in( xfocus, yfocus, nz ), STAT=sts )
-            IF (.not. ALLOCATED(p_in)) ALLOCATE( p_in( xfocus, yfocus, nz ), STAT=sts )
             IF (.not. ALLOCATED(ph_fl)) ALLOCATE( ph_fl( xfocus, yfocus, nz ), STAT=sts )
 
             IF ( var_cmip(ivar) == "prw" ) THEN
@@ -1884,6 +1964,18 @@ DO ifrq = 1, 1, 1
             IF ( (var_cmip(ivar) == "cape" ) .OR. (var_cmip(ivar) == "cin" ) ) THEN
               IF (.not. ALLOCATED(cape)) ALLOCATE( cape( xfocus, yfocus ), STAT=sts )
               IF (.not. ALLOCATED(cin)) ALLOCATE( cin( xfocus, yfocus ), STAT=sts )
+              IF (.not. ALLOCATED(t_p)) ALLOCATE( t_p( xfocus, yfocus, nz ), STAT=sts )
+              IF (.not. ALLOCATED(qvs)) ALLOCATE( qvs( xfocus, yfocus, nz ), STAT=sts )
+              IF (.not. ALLOCATED(lcl)) ALLOCATE( lcl( xfocus, yfocus ), STAT=sts )
+              IF (.not. ALLOCATED(lfc)) ALLOCATE( lfc( xfocus, yfocus ), STAT=sts )
+            END IF
+
+            IF ( var_cmip(ivar) == "clwvi" ) THEN
+              IF (.not. ALLOCATED(clwvi)) ALLOCATE( clwvi( xfocus, yfocus ), STAT=sts )
+            ENDIF
+
+            IF ( var_cmip(ivar) == "clivi" ) THEN
+              IF (.not. ALLOCATED(clivi)) ALLOCATE( clivi( xfocus, yfocus ), STAT=sts )
             END IF
 
             ! PROBLEM to make this efficient: selection of vars via height
@@ -1893,63 +1985,65 @@ DO ifrq = 1, 1, 1
             IF ( height(ivar) > 10 ) THEN
               PRINT *, "prep. int. 3D pres. level vars"
               ! IF (.not. ALLOCATED(var_pl)) ALLOCATE( var_pl( xfocus, yfocus, 6 ), STAT=sts ) ! working on one variable at a time
-              IF (.not. ALLOCATED(var_pl)) ALLOCATE( var_pl( xfocus, yfocus ), STAT=sts )
+              !!IF (.not. ALLOCATED(var_pl)) ALLOCATE( var_pl( xfocus, yfocus ), STAT=sts ) ! get completely rid of this thing
               ! var_pl(:,:,:) = mv
-              var_pl(:,:) = mv
+              !!var_pl(:,:) = mv
               IF (.not. ALLOCATED(var3d_in)) ALLOCATE( var3d_in( xfocus, yfocus, nz ), STAT=sts )
               !!!IF (.not. ALLOCATED(pout)) ALLOCATE( pout( SIZE(pout) ), STAT=sts ) ! # pressure levels can be removed
             END IF
 
             !-------------------------------------------------------------------
             ! read data as needed
-
-            IF (.not. ALLOCATED(t2_in)) ALLOCATE( t2_in ( xfocus, yfocus ), STAT=sts )          
-            sts = NF90_INQ_VARID(ncidin, "T2", t2_varid)
-            sts = NF90_GET_VAR(ncidin, t2_varid, t2_in(:,:), &
-              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-          
             ! these 5 vars are always calculated
-            IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) .OR. ( height(ivar) > 10  ) ) THEN
+
+            !IF (.not. ALLOCATED(t2_in)) ALLOCATE( t2_in ( xfocus, yfocus ), STAT=sts )
+            !sts = NF90_INQ_VARID(ncidin, "T2", t2_varid)
+            !sts = NF90_GET_VAR(ncidin, t2_varid, t2_in(:,:), &
+            !  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+          
+            IF ( ( var_cmip(ivar) == "prw" )   .OR. &
+                 ( var_cmip(ivar) == "psl" )   .OR. &
+                 ( height(ivar) > 10  )        .OR. &
+                 ( var_cmip(ivar) == "clwvi" ) .OR. &
+                 ( var_cmip(ivar) == "clivi" ) .OR. &
+                 ( var_cmip(ivar) == "cape" )  .OR. &
+                 ( var_cmip(ivar) == "cin" ) ) THEN
+
               PRINT *, "read P"
               IF (.not. ALLOCATED(pp_in)) ALLOCATE( pp_in( xfocus, yfocus, nz ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "P", pp_varid)
               sts = NF90_GET_VAR(ncidin, pp_varid, pp_in(:,:,:), &
-                START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )          
-            END IF
+                START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
 
-            IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) .OR. ( height(ivar) > 10  ) ) THEN
               PRINT *, "read PB"
               IF (.not. ALLOCATED(pb_in)) ALLOCATE( pb_in( xfocus, yfocus, nz ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "PB", pb_varid)
               sts = NF90_GET_VAR(ncidin, pb_varid, pb_in(:,:,:), &
                 START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
-            END IF  
 
-            IF ( ( var_cmip(ivar) == "prw" )  .OR. ( var_cmip(ivar) == "psl" ) .OR. ( height(ivar) > 10  ) ) THEN
               PRINT *, "read PH"
               IF (.not. ALLOCATED(ph_in)) ALLOCATE( ph_in( xfocus, yfocus, nz+1 ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "PH", ph_varid)
               sts = NF90_GET_VAR(ncidin, ph_varid, ph_in(:,:,:), &
                 START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz+1, 1 /) )
-            END IF
-  
-            IF ( ( var_cmip(ivar) == "prw" )  .OR. ( var_cmip(ivar) == "psl" ) .OR. ( height(ivar) > 10  ) ) THEN
+
               PRINT *, "read PHB"
               IF (.not. ALLOCATED(phb_in)) ALLOCATE( phb_in( xfocus, yfocus, nz+1 ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "PHB", phb_varid)
               sts = NF90_GET_VAR(ncidin, phb_varid, phb_in(:,:,:), &
                 START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz+1, 1 /) )
-            END IF
-  
-            IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) .OR. ( height(ivar) > 10  ) ) THEN
+
               PRINT *, "read T" ! perturbation potential temperature (theta-t0)
               IF (.not. ALLOCATED(theta_in)) ALLOCATE( theta_in( xfocus, yfocus, nz ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "T", theta_varid)
               sts = NF90_GET_VAR(ncidin, theta_varid, theta_in(:,:,:), &
                 START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
+
             END IF
-  
-            IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) .OR. ( SCAN(var_cmip(ivar),"hus") == 1 ) ) THEN
+
+            !-------------------------------------------------------------------
+
+            IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) .OR. ( SCAN(var_cmip(ivar),"hus") == 1 ) .OR. ( var_cmip(ivar) == "cape" ) .OR. ( var_cmip(ivar) == "cin" ) ) THEN
               PRINT *, "read QVAPOR"
               IF (.not. ALLOCATED(qv_in)) ALLOCATE( qv_in( xfocus, yfocus, nz  ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "QVAPOR", qv_varid)
@@ -1957,27 +2051,40 @@ DO ifrq = 1, 1, 1
                 START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
             END IF  
 
-            IF (.not. ALLOCATED(qc_in)) ALLOCATE( qc_in( xfocus, yfocus, nz  ), STAT=sts )
-            sts = NF90_INQ_VARID(ncidin, "QCLOUD", qc_varid)
-            sts = NF90_GET_VAR(ncidin, qc_varid, qc_in(:,:,:), &
-              START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
+            IF ( var_cmip(ivar) == "clwvi" ) THEN
+              PRINT *, "read QCLOUD"
+              IF (.not. ALLOCATED(qc_in)) ALLOCATE( qc_in( xfocus, yfocus, nz  ), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "QCLOUD", qc_varid)
+              sts = NF90_GET_VAR(ncidin, qc_varid, qc_in(:,:,:), &
+                START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
+            END IF
+
+            IF ( ( var_cmip(ivar) == "clwvi" ) .OR. ( var_cmip(ivar) == "clivi" ) ) THEN
+              PRINT *, "read QICE"
+              IF (.not. ALLOCATED(qi_in)) ALLOCATE( qi_in( xfocus, yfocus, nz  ), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "QICE", qi_varid)
+              sts = NF90_GET_VAR(ncidin, qi_varid, qi_in(:,:,:), &
+                START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
+            END IF
+
+            IF ( var_cmip(ivar) == "clwvi" ) THEN
+              PRINT *, "read QRAIN"
+              IF (.not. ALLOCATED(qr_in)) ALLOCATE( qr_in( xfocus, yfocus, nz  ), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "QRAIN", qr_varid)
+              sts = NF90_GET_VAR(ncidin, qr_varid, qr_in(:,:,:), &
+                START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
+            END IF
   
-            IF (.not. ALLOCATED(qi_in)) ALLOCATE( qi_in( xfocus, yfocus, nz  ), STAT=sts )
-            sts = NF90_INQ_VARID(ncidin, "QICE", qi_varid)
-            sts = NF90_GET_VAR(ncidin, qi_varid, qi_in(:,:,:), &
-              START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
-  
-            IF (.not. ALLOCATED(qr_in)) ALLOCATE( qr_in( xfocus, yfocus, nz  ), STAT=sts )
-            sts = NF90_INQ_VARID(ncidin, "QRAIN", qr_varid)
-            sts = NF90_GET_VAR(ncidin, qr_varid, qr_in(:,:,:), &
-              START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
-  
-            IF (.not. ALLOCATED(qs_in)) ALLOCATE( qs_in( xfocus, yfocus, nz  ), STAT=sts )
-            sts = NF90_INQ_VARID(ncidin, "QSNOW", qs_varid)
-            sts = NF90_GET_VAR(ncidin, qs_varid, qs_in(:,:,:), &
-              START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )          
-  
+            IF ( ( var_cmip(ivar) == "clwvi" ) .OR. ( var_cmip(ivar) == "clivi" ) ) THEN
+              PRINT *, "read QSNOW"
+              IF (.not. ALLOCATED(qs_in)) ALLOCATE( qs_in( xfocus, yfocus, nz  ), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "QSNOW", qs_varid)
+              sts = NF90_GET_VAR(ncidin, qs_varid, qs_in(:,:,:), &
+                START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
+            END IF
+
             IF ( (SCAN(var_cmip(ivar),"ua") == 1) .OR. (SCAN(var_cmip(ivar),"va") == 1) ) THEN
+              PRINT *, "read U"
               IF (.not. ALLOCATED(u_in)) ALLOCATE( u_in( xfocus+1, yfocus, nz ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "U", u_varid)
               sts = NF90_GET_VAR(ncidin, u_varid, u_in(:,:,:), &
@@ -1985,6 +2092,7 @@ DO ifrq = 1, 1, 1
             END IF
   
             IF ( (SCAN(var_cmip(ivar),"ua") == 1) .OR. (SCAN(var_cmip(ivar),"va") == 1) ) THEN
+              PRINT *, "read V"
               IF (.not. ALLOCATED(v_in)) ALLOCATE( v_in( xfocus, yfocus+1, nz ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "V", v_varid)
               sts = NF90_GET_VAR(ncidin, v_varid, v_in(:,:,:), &
@@ -1992,6 +2100,7 @@ DO ifrq = 1, 1, 1
             END IF
             
             IF ( (SCAN(var_cmip(ivar),"wa") == 1) ) THEN
+              PRINT *, "read W"
               IF (.not. ALLOCATED(w_in)) ALLOCATE( w_in( xfocus, yfocus, nz+1 ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "W", w_varid)
               sts = NF90_GET_VAR(ncidin, w_varid, w_in(:,:,:), &
@@ -1999,6 +2108,7 @@ DO ifrq = 1, 1, 1
             END IF
 
             IF ( (SCAN(var_cmip(ivar),"ua") == 1) .OR. (SCAN(var_cmip(ivar),"va") == 1) ) THEN
+              PRINT *, "read SINALPHA"
               IF (.not. ALLOCATED(sinalpha_in)) ALLOCATE( sinalpha_in( xfocus, yfocus ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "SINALPHA", sinalpha_varid)
               sts = NF90_GET_VAR(ncidin, sinalpha_varid, sinalpha_in(:,:), &
@@ -2006,6 +2116,7 @@ DO ifrq = 1, 1, 1
             END IF
   
             IF ( (SCAN(var_cmip(ivar),"ua") == 1) .OR. (SCAN(var_cmip(ivar),"va") == 1) ) THEN
+              PRINT *, "read COSALPHA"
               IF (.not. ALLOCATED(cosalpha_in)) ALLOCATE( cosalpha_in( xfocus, yfocus ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "COSALPHA", cosalpha_varid)
               sts = NF90_GET_VAR(ncidin, cosalpha_varid, cosalpha_in(:,:), &
@@ -2013,6 +2124,7 @@ DO ifrq = 1, 1, 1
             END IF
   
             IF ( var_cmip(ivar) == "psl" ) THEN
+              PRINT *, "read PSFC"
               IF (.not. ALLOCATED(psfc_in)) ALLOCATE( psfc_in( xfocus, yfocus ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "PSFC", psfc_varid)
               sts = NF90_GET_VAR(ncidin, psfc_varid, psfc_in(:,:), &
@@ -2627,9 +2739,10 @@ DO ifrq = 1, 1, 1
               START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )          
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! this is all variables which are solely based on the namelist for whom no 
-! processing is needed whatsoever
-  
+! this is all others variables which are solely based on a namelist for whom 
+! no processing is needed whatsoever, e.g. tas, ps, huss, ...
+! they are read into data_in and also passed on in this 2D array for writing
+
           ELSE
 
             PRINT *, "variable to read/write with no additional processing = ", var_wrf(ivar)
@@ -2686,9 +2799,24 @@ DO ifrq = 1, 1, 1
                (height(ivar) == 850) .OR. &
                (height(ivar) == 700) .OR. &
                (height(ivar) == 500) .OR. &
-               (height(ivar) == 200) ) THEN
+               (height(ivar) == 200) .OR. &
+               (var_cmip(ivar) == "prw") .OR. &
+               (var_cmip(ivar) == "clwvi") .OR. &
+               (var_cmip(ivar) == "clivi") .OR. &
+               (var_cmip(ivar) == "cape") .OR. &
+               (var_cmip(ivar) == "cin") ) THEN
 
             PRINT *, var_cmip(ivar), height(ivar)
+
+            ! needs this initialisation, might be possible that for very low
+            ! high levels calculation cannot be done, then it is set to official
+            ! missing value
+            data_in(:,:) = mv
+
+            ! total pressure [Pa]
+            ! perturbation pressure + base state pressure
+            ! see: http://www2.mmm.ucar.edu/wrf/users/docs/user_guide_V3.8/users_guide_chap5.htm
+            p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
 
             ! PH and PHB are on nz+1 levels
             ! vertically destaggering
@@ -2699,18 +2827,15 @@ DO ifrq = 1, 1, 1
                               (ph_in(:,:,nl+1)+phb_in(:,:,nl+1)))/2./gr
             END DO
 
-            ! total pressure [Pa]
-            ! perturbation pressure + base state pressure
-            ! see: http://www2.mmm.ucar.edu/wrf/users/docs/user_guide_V3.8/users_guide_chap5.htm
-            p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
-
             ! transfer theta-t0 to total potential temperature [K]
             ! and then convert potential temperature theta to absolute temperature
             ! this is the correct version, using 290K as base temp
             ! wrfpress contains data that are still calculated with 300K
             t_in(:,:,:) = ( theta_in(:,:,:) + T00(1) ) * &
-                          ( (pp_in(:,:,:) + pb_in(:,:,:)) / P00(1) )**(R/cp)
-  
+                          ( p_in(:,:,:) / P00(1) )**(R/cp)
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
             IF (height(ivar) == 1000) THEN
               np = 1
             ELSE IF (height(ivar) == 925) THEN
@@ -2754,7 +2879,7 @@ DO ifrq = 1, 1, 1
                       !              slope*(zg_pout-ph_fl(i,j,nl+1))
                       slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/&
                               (p_in(i,j,nl)-p_in(i,j,nl+1))
-                      var_pl(i,j) = var3d_in(i,j,nl+1) + &
+                      data_in(i,j) = var3d_in(i,j,nl+1) + &
                                     slope*(pout(np)-p_in(i,j,nl+1))
                     END IF
                   END DO
@@ -2786,7 +2911,7 @@ DO ifrq = 1, 1, 1
                       !              slope*(LOG(pout(np))-LOG(p_in(i,j,nl+1)))
                       slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/&
                               (p_in(i,j,nl)-p_in(i,j,nl+1))
-                      var_pl(i,j) = var3d_in(i,j,nl+1) + &
+                      data_in(i,j) = var3d_in(i,j,nl+1) + &
                                     slope*(pout(np)-p_in(i,j,nl+1))
                     END IF
                   END DO
@@ -2834,7 +2959,7 @@ DO ifrq = 1, 1, 1
                       !                 (ph_fl(i,j,nl+1)-ph_fl(i,j,nl)))
                       slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/&
                               (p_in(i,j,nl)-p_in(i,j,nl+1))
-                      var_pl(i,j) = var3d_in(i,j,nl+1) + &
+                      data_in(i,j) = var3d_in(i,j,nl+1) + &
                                     slope*(pout(np)-p_in(i,j,nl+1))
                     END IF
                   END DO
@@ -2867,7 +2992,7 @@ DO ifrq = 1, 1, 1
                       !var_pl(i,j) = var3d_in(i,j,nl) * EXP( (zg_pout - ph_fl(i,j,nl)) * (LOG(var3d_in(i,j,nl+1)) - LOG(var3d_in(i,j,nl))) / (ph_fl(i,j,nl+1)-ph_fl(i,j,nl)))
                       slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/&
                               (p_in(i,j,nl)-p_in(i,j,nl+1))
-                      var_pl(i,j) = var3d_in(i,j,nl+1) + &
+                      data_in(i,j) = var3d_in(i,j,nl+1) + &
                                     slope*(pout(np)-p_in(i,j,nl+1))
                     END IF
                   END DO
@@ -2892,7 +3017,7 @@ DO ifrq = 1, 1, 1
                     IF (pout(np).le.p_in(i,j,nl) .and. pout(np).gt.p_in(i,j,nl+1)) then                
                       slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/&
                               (p_in(i,j,nl)-p_in(i,j,nl+1))
-                      var_pl(i,j) = var3d_in(i,j,nl+1) + &
+                      data_in(i,j) = var3d_in(i,j,nl+1) + &
                                     slope*(pout(np)-p_in(i,j,nl+1))
                     END IF
                   END DO
@@ -2923,7 +3048,7 @@ DO ifrq = 1, 1, 1
                       !              slope*(LOG(pout(np))-LOG(p_in(i,j,nl+1)))
                       slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/&
                               (p_in(i,j,nl)-p_in(i,j,nl+1))
-                      var_pl(i,j) = var3d_in(i,j,nl+1) + &
+                      data_in(i,j) = var3d_in(i,j,nl+1) + &
                                     slope*(pout(np)-p_in(i,j,nl+1))
                     END IF
                   END DO
@@ -2948,7 +3073,11 @@ DO ifrq = 1, 1, 1
 !              END DO
 !            END DO
 
-            data_in(:,:) = var_pl(:,:) ! superfluous, remove var_pl TODO was some old idea of someone but does not fit into the overall concept
+            !!data_in(:,:) = var_pl(:,:) ! superfluous, remove var_pl TODO was some old idea of someone but does not fit into the overall concept
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! CORDEX [X], FPS CEM [X]
+! psl [Pa] i Sea Level Pressure
 
             ! several options to calculate slp, either from formula
             ! internal vars needed: ph_fl, t_in, p_in
@@ -2989,147 +3118,157 @@ DO ifrq = 1, 1, 1
 
             END IF
 
-          END IF
-
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! CORDEX [X], FPS CEM [X]
 ! prw [kg m-2] i Water Vapor Path
 
-          IF ( (var_cmip(ivar) == "prw") ) THEN
-
-            t_in(:,:,:) = ( theta_in(:,:,:)+T00(1) ) * ( (pp_in(:,:,:)+pb_in(:,:,:))/P00(1) )**(R/cp)
-            p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
-
-            prw(:,:) = 0.
-            DO nl = 1, nz
-              prw(:,:) = prw(:,:) + &
-                (qv_in(:,:,nl) * p_in(:,:,nl)/(R*t_in(:,:,nl)) * &
-                ((ph_in(:,:,nl+1)+phb_in(:,:,nl+1)) - (ph_in(:,:,nl)+phb_in(:,:,nl)))/gr)
-            END DO
-            data_in(:,:) = prw(:,:)
-
-          END IF
+            IF ( (var_cmip(ivar) == "prw") ) THEN
+  
+              !t_in(:,:,:) = ( theta_in(:,:,:)+T00(1) ) * ( (pp_in(:,:,:)+pb_in(:,:,:))/P00(1) )**(R/cp)
+              !p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
+  
+              prw(:,:) = 0.
+              DO nl = 1, nz
+                prw(:,:) = prw(:,:) + &
+                  (qv_in(:,:,nl) * p_in(:,:,nl)/(R*t_in(:,:,nl)) * &
+                  ((ph_in(:,:,nl+1)+phb_in(:,:,nl+1)) - (ph_in(:,:,nl)+ &
+                  phb_in(:,:,nl)))/gr)
+              END DO
+              data_in(:,:) = prw(:,:)
+  
+            END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! CORDEX [X], FPS CEM [X]
 ! clwvi [kg m-2] i Condensed Water Path  
 
-          IF ( (var_cmip(ivar) == "clwvi") ) THEN
-  
-            t_in(:,:,:) = (theta_in(:,:,:)+T00(1))*((pp_in(:,:,:)+pb_in(:,:,:))/P00(1))**(R/cp)
-            p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
-  
-            clwvi(:,:) = 0.
-            DO nl = 1,nz - 1
-              clwvi(:,:) = clwvi(:,:) + (qc_in(:,:,nl) + qi_in(:,:,nl) + qr_in(:,:,nl) + qs_in(:,:,nl) ) * p_in(:,:,nl)/(R*t_in(:,:,nl)) * ((ph_in(:,:,nl+1)+phb_in(:,:,nl+1)) - (ph_in(:,:,nl)+phb_in(:,:,nl)))/gr
-            END DO
-            data_in(:,:) = clwvi(:,:) 
-  
-          END IF
+            IF ( (var_cmip(ivar) == "clwvi") ) THEN
+    
+              !t_in(:,:,:) = (theta_in(:,:,:)+T00(1))*((pp_in(:,:,:)+pb_in(:,:,:))/P00(1))**(R/cp)
+              !p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
+
+              clwvi(:,:) = 0.
+              DO nl = 1,nz - 1
+                clwvi(:,:) = clwvi(:,:) + (qc_in(:,:,nl) + qi_in(:,:,nl) + &
+                             qr_in(:,:,nl) + qs_in(:,:,nl) ) * p_in(:,:,nl)/ &
+                             (R*t_in(:,:,nl)) * ((ph_in(:,:,nl+1)+ &
+                             phb_in(:,:,nl+1)) - (ph_in(:,:,nl)+ &
+                             phb_in(:,:,nl)))/gr
+              END DO
+              data_in(:,:) = clwvi(:,:)
+
+            END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! CORDEX [X], FPS CEM [X]
 ! clivi  [kg m-2] i Ice Water Path
 
-          IF ( (var_cmip(ivar) == "clivi")) THEN
-  
-            t_in(:,:,:) = (theta_in(:,:,:)+T00(1))*((pp_in(:,:,:)+pb_in(:,:,:))/P00(1))**(R/cp)
-            p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
-  
-            clivi(:,:) = 0.
-            DO nl = 1,nz - 1
-              clivi(:,:) = clivi(:,:) + (qi_in(:,:,nl) + qs_in(:,:,nl)) * p_in(:,:,nl)/(R*t_in(:,:,nl)) * ((ph_in(:,:,nl+1)+phb_in(:,:,nl+1)) - (ph_in(:,:,nl)+phb_in(:,:,nl)))/gr
-            END DO
-            data_in(:,:) = clivi(:,:)
-  
-          END IF
+            IF ( (var_cmip(ivar) == "clivi")) THEN
+    
+              !t_in(:,:,:) = (theta_in(:,:,:)+T00(1))*((pp_in(:,:,:)+pb_in(:,:,:))/P00(1))**(R/cp)
+              !p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
+    
+              clivi(:,:) = 0.
+              DO nl = 1,nz - 1
+                clivi(:,:) = clivi(:,:) + (qi_in(:,:,nl) + qs_in(:,:,nl)) * &
+                             p_in(:,:,nl)/(R*t_in(:,:,nl)) * &
+                             ((ph_in(:,:,nl+1)+phb_in(:,:,nl+1)) - &
+                             (ph_in(:,:,nl)+phb_in(:,:,nl)))/gr
+              END DO
+              data_in(:,:) = clivi(:,:)
+    
+            END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! CORDEX [ ], FPS CEM [X]
 ! cape [J kg-1] i 2-D Maximum Convective Available Potential Energy
 ! cin [J kg-1] i 2-D Maximum Convective Inhibition
 
-          IF ( (var_cmip(ivar) == "cape") .OR. (var_cmip(ivar) == "cin") ) THEN
+            IF ( (var_cmip(ivar) == "cape") .OR. (var_cmip(ivar) == "cin") ) THEN
+    
+              !t_in(:,:,:) = (theta_in(:,:,:)+T00(1))*((pp_in(:,:,:)+pb_in(:,:,:))/P00(1))**(R/cp)
+              !p_in = pp_in+pb_in          
+    
+              t_p(:,:,1) = t_in(:,:,1)
+    
+              cape(:,:) = 0.
+              cin(:,:) = 0.
+              lcl(:,:) = -999.
+              lfc(:,:) = -999.
+    
+              DO i = 1,xfocus
+                DO j = 1,yfocus
+                  DO nl = 1,nz-1
+    
+                    qvs(i,j,nl) = 0.622*a*exp(b*(t_p(i,j,nl)-c)/(t_p(i,j,nl)-d))/p_in(i,j,nl)
+    
+                    IF (qvs(i,j,nl) .gt. qv_in(i,j,1)) THEN ! dry adiabatic ascent
+                   
+                      t_p(i,j,nl+1) = (theta_in(i,j,1)+T00(1))*(p_in(i,j,nl+1)/P00(1))**(R/cp)
+    
+                    ELSE IF (qvs(i,j,nl) .lt. qv_in(i,j,1)) THEN ! moist adiabatic ascent
+    
+                      IF (lcl(i,j) .eq. -999) THEN ! lifting condensation level
+                        lcl(i,j) = p_in(i,j,nl)
+                      END IF
+    
+                      t_ii = t_p(i,j,nl)
+    
+                      DO ii = 1,10 ! solve iteratively
+    
+                        qvs(i,j,nl+1) = 0.622*a*exp(b*(t_ii-c)/(t_ii-d))/p_in(i,j,nl+1)
+    
+                        t_ii = t_ii - (t_ii*(P00(1)/p_in(i,j,nl+1))**(R/cp)*exp(L*qvs(i,j,nl+1)/(cp*t_ii)) - &
+                               (t_p(i,j,nl)*(P00(1)/p_in(i,j,nl))**(R/cp)*exp(L*qvs(i,j,nl)/(cp*t_p(i,j,nl))))) / &
+                               ( (P00(1)/p_in(i,j,nl+1))**(R/cp)*exp(n/(p_in(i,j,nl+1)*t_ii)*exp(b*(t_ii-c)/(t_ii-d))) * &
+                               (1 - (n/p_in(i,j,nl+1)*exp(b*(t_ii-c)/(t_ii-d))*(t_ii*(t_ii-b*c)+(b-2)*d*t_ii+d**2))/(t_ii*(d-t_ii)**2)) )
   
-            t_in(:,:,:) = (theta_in(:,:,:)+T00(1))*((pp_in(:,:,:)+pb_in(:,:,:))/P00(1))**(R/cp)
-            p_in = pp_in+pb_in          
+                      END DO
+    
+                      !print*, 'thetae(i,j,nl)',(t_p(i,j,nl)*(100000./p_in(i,j,nl))**(R/cp)*exp(L*qvs(i,j,nl)/(cp*t_p(i,j,nl))))
+                      !print*,'thetae(i.j.nl+1)',(t_ii*(100000./p_in(i,j,nl+1))**(R/cp)*exp(L*qvs(i,j,nl+1)/(cp*t_ii))) 
   
-            t_p(:,:,1) = t_in(:,:,1)
+                      t_p(i,j,nl+1) = t_ii
+    
+                      !print*, nl, 'moist', t_p(i,j,nl+1), t_in(i,j,nl+1), (t_p(i,j,nl+1)-t_in(i,j,nl+1))
+    
+                    END IF                 
   
-            cape(:,:) = 0.
-            cin(:,:) = 0.
-            lcl(:,:) = -999.
-            lfc(:,:) = -999.
-  
-            DO i = 1,xfocus
-              DO j = 1,yfocus
-                DO nl = 1,nz-1
-  
-                  qvs(i,j,nl) = 0.622*a*exp(b*(t_p(i,j,nl)-c)/(t_p(i,j,nl)-d))/p_in(i,j,nl)
-  
-                  IF (qvs(i,j,nl) .gt. qv_in(i,j,1)) THEN ! dry adiabatic ascent
+                    IF (t_p(i,j,nl) .gt. t_in(i,j,nl)) THEN
+                   
+                      IF (lfc(i,j) .eq. -999) THEN ! level of free convection
+                        lfc(i,j) = p_in(i,j,nl)
+                      END IF
+    
+                      cape(i,j) = cape(i,j) + (t_p(i,j,nl) - t_in(i,j,nl)) / t_in(i,j,nl) * ((phb_in(i,j,nl)+ph_in(i,j,nl))-(phb_in(i,j,nl-1)+ph_in(i,j,nl-1)))
+    
+                      !print*, 'nl, cape(i,j)', nl, cape(i,j)
+    
+                    ELSE IF ( (t_p(i,j,nl) .lt. t_in(i,j,nl)) .and. (cape(i,j) .eq. 0.) ) THEN ! convective inhibition 
                  
-                    t_p(i,j,nl+1) = (theta_in(i,j,1)+T00(1))*(p_in(i,j,nl+1)/P00(1))**(R/cp)
-  
-                  ELSE IF (qvs(i,j,nl) .lt. qv_in(i,j,1)) THEN ! moist adiabatic ascent
-  
-                    IF (lcl(i,j) .eq. -999) THEN ! lifting condensation level
-                      lcl(i,j) = p_in(i,j,nl)
+                      cin(i,j) = cin(i,j) + (t_in(i,j,nl) - t_p(i,j,nl)) / t_in(i,j,nl) * ((phb_in(i,j,nl)+ph_in(i,j,nl))-(phb_in(i,j,nl-1)+ph_in(i,j,nl-1))) 
+    
+                      !print*, 'nl, cin(i,j)', nl, cin(i,j)
+    
                     END IF
-  
-                    t_ii = t_p(i,j,nl)
-  
-                    DO ii = 1,10 ! solve iteratively
-  
-                      qvs(i,j,nl+1) = 0.622*a*exp(b*(t_ii-c)/(t_ii-d))/p_in(i,j,nl+1)
-  
-                      t_ii = t_ii - (t_ii*(P00(1)/p_in(i,j,nl+1))**(R/cp)*exp(L*qvs(i,j,nl+1)/(cp*t_ii)) - &
-                             (t_p(i,j,nl)*(P00(1)/p_in(i,j,nl))**(R/cp)*exp(L*qvs(i,j,nl)/(cp*t_p(i,j,nl))))) / &
-                             ( (P00(1)/p_in(i,j,nl+1))**(R/cp)*exp(n/(p_in(i,j,nl+1)*t_ii)*exp(b*(t_ii-c)/(t_ii-d))) * &
-                             (1 - (n/p_in(i,j,nl+1)*exp(b*(t_ii-c)/(t_ii-d))*(t_ii*(t_ii-b*c)+(b-2)*d*t_ii+d**2))/(t_ii*(d-t_ii)**2)) )
-
-                    END DO
-  
-                    !print*, 'thetae(i,j,nl)',(t_p(i,j,nl)*(100000./p_in(i,j,nl))**(R/cp)*exp(L*qvs(i,j,nl)/(cp*t_p(i,j,nl))))
-                    !print*,'thetae(i.j.nl+1)',(t_ii*(100000./p_in(i,j,nl+1))**(R/cp)*exp(L*qvs(i,j,nl+1)/(cp*t_ii))) 
-
-                    t_p(i,j,nl+1) = t_ii
-  
-                    !print*, nl, 'moist', t_p(i,j,nl+1), t_in(i,j,nl+1), (t_p(i,j,nl+1)-t_in(i,j,nl+1))
-  
-                  END IF                 
-
-                  IF (t_p(i,j,nl) .gt. t_in(i,j,nl)) THEN
-                 
-                    IF (lfc(i,j) .eq. -999) THEN ! level of free convection
-                      lfc(i,j) = p_in(i,j,nl)
-                    END IF
-  
-                    cape(i,j) = cape(i,j) + (t_p(i,j,nl) - t_in(i,j,nl)) / t_in(i,j,nl) * ((phb_in(i,j,nl)+ph_in(i,j,nl))-(phb_in(i,j,nl-1)+ph_in(i,j,nl-1)))
-  
-                    !print*, 'nl, cape(i,j)', nl, cape(i,j)
-  
-                  ELSE IF ( (t_p(i,j,nl) .lt. t_in(i,j,nl)) .and. (cape(i,j) .eq. 0.) ) THEN ! convective inhibition 
-               
-                    cin(i,j) = cin(i,j) + (t_in(i,j,nl) - t_p(i,j,nl)) / t_in(i,j,nl) * ((phb_in(i,j,nl)+ph_in(i,j,nl))-(phb_in(i,j,nl-1)+ph_in(i,j,nl-1))) 
-  
-                    !print*, 'nl, cin(i,j)', nl, cin(i,j)
-  
-                  END IF
-  
+    
+                  END DO
                 END DO
               END DO
-            END DO
+  
+              IF ( var_cmip(ivar) == "cape") THEN
+                data_in(:,:) = cape(:,:)
+              END IF
+              IF ( var_cmip(ivar) == "cin") THEN
+                data_in(:,:) = cin(:,:)
+              END IF
+    
+            END IF
 
-            IF ( var_cmip(ivar) == "cape") THEN
-              data_in(:,:) = cape(:,:)
-            END IF
-            IF ( var_cmip(ivar) == "cin") THEN
-              data_in(:,:) = cin(:,:)
-            END IF
-  
-          END IF
-  
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+          END IF ! pressure levels processing
+
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! clt [%] a Total Cloud Fraction
   
@@ -3189,7 +3328,7 @@ DO ifrq = 1, 1, 1
               END IF
 
             ! this is the last field, i.e. no subsequent field can be found
-            ! any more
+            ! any more in the staged data
             ELSE
 
                 data_in(:,:) = mv
@@ -3362,7 +3501,6 @@ DO ifrq = 1, 1, 1
 !-------------------------------------------------------------------------------
 ! write data to netCDF file
 
-          PRINT *, "~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
           PRINT *, "*** WRITE DATA TO netCDF ***"
           PRINT *, TRIM(pn_out) // "/" // TRIM(fn_out)
           PRINT *, TRIM(var_cmip(ivar)), xfocus, yfocus, counter, ncid, x_varid
