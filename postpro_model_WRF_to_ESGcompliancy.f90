@@ -38,28 +38,25 @@
 !       search path -> part of the structure of the code
 !     * Spatial interpolation to common regular grid EUR-11i
 !   - Double-checked, tested and refined namelists with their respective
-!     variables and diagnostics, after code merge and refactoring, all needs
-!     checking and fixing:
+!     variables and diagnostics, after code merging and refactoring, all needed
+!     extensive checking and fixing, if checked here, all vars in that namelist
+!     are covered by the code and work:
 !     * [X] runctrl.current.nml (runctrl.CORDEX-FPSCEM-CMWL.nml)
 !     * [X] runctrl.vars.nml_pr_tas_1hr_test (special testing table)
 !     * [X] runctrl.vars.nml_vars_on_plevels
 !     * [X] runctrl.vars.nml (standard table with common vars)
 !     * [X] runctrl.vars.nml_water_column
-!     * [X] runctrl.vars.nml_cape
+!     * [X] runctrl.vars.nml_cape -- hourly at the moment, can be aggregated
 !     * [X] runctrl.vars.nml_pr_mrso
 !     * [ ] runctrl.vars.nml_evp_roff
 !     * [ ] runctrl.vars.nml_radiation
 !     * [ ] runctrl.vars.nml_snow
-!     * [ ] runctrl.vars.nml_minmax (not yet created, uses 'wrfxtrm')
+!     * [X] runctrl.vars.nml_minmax (uses 'wrfxtrm')
 !   - Variables not yet implemented (from most recent protocol versions):
 !     CORDEX (some will be added via reading of wrfxtrm files at daily basis):
-!     * tasmin
-!     * tasmax
 !     * hurs
-!     * sfcWindmax
 !     * sund
 !     * mrfso
-!     * prhmax
 !     * wsgsmax
 !     * tauu
 !     * tauv
@@ -453,7 +450,6 @@
 ! **see "TODO" and "CHECK" markers in the code**
 !   - Add: debug option in Makefile.
 !   - Add levels: plev_bnds, needed for: clh, clm, cll
-!   - Aside from mean, also have min/max > use the daily xtrm files
 !   - Static fields processing, fx > seperate namelist; pass through
 !   - Cover ALL REQUIRED variables/diagnostics + ADDITIONAL -> extensions nml
 !   - !! Temporal aggregations, i.e. 6hr, day, mon, seas > controlled by nml and 
@@ -468,6 +464,14 @@
 !   - ((Adjust to other model system)) > TerrSysMP
 !   - (((Refactoring the code to make it more modular using modules and
 !     subroutines. Time-pressed evolution, no time to restruct during v1 devs)))
+!   - STRUCTURE:
+!     Move the generation of the mid-point timevec and the time_bnds calc
+!     into the ref time vec subroutine; use this information then also for
+!     double-checking when averaging any data; the ref time vec as is at the 
+!     moment basically reflects only the 'point' information and everything
+!     else is calculated on top, very complicated. Move the call of the ref time
+!     vec calc down in the loop hierarchy into the beginning of the variable 
+!     loop as the cell method is set on a per variable basis. 
 !
 ! TEST PROCEDURE:
 !   - Per variable and namelist.
@@ -479,13 +483,15 @@
 !   - Checking: (i) log, (ii) ncdump, (iii) ncview.
 !
 ! QUESTIONS:
-!   - "theta_in(:,:,:) + T00(1)" (correct, right?) OR "theta_in(:,:,:) + 300" 
+!   (1)
+!   Q "theta_in(:,:,:) + T00(1)" (correct, right?) OR "theta_in(:,:,:) + 300" 
 !     (www2.mmm.ucar.edu/wrf/users/docs/user_guide_V3.8/users_guide_chap5.htm)
 !     if not 300K is used, then there is a conflict between wrfpress diagnostics
 !     and the WRF_CMORizer. Is wrfpress wrong with built-in diagnostics or the \
 !     WRF_CMORizer?
-!   > http://mailman.ucar.edu/pipermail/wrf-users/2013/003117.html
-!     Do not use T00, but set to 300K
+!   A http://mailman.ucar.edu/pipermail/wrf-users/2013/003117.html
+!     Do not use T00 form the meta-data, but set to 300K hardcoded. Tested and 
+!     also confirmed by NCAR, personal comm.
 !
 ! ONGOING DEVELOPMENTS (March 2018):
 !   - Currently merging forks from different contributors, complete check of the
@@ -495,8 +501,9 @@
 !     school locally without git
 !   - Walk through the code, contnuously building and checking using gfortran
 !   - Mid March 2018:
-!     * [X] master totally out of date > Knist+Truhetz+Kartsios worked from here
+!     * [X] 'master' branch out of date > Knist+Truhetz+Kartsios worked from; 
 !           most versions were running, but not ideal, just doing a fraction
+!           of the needed fixes and adjustments
 !     * [X] start with Knist version as new base, know this version most
 !     * [X] Truhetz merge file 1, start
 !     * [X] fix (!) and check overall, document, and implement the flexible time 
@@ -516,11 +523,16 @@
 !           x psl integrate and also new stuff from heimo
 !           X all new pressure level calcs
 !           x variable grouping: 3D vars: improve
-!           o bucket fct checking > radiation (  ) and precipitation (OK)
-!     * [ ] test ALL other tier-2 variables
+!           _ bucket fct checking > radiation (  ) and precipitation (OK)
+!     * [_] test ALL other tier-2 variables
+!     * [X] what happens when going accross months with indiv timing?
+!     * [X] min / max shifting
+!     * [X] new filename protocol: last/first element: -/+dthours/2 if cell 
+!           method 'mean': 23UTC to 00UTC hourly precipitation: end filename is 
+!           2330, not day+1_00UTC: the mid point value is to be used 
 !     * [ ] process data for the ICTP paper >>> test on JURECA once more (Intel
 !           + multiple files), v0.2 nml #1 & #2
-!     * [ ] !!! xtrm
+!     * [X] xtrm
 !     * [ ] !!! fx
 !   - Later:
 !     * [ ] Aris, temporal averaging merge
@@ -819,7 +831,9 @@ REAL, DIMENSION(:,:), ALLOCATABLE :: &
   cosalpha_in , &
   !!var_pl      , &
   psfc_in     , &
-  tmp_2d
+  tmp_2d      , &
+  rainc_max_in, &
+  rainnc_max_in
 REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   pp_in       , &
   pb_in       , &
@@ -900,15 +914,25 @@ INTEGER, DIMENSION(:), ALLOCATABLE :: InDateTimeYear, InDateTimeMonth, &
   InDateTimeDay, InDateTimeHour, InDateTimeMinute, InDateTimeSecond      !, WRFfileIyears, WRFfileImonths
 REAL, DIMENSION(:), ALLOCATABLE :: InDateTimeCombined
 CHARACTER (LEN=4) :: InDateTimeYearStr
-CHARACTER (LEN=2) :: InDateTimeMonthStr, LastHourStr
+CHARACTER (LEN=2) :: &
+  InDateTimeMonthStr    , &
+  FirstHourStr          , &
+  FirstMinuteStr        , &
+  LastDayStr            , &
+  LastHourStr           , &
+  LastMinuteStr
 INTEGER :: InDateTimeYearPrev = 0, InDateTimeMonthPrev = 0
-CHARACTER (len = 10) :: FileNameStartDateTime, FileNameEndDateTime
+CHARACTER (len = 12) :: FileNameStartDateTime, FileNameEndDateTime
 INTEGER :: tsactYear, tsactMonth, tsactDay, tsactHour, tsactMinute, tsactSecond, & 
   teactYear, teactMonth, teactDay, teactHour, teactMinute, teactSecond
 CHARACTER (LEN=4) :: tsactYearStr, teactYearStr
 CHARACTER (LEN=2) :: tsactMonthStr, tsactDayStr, tsactHourStr, tsactMinuteStr, &
   tsactSecondStr, teactMonthStr, teactDayStr, teactHourStr, teactMinuteStr, &
   teactSecondStr
+REAL(KIND=8) :: tsact_singlenumber, teact_singlenumber
+
+REAL(KIND=8), DIMENSION(:), ALLOCATABLE :: tmp2D_singlenumber
+REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: tmp2D
 
 CHARACTER (LEN = 100), DIMENSION(nvars) :: cell_methods
 LOGICAL, DIMENSION(nvars) :: procflag
@@ -1051,7 +1075,7 @@ fnNMLvar(1) = "runctrl.vars.nml_pr_tas_1hr_test" ! OK
 fnNMLvar(2) = "runctrl.vars.nml_vars_on_plevels" ! OK
 fnNMLvar(3) = "runctrl.vars.nml" ! OK
 fnNMLvar(4) = "runctrl.vars.nml_pr_mrso" ! OK
-fnNMLvar(5) = "runctrl.vars.nml_minmax" ! ***ONGOING***
+fnNMLvar(5) = "runctrl.vars.nml_minmax" ! OK
 fnNMLvar(6) = "runctrl.vars.nml_evp_roff"
 fnNMLvar(7) = "runctrl.vars.nml_water_column" ! OK
 fnNMLvar(8) = "runctrl.vars.nml_radiation"
@@ -1072,8 +1096,8 @@ fnNMLvar(12) = "runctrl.vars.nml_psl"            ! new from HTr, not implemented
 !            -> just run the outer loop over 1 frequency only
 
 !DO ifrq = 1, SIZE(frequency), 1 
-!DO ifrq = 1, 1, 1 !xyz 1hr
-DO ifrq = 4, 4, 1 ! check min/max day
+DO ifrq = 1, 1, 1 ! 1hr
+!DO ifrq = 4, 4, 1 ! check min/max day
 
   PRINT *, "============================================================"
   PRINT *, "freq = ", frequency(ifrq)
@@ -1148,8 +1172,8 @@ DO ifrq = 4, 4, 1 ! check min/max day
   
   !DO ivarnml = 1, 9, 1 ! loop over all regular namelists
   !DO ivarnml = 1, 1, 1 ! recommended to all for first steps and testing: nml #1
-  !DO ivarnml = 1, 2, 1 ! ICTP paper data contrib
-  DO ivarnml = 5, 5, 1 ! test min/max !xyz
+  DO ivarnml = 1, 2, 1 ! ICTP paper data contrib
+  !DO ivarnml = 5, 5, 1 ! test min/max !xyz
   
     PRINT *, "============================================================"
     PRINT *, "var. namelist nr. and name: ", ivarnml, TRIM(fnNMLvar(ivarnml))
@@ -1219,7 +1243,7 @@ DO ifrq = 4, 4, 1 ! check min/max day
       nvar_nml = 6
     CASE ("runctrl.vars.nml_psl") ! new stuff from HTr, no nml yet available
       nvar_nml = 1
-    CASE ("runctrl.vars.nml_minmax") ! TESTING ***ONGOING***
+    CASE ("runctrl.vars.nml_minmax") ! OK
       nvar_nml = 4
     END SELECT
   
@@ -1246,11 +1270,6 @@ DO ifrq = 4, 4, 1 ! check min/max day
       !this is the place to put the ref time vec calculation to incorporate
       !the specifics of the respective variable, like point or mean data in
       !combinaiton with the ifrq  
-      !
-      ! point data or mean/
-      ! freq
-      ! processing at all
-      ! >>>>>>>>>>>>>>>>>>  INSERT  <<<<<<<<<<<<<<<<<<<
  
 !-------------------------------------------------------------------------------
 ! loop over the filelist
@@ -1304,13 +1323,24 @@ DO ifrq = 4, 4, 1 ! check min/max day
         sts = NF90_INQ_VARID(ncid_in, "Times", InVarIdRec)
         sts = NF90_INQUIRE_DIMENSION(ncid_in, unlimdimid_in, &
           NAME = InDimNameRec, LEN = InDimLenRec)
+        ! with the wrfxtrm minimum and maximum fields, the 1st field per file is
+        ! empty, but the last field has already the next day assigned; this 
+        ! leads to a plus 1 day time shift in the minimum and maximum data
+        ! by shortening the input time vector and by offsetting the time-dim
+        ! by 1 in the output writing this is fixed
+        ! see "variable to read/write with no additional processing" part
+        PRINT *, "number of timesteps in the input data: ", InDimLenRec
+        IF ( ( cell_methods(ivar) == "minimum" ) .OR. &
+             ( cell_methods(ivar) == "maximum" ) ) THEN
+          InDimLenRec = InDimLenRec - 1
+          PRINT *, "fixing number of input timesteps for min/max: ", InDimLenRec
+        END IF
         ALLOCATE(InVarDataRec(InDimLenRec))
         sts = NF90_GET_VAR(ncid_in, InVarIdRec, InVarDataRec)
         sts = NF90_CLOSE(ncid_in)
-
         PRINT *, "RCM input file time coverage:"
-        print *, InVarDataRec(1), " to ", InVarDataRec(InDimLenRec)
-  
+        PRINT *, InVarDataRec(1), " to ", InVarDataRec(InDimLenRec)
+ 
         ALLOCATE(InDateTimeYear(InDimLenRec))
         ALLOCATE(InDateTimeMonth(InDimLenRec))
         ALLOCATE(InDateTimeDay(InDimLenRec))
@@ -1404,6 +1434,152 @@ DO ifrq = 4, 4, 1 ! check min/max day
             PRINT *, "start of processing or new year/month/timespan encountered"
 
 !-------------------------------------------------------------------------------
+! extract the time info from the ref time array which matches the respective
+! file in which data is to be written and thereby matches also the input data
+! ...as there is no "WHERE" the way I need it in F95, use loops
+! this is needed whenever a new netCDF file is to be used and also if
+! this file exists already
+! still working on single variable 'ivar', file 'ifl', and timestep 'it'
+! InDateTimeYear(it), InDateTimeMonth(it), InDateTimeDay(it), InDateTimeHour(it), InDateTimeCombined(it)
+! TimeRefArray, TimeRefArraySubset
+!
+! the time span covered by the storage file is determining the time vector subset
+! to be extracted from the reference time vec which is again spanning the
+! complete experiment; once this reference time vector subset (matching the 
+! storage file) is determined the individual offset may be determined which is 
+! used to sort the individual WRF field in
+
+            PRINT *, "subsetting the TimeRefArray"
+
+            !PRINT *, "TimeRefArray: index, y, m, d, h"
+            !PRINT *, "size & shape of the main TimRefArray = ", &
+            !  SIZE(TimeRefArray), SHAPE(TimeRefArray)
+            !PRINT "(6F20.6)", TRANSPOSE(TimeRefArray(20000:20010,:))
+  
+            DEALLOCATE( TimeRefArraySubset )
+            DEALLOCATE( TimeRefArraySubsetMean )
+            DEALLOCATE( Time_bnds )
+            
+!            PRINT *,'SIZE(TimeRefArray, 1)', SIZE(TimeRefArray, 1)
+!            PRINT *,'SHAPE(TimeRefArray, 1)', SHAPE(TimeRefArray, 1)
+!            PRINT *,'TimeRefArray(1,2)', TimeRefArray(1,2)
+!            PRINT *,'TimeRefArray(744,2)', TimeRefArray(744,2)
+!            PRINT *,'InDateTimeYear(it)', InDateTimeYear(it)
+
+            ! only needed for aggregation_individually
+            READ( tsact, '(I4,1X,I2,1X,I2,1X,I2,1X,I2,1X,I2)' ) &
+              tsactYear, &
+              tsactMonth, &
+              tsactDay, &
+              tsactHour, &
+              tsactMinute, &
+              tsactSecond
+            READ( teact, '(I4,1X,I2,1X,I2,1X,I2,1X,I2,1X,I2)' ) &
+              teactYear, &
+              teactMonth, &
+              teactDay, &
+              teactHour, &
+              teactMinute, &
+              teactSecond
+
+            ! number of date/time steps in the ref array which match the current 
+            ! year or month, or individual time span
+            ! the TimeRefArray must span the requested subsets, this is a 
+            ! special case as requested e.g. in some FPS sideline and WL/CM 
+            ! studies
+            ALLOCATE( ipos(0) )
+            counter = 0
+            IF (aggregation_individually) THEN
+              PRINT *, "aggregation_individually"
+              PRINT *,tsactYear, tsactMonth, tsactDay, tsactHour, teactYear, teactMonth, teactDay, teactHour
+
+              tsact_singlenumber = REAL(tsactYear,8)*1000000._8 + REAL(tsactMonth,8)*10000._8 + REAL(tsactDay,8)*100._8 + REAL(tsactHour,8)
+              teact_singlenumber = REAL(teactYear,8)*1000000._8 + REAL(teactMonth,8)*10000._8 + REAL(teactDay,8)*100._8 + REAL(teactHour,8)
+              PRINT *, tsact_singlenumber, teact_singlenumber
+              DO i = 1, SIZE(TimeRefArray, 1), 1
+                IF ( ( TimeRefArray(i,6) >= tsact_singlenumber ) .AND. & 
+                     ( TimeRefArray(i,6) <= teact_singlenumber ) ) THEN ! CHECK/TODO <= or < -->>> wrong wit <= when doing daily min/max: one day too many in time vec
+                  counter = counter + 1
+                  ipos = [ipos, i]
+                END IF
+              END DO
+              PRINT *, "size ipos", SIZE(ipos)
+              PRINT *, "counter = ", counter
+              IF ( ( cell_methods(ivar) == "mean" ) .OR. &
+                   ( cell_methods(ivar) == "minimum" ) .OR. &
+                   ( cell_methods(ivar) == "maximum" ) ) THEN
+                counter = counter - 1
+                ipos = ipos(1:counter)
+                PRINT *, "size ipos", SIZE(ipos)
+                PRINT *, "counter = ", counter
+              END IF     
+
+!              DO i = 1, SIZE(TimeRefArray, 1), 1
+!                IF ( ( TimeRefArray(i,2) >= tsactYear ) .AND. & 
+!                     ( TimeRefArray(i,2) <= teactYear ) .AND. &
+!                     ( TimeRefArray(i,3) >= tsactMonth ) .AND. &
+!                     ( TimeRefArray(i,3) <= teactMonth ) .AND. &
+!                     ( TimeRefArray(i,4) >= tsactDay ) .AND. &
+!                     ( TimeRefArray(i,4) < teactDay ) ) THEN !.AND. &
+!!                   ( TimeRefArray(i,5) >= tsactHour ) .AND. &
+!!                   ( TimeRefArray(i,5) <= teactHour ) ) THEN ! TODO, porblem if the end of also 00UTC > then there is no match with the hours
+!                  ! special case, e.g. 20090620_00:00:00 to 20090627_00:00:00 = defined timespan
+!                  ! the last mean field is then 20090627_00:30:00, one less mean fields in the total time span covered
+!                  counter = counter + 1
+!                  ipos = [ipos, i]
+!                END IF
+!              END DO
+!              ! TODO see the problem with the ending, there is one timestep too
+!              ! few in the file if this is not done
+!              ! artifically add a further postion at the very end
+!                  IF ( cell_methods(ivar) == "point" ) THEN ! and then also automatically sub-daily
+!                    ipos = [ipos, ipos(counter)+1] 
+!                    counter = counter + 1
+!                  END IF
+            ELSE IF (aggregation_monthly) THEN
+              PRINT *, "aggregation_monthly"
+              DO i = 1, SIZE(TimeRefArray, 1), 1
+                IF (( TimeRefArray(i,2) == InDateTimeYear(it)) .AND. &
+                   ( TimeRefArray(i,3) == InDateTimeMonth(it))) THEN
+                  counter = counter + 1
+                  ipos = [ipos, i]
+                END IF
+              END DO
+              !!ipos = [ipos, ipos(counter)+1] 
+              !!counter = counter + 1
+            ELSE IF (aggregation_yearly) THEN ! default, CORDEX annual files
+              PRINT *, "aggregation_annually"
+              PRINT *, InDateTimeYear(it)
+              DO i = 1, SIZE(TimeRefArray, 1), 1
+                IF ( TimeRefArray(i,2) == InDateTimeYear(it)) THEN
+                  counter = counter + 1
+                  ipos = [ipos, i]
+                END IF
+              END DO
+              !!ipos = [ipos, ipos(counter)+1] ! XXXXXXXXXX remove this
+              !!counter = counter + 1
+            END IF
+            PRINT *, "timesteps in the time ref. subset = ", counter
+
+            ALLOCATE( TimeRefArraySubset( counter, 5 ) ) ! index, y, m, d, h
+            ALLOCATE( TimeRefArraySubsetMean( counter ) )
+            ALLOCATE( Time_bnds( 2, counter ) )
+
+            ! the TimeRefArraySubset is the time vec of the newly created (or
+            ! already existing) file; it may be any size =< the original ref
+            ! time vec; WRF data will be matched with this time vec
+            ! this time vec is basically created for point data
+            DO i = 1, counter, 1
+              j = ipos(i)
+              TimeRefArraySubset(i,1:5) = TimeRefArray(j,1:5)
+              PRINT *, TimeRefArraySubset(i,1:5) ! index, y, m, d, h
+            END DO
+            !PRINT '(F9.3,1X,F5.0,1X,F3.0,1X,F3.0,1X,F3.0)', TRANSPOSE( TimeRefArraySubset(:,:) )
+            !print *, TimeRefArraySubset(0,:)
+
+            DEALLOCATE(ipos)
+
+!-------------------------------------------------------------------------------
 ! create path- and filenames according to the ruleset of the CORDEX data 
 ! protocol: 2 main options here:
 ! Non standard:
@@ -1423,20 +1599,6 @@ DO ifrq = 4, 4, 1 ! check min/max day
             ! arbitrary timespan
             IF (aggregation_individually) THEN
 
-              READ( tsact, '(I4,1X,I2,1X,I2,1X,I2,1X,I2,1X,I2)' ) &
-                tsactYear, &
-                tsactMonth, &
-                tsactDay, &
-                tsactHour, &
-                tsactMinute, &
-                tsactSecond
-              READ( teact, '(I4,1X,I2,1X,I2,1X,I2,1X,I2,1X,I2)' ) &
-                teactYear, &
-                teactMonth, &
-                teactDay, &
-                teactHour, &
-                teactMinute, &
-                teactSecond
               WRITE (tsactYearStr,'(I4.4)') tsactYear
               WRITE (tsactMonthStr,'(I2.2)') tsactMonth
               WRITE (tsactDayStr,'(I2.2)') tsactDay
@@ -1474,47 +1636,66 @@ DO ifrq = 4, 4, 1 ! check min/max day
               !READ( InDateTimeMonth(it), '(2A)' ) InDateTimeMonthStr
               WRITE (InDateTimeYearStr,'(I4.4)') InDateTimeYear(it)
               WRITE (InDateTimeMonthStr,'(I2.2)') InDateTimeMonth(it)              
-              WRITE (LastHourStr,'(I2.2)') 24-INT(dtHours) ! TODO  type issues
-
+              WRITE (LastDayStr,'(I2.2)') INT(TimeRefArraySubset(0,5))
+              IF ( cell_methods(ivar) == "mean" ) THEN 
+                WRITE (FirstHourStr,'(I2.2)') INT( FLOOR( ((dthours/2.)*60.) / 60. ) )
+                WRITE (FirstMinuteStr,'(I2.2)') INT( MOD( (dtHours/2.)*60., 60. ) )
+                WRITE (LastHourStr,'(I2.2)') INT( FLOOR( ( (24.*60.) - (dthours/2.)*60.)  / 60. ) )
+                WRITE (LastMinuteStr,'(I2.2)') INT( MOD( (24.*60.) - (dtHours/2.)*60., 60. ) )
+                PRINT *, "first and last h + min strings: ", FirstHourStr, FirstMinuteStr, LastHourStr, LastMinuteStr
+              ELSE
+                FirstHourStr = "00"
+                WRITE (LastHourStr,'(I2.2)') 24-INT(dtHours)
+              END IF
               PRINT *, "date/time information for the automatic output path- and filename generation: ", &
-                InDateTimeYearStr, InDateTimeMonthStr, LastHourStr
+                InDateTimeYearStr, InDateTimeMonthStr, FirstHourStr, LastHourStr, LastDayStr
 
-              ! TODO replace the hardcoded day '31' with proper month length in 
-              ! days of the specific month
               ! last hour may be YYYY-<NextMonth>-01_00:00:00 for point
-              ! last hour may be YYYY-<NextMonth>-01_00:00:00 for mean (last time in bound value) -> old spec
-              !      e.g.: time_bnds 21:00-24:00 and for the midpoint 22:30 
-              ! new standard: always give the midpoint time value of thre first and last time element in the file
-              !      not implemented here
+              ! last hour may be YYYY-<NextMonth>-01_00:00:00 for mean (last 
+              ! time in bound value) -> this is the old spec
+              ! e.g.: time_bnds 21:00-24:00 and for the midpoint 22:30 
+              ! here the new standard is applied:
+              ! always have the midpoint time value of the first and last time 
+              ! element in the file in the filename
               IF (aggregation_monthly) THEN
 
-                !InDateTimeMonth(it), need leapyear check
                 IF ((frequency(ifrq) == '1hr') .OR. &
                     (frequency(ifrq) == '3hr') .OR. &
                     (frequency(ifrq) == '6hr')) THEN
 
-                  FileNameStartDateTime = InDateTimeYearStr//InDateTimeMonthStr//"0100"
-                  FileNameEndDateTime = InDateTimeYearStr//InDateTimeMonthStr//"31"//LastHourStr ! TODO replace 31
+                  IF ( cell_methods(ivar) == "mean" ) THEN
+                    FileNameStartDateTime = InDateTimeYearStr//InDateTimeMonthStr//"01"//FirstHourStr//FirstMinuteStr
+                    FileNameEndDateTime = InDateTimeYearStr//InDateTimeMonthStr//LastDayStr//LastHourStr//LastMinuteStr
+                  ELSE
+                    FileNameStartDateTime = InDateTimeYearStr//InDateTimeMonthStr//"01"//FirstHourStr
+                    FileNameEndDateTime = InDateTimeYearStr//InDateTimeMonthStr//LastDayStr//LastHourStr
+                  END IF  
 
                 ELSE IF (frequency(ifrq) == 'day') THEN
   
                   FileNameStartDateTime = InDateTimeYearStr//InDateTimeMonthStr//"01"
-                  FileNameEndDateTime = InDateTimeYearStr//InDateTimeMonthStr//"31" ! TODO replace 31
+                  FileNameEndDateTime = InDateTimeYearStr//InDateTimeMonthStr//LastDayStr
 
                 END IF
 
               ! with the full default, the aggregation in files depends all on 
               ! the temporal resolution of the data to be stored, see the 
               ! beginning of this section
-              ELSE IF (aggregation_yearly) THEN ! default: either annual, 5 years or 10 years, depending on
-                   ! the aggregation
+              ! default: either annual, 5 years or 10 years, depending on the 
+              ! aggregation
+              ELSE IF (aggregation_yearly) THEN 
 
                 IF ((frequency(ifrq) == '1hr') .OR. &
                     (frequency(ifrq) == '3hr') .OR. &
                     (frequency(ifrq) == '6hr')) THEN
 
-                  FileNameStartDateTime = InDateTimeYearStr//"010100"
-                  FileNameEndDateTime = InDateTimeYearStr//"1231"//LastHourStr
+                  IF ( cell_methods(ivar) == "mean" ) THEN
+                    FileNameStartDateTime = InDateTimeYearStr//"0101"//FirstHourStr//FirstMinuteStr
+                    FileNameEndDateTime = InDateTimeYearStr//"1231"//LastHourStr//LastMinuteStr
+                  ELSE
+                    FileNameStartDateTime = InDateTimeYearStr//"0101"//FirstHourStr
+                    FileNameEndDateTime = InDateTimeYearStr//"1231"//LastHourStr
+                  END IF
 
                 ! TODO: 5 yearly
                 ELSE IF (frequency(ifrq) == 'day') THEN
@@ -1564,110 +1745,6 @@ DO ifrq = 4, 4, 1 ! check min/max day
   
             PRINT *, "CORDEX compliant pathname, pn_out = ", TRIM(pn_out)
             PRINT *, "CORDEX compliant filename, fn_out = ", TRIM(fn_out)
-
-!-------------------------------------------------------------------------------
-! extract the time info from the ref time array which matches the respective
-! file in which data is to be written and thereby matches also the input data
-! ...as there is no "WHERE" the way I need it in F95, use loops
-! this is needed whenever a new netCDF file is to be used and also if
-! this file exists already
-! still working on single variable 'ivar', file 'ifl', and timestep 'it'
-! InDateTimeYear(it), InDateTimeMonth(it), InDateTimeDay(it), InDateTimeHour(it), InDateTimeCombined(it)
-! TimeRefArray, TimeRefArraySubset
-!
-! the time span covered by the storage file is determining the time vector subset
-! to be extracted from the reference time vec which is again spanning the
-! complete experiment; once this reference time vector subset (matching the 
-! storage file) is determined the individual offset may be determined which is 
-! used to sort the individual WRF field in
-
-            PRINT *, "subsetting the TimeRefArray"
-
-            ! index, y, m, d, h
-            PRINT *, "size & shape of the main TimRefArray = ", SIZE(TimeRefArray), &
-              SHAPE(TimeRefArray)
-  
-            DEALLOCATE( TimeRefArraySubset )
-            DEALLOCATE( TimeRefArraySubsetMean )
-            DEALLOCATE( Time_bnds )
-            
-!            PRINT *,'SIZE(TimeRefArray, 1)', SIZE(TimeRefArray, 1)
-!            PRINT *,'SHAPE(TimeRefArray, 1)', SHAPE(TimeRefArray, 1)
-!            PRINT *,'TimeRefArray(1,2)', TimeRefArray(1,2)
-!            PRINT *,'TimeRefArray(744,2)', TimeRefArray(744,2)
-!            PRINT *,'InDateTimeYear(it)', InDateTimeYear(it)
-
-            ! number of date/time steps in the ref array which match the current 
-            ! year or month, or individual time span
-            ! the TimeRefArray must span the requested subsets
-            ALLOCATE( ipos(0) )
-            counter = 0
-            IF (aggregation_individually) THEN
-              PRINT *, "aggregation_individually"
-              PRINT *,tsactYear, tsactMonth, tsactDay, tsactHour, teactYear, teactMonth, teactDay, teactHour
-              DO i = 1, SIZE(TimeRefArray, 1), 1
-                IF ( ( TimeRefArray(i,2) >= tsactYear ) .AND. & 
-                     ( TimeRefArray(i,2) <= teactYear ) .AND. &
-                     ( TimeRefArray(i,3) >= tsactMonth ) .AND. &
-                     ( TimeRefArray(i,3) <= teactMonth ) .AND. &
-                     ( TimeRefArray(i,4) >= tsactDay ) .AND. &
-                     ( TimeRefArray(i,4) < teactDay ) ) THEN !.AND. &
-!                   ( TimeRefArray(i,5) >= tsactHour ) .AND. &
-!                   ( TimeRefArray(i,5) <= teactHour ) ) THEN ! TODO, porblem if the end of also 00UTC > then there is no match with the hours
-                  ! special case, e.g. 20090620_00:00:00 to 20090627_00:00:00 = defined timespan
-                  ! the last mean field is then 20090627_00:30:00, one less mean fields in the total time span covered
-                  counter = counter + 1
-                  ipos = [ipos, i]
-                END IF
-              END DO
-              ! TODO see the problem with the ending, there is one timestep too
-              ! few in the file if this is not done
-              ! artifically add a further postion at the very end
-                  IF ( cell_methods(ivar) == "point" ) THEN ! and sub-daily
-                    ipos = [ipos, ipos(counter)+1] 
-                    counter = counter + 1
-                  END IF
-            ELSE IF (aggregation_monthly) THEN
-              PRINT *, "aggregation_monthly"
-              DO i = 1, SIZE(TimeRefArray, 1), 1
-                IF (( TimeRefArray(i,2) == InDateTimeYear(it)) .AND. &
-                   ( TimeRefArray(i,3) == InDateTimeMonth(it))) THEN
-                  counter = counter + 1
-                  ipos = [ipos, i]
-                END IF
-              END DO
-              !!ipos = [ipos, ipos(counter)+1] 
-              !!counter = counter + 1
-            ELSE IF (aggregation_yearly) THEN ! default, CORDEX annual files
-              PRINT *, "aggregation_annually"
-              PRINT *, InDateTimeYear(it)
-              DO i = 1, SIZE(TimeRefArray, 1), 1
-                IF ( TimeRefArray(i,2) == InDateTimeYear(it)) THEN
-                  counter = counter + 1
-                  ipos = [ipos, i]
-                END IF
-              END DO
-              !!ipos = [ipos, ipos(counter)+1] ! XXXXXXXXXX remove this
-              !!counter = counter + 1
-            END IF
-            PRINT *, "timesteps in the time ref. subset = ", counter
-
-            ALLOCATE( TimeRefArraySubset( counter, 5 ) ) ! index, y, m, d, h
-            ALLOCATE( TimeRefArraySubsetMean( counter ) )
-            ALLOCATE( Time_bnds( 2, counter ) )
-
-            ! the TimeRefArraySubset is the time vec of the newly created (or
-            ! already existing) file; it may be any size =< the original ref
-            ! time vec; WRF data will be matched with this time vec
-            ! this time vec is basically created for point data
-            DO i = 1, counter, 1
-              j = ipos(i)
-              TimeRefArraySubset(i,1:5) = TimeRefArray(j,1:5)
-              PRINT *, TimeRefArraySubset(i,1:5)
-            END DO
-            !PRINT '(F9.3,1X,F5.0,1X,F3.0,1X,F3.0,1X,F3.0)', TRANSPOSE( TimeRefArraySubset(:,:) )
-
-            DEALLOCATE(ipos)
 
 !-------------------------------------------------------------------------------
 ! check for existance of the new output file and generate this file if needed
@@ -1947,7 +2024,6 @@ DO ifrq = 4, 4, 1 ! check min/max day
 
               END IF
 
-              ! TODO, hardcoding! 
               IF ( ( cell_methods(ivar) == "mean" ) .OR. &
                    ( cell_methods(ivar) == "minimum" ) .OR. &
                    ( cell_methods(ivar) == "maximum" ) ) THEN
@@ -2069,7 +2145,7 @@ DO ifrq = 4, 4, 1 ! check min/max day
 ! "it" controls it all: timestep in the individual WRF file
 ! there is only one variable at a time under processing
 
-          PRINT *, "*** SOME VARS ALWAYS HAVE TO BE READ: T00, P00 ***"
+          PRINT *, "*** SOME VARS ALWAYS HAVE TO BE READ: (T00), P00 ***"
   
           sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin)
   
@@ -2978,6 +3054,25 @@ DO ifrq = 4, 4, 1 ! check min/max day
               START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )          
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! prhmax [kg m-2 s-1] m Daily Maximum Hourly Precipitation Rate (using wrfxtrm)
+! reuse variables form rainc and rainnc
+! special offset, as needed with minimum and maximum per file 
+! as 'it' counts per input file this is OK
+
+          ELSE IF (var_cmip(ivar) == "prhmax") THEN
+ 
+            IF (.not. ALLOCATED(rainc_max_in)) ALLOCATE( rainc_max_in ( xfocus, yfocus ), STAT=sts ) 
+            IF (.not. ALLOCATED(rainnc_max_in)) ALLOCATE( rainnc_max_in ( xfocus, yfocus ), STAT=sts )
+  
+            sts = NF90_INQ_VARID(ncidin, "RAINCVMAX", rainc_varid)
+            sts = NF90_INQ_VARID(ncidin, "RAINNCVMAX", rainnc_varid)
+  
+            sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_max_in(:,:), &
+              START = (/ xoffset, yoffset, it+1 /), COUNT = (/ xfocus, yfocus, 1 /) )
+            sts = NF90_GET_VAR(ncidin, rainnc_varid, rainnc_max_in(:,:), &
+              START = (/ xoffset, yoffset, it+1 /), COUNT = (/ xfocus, yfocus, 1 /) )
+  
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! this is all others variables which are solely based on a namelist for whom 
 ! no processing is needed whatsoever, e.g. tas, ps, huss, ...
 ! they are read into data_in and also passed on in this 2D array for writing
@@ -2988,16 +3083,22 @@ DO ifrq = 4, 4, 1 ! check min/max day
   
             sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
   
-            sts = NF90_GET_VAR(ncidin, varid, data_in(:,:), &
-              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-  
+            IF ( ( cell_methods(ivar) == "minimum" ) .OR. &
+                 ( cell_methods(ivar) == "maximum" ) ) THEN
+              sts = NF90_GET_VAR(ncidin, varid, data_in(:,:), &
+                    START = (/ xoffset, yoffset, it+1 /), COUNT = (/ xfocus, yfocus, 1 /) )
+            ELSE 
+              sts = NF90_GET_VAR(ncidin, varid, data_in(:,:), &
+                    START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+            END IF
+
           END IF
   
           sts = NF90_CLOSE(ncidin)
 
 !-------------------------------------------------------------------------------
 !-------------------------------------------------------------------------------
-! some analysis of the data -- may be removed
+! some analysis of the data
 !  
 !         PRINT *, "*** STATISTICS BEFORE PROCESSING OF VARIABLES ***"
 !         PRINT *, "(useless if data is stored in other vars than 'data_in')"
@@ -3790,6 +3891,15 @@ DO ifrq = 4, 4, 1 ! check min/max day
   
           END IF
 
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! prhmax [kg m-2 s-1] m Daily Maximum Hourly Precipitation Rate (using wrfxtrm)
+
+          IF (var_cmip(ivar) == "prhmax") THEN
+
+            data_in(:,:) = rainnc_max_in(:,:) + rainc_max_in(:,:)
+
+          END IF
+
 !-------------------------------------------------------------------------------
 ! write data to netCDF file
 
@@ -3874,11 +3984,11 @@ DO ifrq = 4, 4, 1 ! check min/max day
       InDateTimeMonthPrev = 0
       prevpass = 0 ! ?????????????????????? one level inside????
 
-      ENDIF ! procflag T/F
+      ENDIF ! procflag T/F TODO fix indention
 
     END DO ! ivar - variable loop
 
-  END DO ! ivarnml - namelist loop ! TODO fix indention
+  END DO ! ivarnml - namelist loop 
 
 END DO ! ifrq - different temporal aggregations
 
@@ -4170,7 +4280,7 @@ INTEGER :: i, j, k, l, counter
 REAL(KIND=8) :: dtDecDay
 INTEGER :: tstotYYYY, tstotMM, tstotDD, tstotHH
 INTEGER :: tetotYYYY, tetotMM, tetotDD, tetotHH
-REAl(KIND=8) :: tstot_singlenumber, tetot_singlenumber
+REAL(KIND=8) :: tstot_singlenumber, tetot_singlenumber
 REAL(KIND=8), DIMENSION(:), ALLOCATABLE :: tmp2D_singlenumber
 REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: tmp2D
 INTEGER, DIMENSION(12) :: ndpm ! number of days per month
@@ -4243,7 +4353,7 @@ DO i=tstotYYYY,tetotYYYY,1
   END DO
 END DO
 
-PRINT "(5F10.6)", TRANSPOSE(tmp2D(1:10,:))
+!PRINT "(5F10.6)", TRANSPOSE(tmp2D(1:10,:))
 
 ! the ref time vec as is now is most likely too big, starting, e.g., 19490-01-01_00, ending 2101-12-31_23 with 1hr data
 ! here do some subsetting
@@ -4273,8 +4383,9 @@ DO i=1_4,LONG(ndOverall)*LONG(ntspd),1
 END DO
 
 PRINT *, "subset bounds lower upper, # elements ", j, k, l
-ALLOCATE( TimeRefArray( l , 5 ) )
-TimeRefArray(:,:) = tmp2D(j:k,:)
+ALLOCATE( TimeRefArray( l , 6 ) )
+TimeRefArray(:,1:5) = tmp2D(j:k,1:5)
+TimeRefArray(:,6) = tmp2D_singlenumber(j:k)
 TimeRefArray(:,1) = TimeRefArray(:,1) - TimeRefArray(1,1) ! offset the time information [decimal days] used later on in the netCDF file
 PRINT *, "start = ", TimeRefArray(1,:)
 PRINT *, "end = ", TimeRefArray(l,:)
