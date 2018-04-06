@@ -16,7 +16,7 @@
 !   WRF_CMORizer.f90
 !
 ! VERSION:
-!   v0.1 (= git tag) + modifications as of 2018-03-28
+!   v0.3 (= git tag) + modifications as of 2018-04-05
 !   see git tags and log for revision details, history, and versions
 !
 ! STATUS:
@@ -48,7 +48,7 @@
 !     * [X] runctrl.vars.nml_water_column
 !     * [X] runctrl.vars.nml_cape -- hourly at the moment, can be aggregated
 !     * [X] runctrl.vars.nml_pr_mrso
-!     * [ ] runctrl.vars.nml_evp_roff
+!     * [ ] runctrl.vars.nml_evp_roff    ***CHECKING ONGOING*** cannot fionally test as I am lacking data in the output
 !     * [ ] runctrl.vars.nml_radiation
 !     * [ ] runctrl.vars.nml_snow
 !     * [X] runctrl.vars.nml_minmax (uses 'wrfxtrm')
@@ -63,7 +63,7 @@
 !     * cll
 !     * clm
 !     * clh
-!     Special FPS CEM:
+!     Special FPS CEM variables:
 !     * ua100m
 !     * va100m
 !     * wsgmax100m
@@ -536,6 +536,7 @@
 !     * [ ] !!! fx
 !   - Later:
 !     * [ ] Aris, temporal averaging merge
+!     * [ ] grid transform
 !     * [ ] register new institute ID and model name with O.B. Christensen at 
 !           DMI.!     
 !     * [ ] adjustment for different RCMs < see CCLM code from Heimo 
@@ -1076,7 +1077,7 @@ fnNMLvar(2) = "runctrl.vars.nml_vars_on_plevels" ! OK
 fnNMLvar(3) = "runctrl.vars.nml" ! OK
 fnNMLvar(4) = "runctrl.vars.nml_pr_mrso" ! OK
 fnNMLvar(5) = "runctrl.vars.nml_minmax" ! OK
-fnNMLvar(6) = "runctrl.vars.nml_evp_roff"
+fnNMLvar(6) = "runctrl.vars.nml_evp_roff" ! ***CHECKING ONGOING*** not yet tested: evspsbl, evspsblpot
 fnNMLvar(7) = "runctrl.vars.nml_water_column" ! OK
 fnNMLvar(8) = "runctrl.vars.nml_radiation"
 fnNMLvar(9) = "runctrl.vars.nml_snow"
@@ -1172,8 +1173,9 @@ DO ifrq = 1, 1, 1 ! 1hr
   
   !DO ivarnml = 1, 9, 1 ! loop over all regular namelists
   !DO ivarnml = 1, 1, 1 ! recommended to all for first steps and testing: nml #1
-  DO ivarnml = 1, 2, 1 ! ICTP paper data contrib
+  !DO ivarnml = 1, 2, 1 ! ICTP paper data contrib
   !DO ivarnml = 5, 5, 1 ! test min/max !xyz
+  DO ivarnml = 6, 6, 1
   
     PRINT *, "============================================================"
     PRINT *, "var. namelist nr. and name: ", ivarnml, TRIM(fnNMLvar(ivarnml))
@@ -1221,7 +1223,7 @@ DO ifrq = 1, 1, 1 ! 1hr
     SELECT CASE (TRIM(fnNMLvar(ivarnml)))
     CASE ("runctrl.vars.nml") ! OK
       nvar_nml = 9
-    CASE ("runctrl.vars.nml_evp_roff") ! TESTING PENDING
+    CASE ("runctrl.vars.nml_evp_roff") ! ***TESTING ONGOING***
       nvar_nml = 4
     CASE ("runctrl.vars.nml_water_column") ! OK
       nvar_nml = 3
@@ -2724,31 +2726,35 @@ DO ifrq = 1, 1, 1 ! 1hr
             IF (it /= InDimLenRec) THEN
   
               sts = NF90_INQ_VARID(ncidin, "SFCEVP", sfcevp_varid)
-  
               sts = NF90_GET_VAR(ncidin, sfcevp_varid, sfcevp_in(:,:,:), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus, 2 /) )
             
-            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
+            ELSE IF ( (it == InDimLenRec) .AND. (ifl /= SIZE(fl_input)) ) THEN
   
               sts = NF90_INQ_VARID(ncidin, "SFCEVP", sfcevp_varid)
               sts = NF90_GET_VAR(ncidin, sfcevp_varid, sfcevp_in(:,:,1), &
                 START = (/ xoffset, yoffset, it /), &
-                COUNT = (/ xfocus, yfocus,1/))
+                COUNT = (/ xfocus, yfocus, 1/))
   
-              iflWRFin = fl_input(ifl+1) ! set to the previous wrfoutfile 
-                                          ! if it is not the first 
+              iflWRFin = fl_input(ifl+1) 
   
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
   
               sts = NF90_INQ_VARID(ncidin0, "SFCEVP", sfcevp_varid)
               sts = NF90_GET_VAR(ncidin0, sfcevp_varid, sfcevp_in(:,:,2), &
                 START = (/ xoffset, yoffset, 1 /), &
-                COUNT =(/xfocus,yfocus,1 /) )
+                COUNT =(/xfocus,yfocus, 1 /) )
   
               sts = NF90_CLOSE(ncidin0)
   
               iflWRFin = fl_input(ifl)  !set to the current wrfout file again
+  
+            ELSE
+
+              PRINT *, "no data available for average calculation any more"
+
+              calc = .FALSE.  
   
             END IF 
   
@@ -2766,26 +2772,29 @@ DO ifrq = 1, 1, 1 ! 1hr
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus, 2 /) )
   
-            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
+            ELSE IF ( (it == InDimLenRec) .AND. (ifl /= SIZE(fl_input)) ) THEN
   
               sts = NF90_INQ_VARID(ncidin, "POTEVP", potevp_varid)
               sts = NF90_GET_VAR(ncidin, potevp_varid, potevp_in(:,:,1), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus,1/))
   
-              iflWRFin = fl_input(ifl+1) ! set to the previous wrfoutfile 
-                                          ! if it is not the first
+              iflWRFin = fl_input(ifl+1)
   
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
-  
-              sts = NF90_INQ_VARID(ncidin0, "POTEVP", potevp_varid)
-              sts = NF90_GET_VAR(ncidin0, potevp_varid, potevp_in(:,:,2), &
-                START = (/ xoffset, yoffset, 1 /), &
-                COUNT =(/xfocus,yfocus,1 /) )
-  
+                sts = NF90_INQ_VARID(ncidin0, "POTEVP", potevp_varid)
+                sts = NF90_GET_VAR(ncidin0, potevp_varid, potevp_in(:,:,2), &
+                  START = (/ xoffset, yoffset, 1 /), &
+                  COUNT =(/xfocus,yfocus,1 /) )
               sts = NF90_CLOSE(ncidin0)
   
               iflWRFin = fl_input(ifl)  !set to the current wrfout file again
+  
+            ELSE
+
+              PRINT *, "no data available for average calculation any more"
+
+              calc = .FALSE.  
   
             END IF 
   
@@ -2809,20 +2818,22 @@ DO ifrq = 1, 1, 1 ! 1hr
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus,1/))
   
-              iflWRFin = fl_input(ifl+1) ! set to the previous wrfoutfile 
-                                          ! if it is not the first
+              iflWRFin = fl_input(ifl+1)
   
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
-              
-              sts = NF90_INQ_VARID(ncidin0, "SFROFF", sfroff_varid)
-              sts = NF90_GET_VAR(ncidin0, sfroff_varid, sfroff_in(:,:,2), &
-                START = (/ xoffset, yoffset, 1 /), &
-                COUNT =(/xfocus,yfocus,1 /) )
-  
+                sts = NF90_INQ_VARID(ncidin0, "SFROFF", sfroff_varid)
+                sts = NF90_GET_VAR(ncidin0, sfroff_varid, sfroff_in(:,:,2), &
+                  START = (/ xoffset, yoffset, 1 /), &
+                  COUNT =(/xfocus,yfocus, 1 /) )
               sts = NF90_CLOSE(ncidin0)
+
+              iflWRFin = fl_input(ifl)
   
-  
-              iflWRFin = fl_input(ifl)  !set to the current wrfout file again
+            ELSE
+
+              PRINT *, "no data available for average calculation any more"
+
+              calc = .FALSE.  
   
             END IF
   
@@ -2858,25 +2869,30 @@ DO ifrq = 1, 1, 1 ! 1hr
                 START = (/ xoffset, yoffset, it /), &
                 COUNT =(/xfocus,yfocus,1 /) )
   
-              iflWRFin = fl_input(ifl+1) ! set to the previous wrfoutfile 
-                                          ! if it is not the first
+              iflWRFin = fl_input(ifl+1)
   
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
   
               sts = NF90_INQ_VARID(ncidin0, "SFROFF", sfroff_varid)
-              sts = NF90_INQ_VARID(ncidin, "UDROFF", udroff_varid)
+              sts = NF90_INQ_VARID(ncidin0, "UDROFF", udroff_varid)
   
               sts = NF90_GET_VAR(ncidin0, sfroff_varid, sfroff_in(:,:,2), &
                 START = (/ xoffset, yoffset, 1 /), &
-                COUNT =(/xfocus,yfocus,1 /) )
+                COUNT =(/xfocus, yfocus, 1 /) )
   
               sts = NF90_GET_VAR(ncidin0, udroff_varid, udroff_in(:,:,2), &
                 START = (/ xoffset, yoffset, 1 /), &
-                COUNT =(/xfocus,yfocus,1 /) )
+                COUNT =(/xfocus, yfocus, 1 /) )
   
               sts = NF90_CLOSE(ncidin0)
   
-              iflWRFin = fl_input(ifl)  !set to the current wrfout file again
+              iflWRFin = fl_input(ifl)
+  
+            ELSE
+
+              PRINT *, "no data available for average calculation any more"
+
+              calc = .FALSE.  
   
             END IF
   
@@ -3762,44 +3778,94 @@ DO ifrq = 1, 1, 1 ! 1hr
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! evspsbl [kg m-2 s-1] a Evaporation
 ! unit [kg m-2 /3hr] to [kg m-2 s-1]
+! TO CHECK STILL in principle
   
           IF (var_cmip(ivar) == "evspsbl") THEN
   
-            data_in(:,:) = (sfcevp_in(:,:,2) - sfcevp_in(:,:,1))/(dtHours*3600.)
+            IF (calc) THEN
+            
+              data_in(:,:) = ( sfcevp_in(:,:,2) - sfcevp_in(:,:,1) ) / &
+                             (dtHours*3600.)
   
+            ELSE
+
+              data_in(:,:) = mv
+
+            END IF
+
+            calc = .TRUE.
+
           END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! evspblpot [kg m-2 s-1] a Potential Evapotranspiration 
 ! unit [W m-2]/[J kg-1] -> [kg m-2 s-1]
-! TODO
+! TO CHECK STILL in principle
+! TODO / CHECK
 ! THERE IS STH WRONG WITH THE UNITS: WRF's POTEVP is accumulated and declared to be in W m-2. 
 ! It doesen't make sense to accumulate in W m-2, but even if assume it as J m-2 or derive kg m-2 
 ! by using latent heat of vaporization you never get values that have a reasonable magnitude...
+! CHECK with registry on the units
   
           IF (var_cmip(ivar) == "evspsblpot") THEN
   
-            data_in(:,:) = (potevp_in(:,:,2) - (potevp_in(:,:,1)))/L
+            IF (calc) THEN
+            
+              data_in(:,:) = (potevp_in(:,:,2) - (potevp_in(:,:,1))) / L
   
+            ELSE
+
+              data_in(:,:) = mv
+
+            END IF
+
+            calc = .TRUE.
+
           END IF
+
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! mrros [kg m-2 s-1] a Surface Runoff
 ! unit [mm/3hr] to [kg m-2 s-1]
   
           IF (var_cmip(ivar) == "mrros") THEN
   
-            data_in(:,:) = (sfroff_in(:,:,2) - sfroff_in(:,:,1))/(dtHours*3600.)
+            IF (calc) THEN
+
+              data_in(:,:) = (sfroff_in(:,:,2) - sfroff_in(:,:,1)) / &
+                             (dtHours*3600.)
   
+            ELSE
+
+              data_in(:,:) = mv
+
+            END IF
+
+            calc = .TRUE.
+
           END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! mrro [kg m-2 s-1] a Total Runoff
 ! unit [mm/3hr] to [kg m-2 s-1]
+! SFROFF, UDROFF
+! UDROFF is accumulated!
   
           IF (var_cmip(ivar) == "mrro") THEN
   
-            data_in(:,:) = ((sfroff_in(:,:,2) - sfroff_in(:,:,1)) + (udroff_in(:,:,2) - udroff_in(:,:,1)))/(dtHours*3600.) 
+            IF (calc) THEN
+
+              data_in(:,:) = ( (sfroff_in(:,:,2) - sfroff_in(:,:,1)) + &
+                               (udroff_in(:,:,2) - udroff_in(:,:,1)) ) / &
+                             (dtHours*3600.) 
   
+            ELSE
+
+              data_in(:,:) = mv
+
+            END IF
+
+            calc = .TRUE.
+
           END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

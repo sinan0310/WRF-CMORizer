@@ -46,6 +46,6 @@
    aggregation_yearly = .F.,              ! for tier-2 / initial processing, default CMOR, 1hr 3hr data are stored in yearly files, data controls files created
    aggregation_monthly = .F.,             ! data controls monthly files created
    aggregation_individually = .T.,        ! individual file is created, for the timespan as defined below
-   tsact = '2009-06-20_00:00:00',         ! only needed if aggregation_individually = .TRUE.,
+   tsact = '2009-06-18_00:00:00',         ! only needed if aggregation_individually = .TRUE.,
    teact = '2009-06-27_00:00:00',         ! see above
 /
