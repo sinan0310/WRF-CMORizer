@@ -1,4 +1,4 @@
-! ===============================================================================
+!-------------------------------------------------------------------------------
 ! BOP
 !
 ! ****************************************************************************
@@ -16,7 +16,7 @@
 !   WRF_CMORizer.f90
 !
 ! VERSION:
-!   v0.3 (= git tag) + modifications as of 2018-04-05
+!   v0.3 (= git tag) + modifications as of 2018-04-07
 !   see git tags and log for revision details, history, and versions
 !
 ! STATUS:
@@ -48,14 +48,13 @@
 !     * [X] runctrl.vars.nml_water_column
 !     * [X] runctrl.vars.nml_cape -- hourly at the moment, can be aggregated
 !     * [X] runctrl.vars.nml_pr_mrso
-!     * [ ] runctrl.vars.nml_evp_roff    ***CHECKING ONGOING*** cannot fionally test as I am lacking data in the output
-!     * [ ] runctrl.vars.nml_radiation
-!     * [ ] runctrl.vars.nml_snow
+!     * [x] runctrl.vars.nml_evp_roff    cannot finally test as I am lacking data in the output
+!     * [X] runctrl.vars.nml_radiation
+!     * [x] runctrl.vars.nml_snow        check sic once more with winter data
 !     * [X] runctrl.vars.nml_minmax (uses 'wrfxtrm')
-!   - Variables not yet implemented (from most recent protocol versions):
-!     CORDEX (some will be added via reading of wrfxtrm files at daily basis):
+!   - Variables (from most recent protocol versions) not yet implemented:
+!     CORDEX:
 !     * hurs
-!     * sund
 !     * mrfso
 !     * wsgsmax
 !     * tauu
@@ -63,16 +62,16 @@
 !     * cll
 !     * clm
 !     * clh
-!     Special FPS CEM variables:
+!     Special, additional FPS CEM variables:
 !     * ua100m
 !     * va100m
 !     * wsgmax100m
 !     * mrsol
 !     * clbvi
 !     * clgvi
-!     * ic_lightning
-!     * cg_lightning
-!     * total_lightning
+!     * (ic_lightning) need special scheme
+!     * (cg_lightning)
+!     * (total_lightning)
 !     All other variables are covered by namelists and implemented.
 !
 !   - Desired additional diagnostics (not yet implemented):
@@ -448,6 +447,7 @@
 !
 ! TODO / PLANNED EXTENSIONS
 ! **see "TODO" and "CHECK" markers in the code**
+! **see the Ongoing Developments section below**
 !   - Add: debug option in Makefile.
 !   - Add levels: plev_bnds, needed for: clh, clm, cll
 !   - Static fields processing, fx > seperate namelist; pass through
@@ -480,7 +480,7 @@
 !     between nmls.
 !   - Per namelist: check processing of each variable seperately.
 !   - Per namelist: check processing of all variables in one go.
-!   - Checking: (i) log, (ii) ncdump, (iii) ncview.
+!   - Checking: (i) log, (ii) ncdump, (iii) cdo, (iv) ncview.
 !
 ! QUESTIONS:
 !   (1)
@@ -518,13 +518,13 @@
 !     * [X] Truhetz merge file 2, compare HTr1 w/ HTr2
 !     * [X] Truhetz add/merge 2018-03-21 stuff, changed slp calc > combine above
 !     * [X] compare pressure calcs with wrfpress
-!     * [ ] TESTING and REFINEMENTS > also related to the data delivery for ICTP
+!     * [X] TESTING and REFINEMENTS > also related to the data delivery for ICTP
 !           x staggering test > uw, PH PHB
 !           x psl integrate and also new stuff from heimo
 !           X all new pressure level calcs
 !           x variable grouping: 3D vars: improve
-!           _ bucket fct checking > radiation (  ) and precipitation (OK)
-!     * [_] test ALL other tier-2 variables
+!           x bucket fct checking > radiation (OK) and precipitation (OK)
+!     * [X] test ALL other tier-2 variables already implemented in f90 and nml
 !     * [X] what happens when going accross months with indiv timing?
 !     * [X] min / max shifting
 !     * [X] new filename protocol: last/first element: -/+dthours/2 if cell 
@@ -533,12 +533,14 @@
 !     * [ ] process data for the ICTP paper >>> test on JURECA once more (Intel
 !           + multiple files), v0.2 nml #1 & #2
 !     * [X] xtrm
+!     * [ ] add missing vars > see Chus / UNICAN table
 !     * [ ] !!! fx
 !   - Later:
 !     * [ ] Aris, temporal averaging merge
 !     * [ ] grid transform
 !     * [ ] register new institute ID and model name with O.B. Christensen at 
 !           DMI.!     
+!   - Long-term:
 !     * [ ] adjustment for different RCMs < see CCLM code from Heimo 
 !           (not yet included in merge file 1 or 2)
 !
@@ -590,6 +592,7 @@
 ! [2] https://www.hymex.org/cordexfps-convection/wiki/doku.php?id=protocol
 ! [3] https://www.unidata.ucar.edu/software/netcdf/conventions.html
 ! [4] http://www2.mmm.ucar.edu/wrf/users/utilities/util.htm
+! [5] http://www.meteo.unican.es/wiki/cordexwrf/OutputVariables
 ! ...
 !
 ! LICENSE / COPYING:
@@ -799,7 +802,8 @@ INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, &
   theta_varid, t2_varid, recbnds_varid, rainnc_varid, &
   rainc_varid, snownc_varid, u10_varid, v10_varid, u_varid, v_varid, w_varid, &
   sfcevp_varid, potevp_varid, sfroff_varid, udroff_varid, acsnom_varid, &
-  sinalpha_varid, cosalpha_varid, plev_varid, plevbnds_varid, psfc_varid
+  sinalpha_varid, cosalpha_varid, plev_varid, plevbnds_varid, psfc_varid, &
+  landmask_varid, xland_varid, swdown_varid
 
 ! input data general query
 INTEGER :: ncid_in, ndims_in, nvars_in, ngatts_in, unlimdimid_in !!!, formatp_in
@@ -834,7 +838,9 @@ REAL, DIMENSION(:,:), ALLOCATABLE :: &
   psfc_in     , &
   tmp_2d      , &
   rainc_max_in, &
-  rainnc_max_in
+  rainnc_max_in , &
+  landmask_in   , &
+  xland_in
 REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   pp_in       , &
   pb_in       , &
@@ -866,6 +872,7 @@ REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   sfcevp_in   , &
   sfroff_in   , &
   udroff_in   , &
+  swdown_in   , &
   tmp_3d
 REAL, DIMENSION(:,:,:,:), ALLOCATABLE :: &
   cldfra_in   , &
@@ -937,6 +944,8 @@ REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: tmp2D
 
 CHARACTER (LEN = 100), DIMENSION(nvars) :: cell_methods
 LOGICAL, DIMENSION(nvars) :: procflag
+
+LOGICAL :: fractSeaIce = .FALSE.
 
 !-------------------------------------------------------------------------------
 ! statistics
@@ -1077,10 +1086,10 @@ fnNMLvar(2) = "runctrl.vars.nml_vars_on_plevels" ! OK
 fnNMLvar(3) = "runctrl.vars.nml" ! OK
 fnNMLvar(4) = "runctrl.vars.nml_pr_mrso" ! OK
 fnNMLvar(5) = "runctrl.vars.nml_minmax" ! OK
-fnNMLvar(6) = "runctrl.vars.nml_evp_roff" ! ***CHECKING ONGOING*** not yet tested: evspsbl, evspsblpot
+fnNMLvar(6) = "runctrl.vars.nml_evp_roff" ! ok not yet tested: evspsbl, evspsblpot
 fnNMLvar(7) = "runctrl.vars.nml_water_column" ! OK
-fnNMLvar(8) = "runctrl.vars.nml_radiation"
-fnNMLvar(9) = "runctrl.vars.nml_snow"
+fnNMLvar(8) = "runctrl.vars.nml_radiation" ! OK
+fnNMLvar(9) = "runctrl.vars.nml_snow" ! ok not yet tested in winter: sic
 fnNMLvar(10) = "runctrl.vars.nml_cape" ! OK
 fnNMLvar(11) = "runctrl.vars.nml_weathertyping"  ! new from HTr, not implemented
 fnNMLvar(12) = "runctrl.vars.nml_psl"            ! new from HTr, not implemented
@@ -1141,10 +1150,10 @@ DO ifrq = 1, 1, 1 ! 1hr
     PRINT '(100A)', fl_wrfout(i)
   END DO
   DO i=1,SIZE(fl_wrfxtr(:)),1
-      PRINT '(100A)', fl_wrfxtr(i)
+    PRINT '(100A)', fl_wrfxtr(i)
   END DO
   DO i=1,SIZE(fl_wrfpres(:)),1
-      PRINT '(100A)', fl_wrfpres(i)
+    PRINT '(100A)', fl_wrfpres(i)
   END DO
   
 !-------------------------------------------------------------------------------
@@ -1175,7 +1184,7 @@ DO ifrq = 1, 1, 1 ! 1hr
   !DO ivarnml = 1, 1, 1 ! recommended to all for first steps and testing: nml #1
   !DO ivarnml = 1, 2, 1 ! ICTP paper data contrib
   !DO ivarnml = 5, 5, 1 ! test min/max !xyz
-  DO ivarnml = 6, 6, 1
+  DO ivarnml = 8, 8, 1
   
     PRINT *, "============================================================"
     PRINT *, "var. namelist nr. and name: ", ivarnml, TRIM(fnNMLvar(ivarnml))
@@ -1223,7 +1232,7 @@ DO ifrq = 1, 1, 1 ! 1hr
     SELECT CASE (TRIM(fnNMLvar(ivarnml)))
     CASE ("runctrl.vars.nml") ! OK
       nvar_nml = 9
-    CASE ("runctrl.vars.nml_evp_roff") ! ***TESTING ONGOING***
+    CASE ("runctrl.vars.nml_evp_roff") ! ok -- see above
       nvar_nml = 4
     CASE ("runctrl.vars.nml_water_column") ! OK
       nvar_nml = 3
@@ -1231,12 +1240,10 @@ DO ifrq = 1, 1, 1 ! 1hr
       nvar_nml = 36
     CASE ("runctrl.vars.nml_pr_mrso") ! OK
       nvar_nml = 4
-    CASE ("runctrl.vars.nml_snow") ! TESTING PENDING
+    CASE ("runctrl.vars.nml_snow") ! ok -- see above
       nvar_nml = 6 
-    CASE ("runctrl.vars.nml_radiation") ! TESTING PENDING
-      nvar_nml = 9
-    CASE ("runctrl.vars.nml_radiation_alternative") ! do not use the inst. values
-      nvar_nml = 9
+    CASE ("runctrl.vars.nml_radiation") ! OK
+      nvar_nml = 10
     CASE ("runctrl.vars.nml_cape") ! OK
       nvar_nml = 2
     CASE ("runctrl.vars.nml_pr_tas_1hr_test") ! OK
@@ -1508,6 +1515,7 @@ DO ifrq = 1, 1, 1 ! 1hr
               PRINT *, "size ipos", SIZE(ipos)
               PRINT *, "counter = ", counter
               IF ( ( cell_methods(ivar) == "mean" ) .OR. &
+                   ( cell_methods(ivar) == "sum" ) .OR. &
                    ( cell_methods(ivar) == "minimum" ) .OR. &
                    ( cell_methods(ivar) == "maximum" ) ) THEN
                 counter = counter - 1
@@ -1639,7 +1647,7 @@ DO ifrq = 1, 1, 1 ! 1hr
               WRITE (InDateTimeYearStr,'(I4.4)') InDateTimeYear(it)
               WRITE (InDateTimeMonthStr,'(I2.2)') InDateTimeMonth(it)              
               WRITE (LastDayStr,'(I2.2)') INT(TimeRefArraySubset(0,5))
-              IF ( cell_methods(ivar) == "mean" ) THEN 
+              IF ( (cell_methods(ivar) == "mean") .OR. (cell_methods(ivar) == "sum") ) THEN 
                 WRITE (FirstHourStr,'(I2.2)') INT( FLOOR( ((dthours/2.)*60.) / 60. ) )
                 WRITE (FirstMinuteStr,'(I2.2)') INT( MOD( (dtHours/2.)*60., 60. ) )
                 WRITE (LastHourStr,'(I2.2)') INT( FLOOR( ( (24.*60.) - (dthours/2.)*60.)  / 60. ) )
@@ -1665,7 +1673,7 @@ DO ifrq = 1, 1, 1 ! 1hr
                     (frequency(ifrq) == '3hr') .OR. &
                     (frequency(ifrq) == '6hr')) THEN
 
-                  IF ( cell_methods(ivar) == "mean" ) THEN
+                  IF ( (cell_methods(ivar) == "mean") .OR. (cell_methods(ivar) == "sum") ) THEN
                     FileNameStartDateTime = InDateTimeYearStr//InDateTimeMonthStr//"01"//FirstHourStr//FirstMinuteStr
                     FileNameEndDateTime = InDateTimeYearStr//InDateTimeMonthStr//LastDayStr//LastHourStr//LastMinuteStr
                   ELSE
@@ -1691,7 +1699,7 @@ DO ifrq = 1, 1, 1 ! 1hr
                     (frequency(ifrq) == '3hr') .OR. &
                     (frequency(ifrq) == '6hr')) THEN
 
-                  IF ( cell_methods(ivar) == "mean" ) THEN
+                  IF ( (cell_methods(ivar) == "mean") .OR. (cell_methods(ivar) == "sum") ) THEN
                     FileNameStartDateTime = InDateTimeYearStr//"0101"//FirstHourStr//FirstMinuteStr
                     FileNameEndDateTime = InDateTimeYearStr//"1231"//LastHourStr//LastMinuteStr
                   ELSE
@@ -1819,6 +1827,7 @@ DO ifrq = 1, 1, 1 ! 1hr
               END IF
               sts = NF90_DEF_DIM(ncid, "time", NF90_UNLIMITED, rec_dimid)
               IF ( ( cell_methods(ivar) == "mean" ) .OR. &
+                   ( cell_methods(ivar) == "sum" ) .OR. &
                    ( cell_methods(ivar) == "minimum" ) .OR. &
                    ( cell_methods(ivar) == "maximum" ) ) THEN
                 sts = NF90_DEF_DIM(ncid, "bnds", 2, nb2_dimid)
@@ -1914,6 +1923,7 @@ DO ifrq = 1, 1, 1 ! 1hr
               sts = nf90_put_att(ncid, rec_varid, "calendar", "standard")
               sts = nf90_put_att(ncid, rec_varid, "axis", "T")
               IF ( ( cell_methods(ivar) == "mean" ) .OR. &
+                   ( cell_methods(ivar) == "sum" ) .OR. &
                    ( cell_methods(ivar) == "minimum" ) .OR. &
                    ( cell_methods(ivar) == "maximum" ) ) THEN
                 sts = nf90_put_att(ncid, rec_varid, "bounds", "time_bnds")
@@ -1922,6 +1932,7 @@ DO ifrq = 1, 1, 1 ! 1hr
               ! for mean variables need the time bounds
               ! no further attributes, like plev_bnds > confirmed
               IF ( ( cell_methods(ivar) == "mean" ) .OR. &
+                   ( cell_methods(ivar) == "sum" ) .OR. &
                    ( cell_methods(ivar) == "minimum" ) .OR. &
                    ( cell_methods(ivar) == "maximum" ) ) THEN
                 sts = nf90_def_var(ncid, "time_bnds", NF90_DOUBLE, (/ nb2_dimid, rec_dimid /), recbnds_varid)
@@ -2027,6 +2038,7 @@ DO ifrq = 1, 1, 1 ! 1hr
               END IF
 
               IF ( ( cell_methods(ivar) == "mean" ) .OR. &
+                   ( cell_methods(ivar) == "sum" ) .OR. &
                    ( cell_methods(ivar) == "minimum" ) .OR. &
                    ( cell_methods(ivar) == "maximum" ) ) THEN
 
@@ -2642,7 +2654,7 @@ DO ifrq = 1, 1, 1 ! 1hr
             END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! prsn [kg m-2 s-1] ? Snowfall Flux
+! prsn [kg m-2 s-1] ?>a Snowfall Flux
   
           ELSE IF (var_cmip(ivar) == "prsn") THEN
   
@@ -2661,19 +2673,24 @@ DO ifrq = 1, 1, 1 ! 1hr
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus, 1/))
   
-              iflWRFin = fl_input(ifl+1) ! set to the previous wrfoutfile 
-                                          ! if it is not the first
+              iflWRFin = fl_input(ifl+1)
   
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
   
               sts = NF90_INQ_VARID(ncidin0, "SNOWNC", snownc_varid)
               sts = NF90_GET_VAR(ncidin0, snownc_varid, snownc_in(:,:,2), &
                 START = (/ xoffset, yoffset, 1 /), &
-                COUNT = (/xfocus,yfocus,1 /) )
+                COUNT = (/xfocus, yfocus, 1 /) )
   
               sts = NF90_CLOSE(ncidin0)
   
-              iflWRFin = fl_input(ifl)  !set to the current wrfout file again
+              iflWRFin = fl_input(ifl)
+  
+            ELSE
+
+              PRINT *, "no data available for average calculation any more"
+
+              calc = .FALSE.  
   
             END IF
   
@@ -2698,22 +2715,27 @@ DO ifrq = 1, 1, 1 ! 1hr
               sts = NF90_INQ_VARID(ncidin, "ACSNOM", acsnom_varid)
               sts = NF90_GET_VAR(ncidin, acsnom_varid, acsnom_in(:,:,1), &
                 START = (/ xoffset, yoffset, it /), &
-                COUNT = (/ xfocus, yfocus,1/))
+                COUNT = (/ xfocus, yfocus, 1 /))
   
-              iflWRFin = fl_input(ifl+1) ! set to the previous wrfoutfile 
-                                          ! if it is not the first
+              iflWRFin = fl_input(ifl+1)
   
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
               
               sts = NF90_INQ_VARID(ncidin0, "ACSNOM", acsnom_varid)
               sts = NF90_GET_VAR(ncidin0, acsnom_varid, acsnom_in(:,:,2), &
                 START = (/ xoffset, yoffset, 1 /), &
-                COUNT =(/xfocus,yfocus,1 /) )
+                COUNT =(/xfocus, yfocus, 1 /) )
             
               sts = NF90_CLOSE(ncidin0)
             
-              iflWRFin = fl_input(ifl)  !set to the current wrfout file again
+              iflWRFin = fl_input(ifl)
               
+            ELSE
+
+              PRINT *, "no data available for average calculation any more"
+
+              calc = .FALSE.  
+  
             END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2903,81 +2925,138 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! rlus [W m-2] a Surface Upwelling Longwave Radiation
 ! hfss [W m-2] a Surface Upward Latent Heat Flux
 ! hfls [W m-2] a Surface Upward Sensible Heat Flux
-! rlut
-! rsdt
-! rsut
-! alternative: since accumulated values as read above get so large in 
-! long term simulations that their differences loose accuracy, use 
-! instantaneous values instead and calculate means
+! rlut [W m-2] a TOA Outgoing Longwave Radiation
+! rsdt [W m-2] a TOA Incident Shortwave Radiation
+! rsut [W m-2] a TOA Outgoing Shortwave Radiation
+! only method in use finally: accumulated values with bucket
+! restriction: assume bucket is used
   
           ELSE IF ((var_cmip(ivar) == "rsds") &
-              .or. (var_cmip(ivar) == "rlds") &
-              .or. (var_cmip(ivar) == "rsus") &
-              .or. (var_cmip(ivar) == "rlus") &
-              .or. (var_cmip(ivar) == "hfss") &
-              .or. (var_cmip(ivar) == "hfls") &
-              .or. (var_cmip(ivar) == "rlut") &
-              .or. (var_cmip(ivar) == "rsdt") &
-              .or. (var_cmip(ivar) == "rsut")) THEN
+            .OR. (var_cmip(ivar) == "rlds") &
+            .OR. (var_cmip(ivar) == "rsus") &
+            .OR. (var_cmip(ivar) == "rlus") &
+            .OR. (var_cmip(ivar) == "hfss") &
+            .OR. (var_cmip(ivar) == "hfls") &
+            .OR. (var_cmip(ivar) == "rlut") &
+            .OR. (var_cmip(ivar) == "rsdt") &
+            .OR. (var_cmip(ivar) == "rsut")) THEN
+
+            PRINT *, "get radiation variables incl. bucket if set"
 
             IF (.not. ALLOCATED(rad_in)) ALLOCATE( rad_in ( xfocus, yfocus, 2 ), STAT=sts )
 
-            ! use the bucket or not
-            sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_J", bucket_J)
-            IF ( bucket_J > 0. ) THEN
-
-              IF (TRIM(fnNMLvar(ivarnml)) == "runctrl.vars.nml_radiation_alternative") & 
-                STOP "bucket_J AND runctrl.vars.nml_radiation_alternative not implemented yet"
-
-              IF (.not. ALLOCATED(i_rad_in)) ALLOCATE( i_rad_in ( xfocus, yfocus, 2 ), STAT=sts )
+            IF (it /= InDimLenRec) THEN
+ 
+              PRINT *, "read rad_in for two times from the same file"
 
               sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
               sts = NF90_GET_VAR(ncidin, varid, rad_in(:,:,:), &
-                START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
-
-              sts = NF90_INQ_VARID(ncidin, TRIM('I_' // var_wrf(ivar)), varid)
-              sts = NF90_GET_VAR(ncidin, varid, i_rad_in(:,:,:), &
-                START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
-
-            ! "primitive" method
-            ELSE
-
-              IF (it /= InDimLenRec) THEN
-  
-                sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
-                sts = NF90_GET_VAR(ncidin, varid, rad_in(:,:,:), &
+                START = (/ xoffset, yoffset, it /), &
+                COUNT = (/ xfocus, yfocus, 2 /) )
+ 
+              sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_J", bucket_J)
+              IF ( bucket_J > 0. ) THEN
+                IF (.not. ALLOCATED(i_rad_in)) ALLOCATE( i_rad_in ( xfocus, yfocus, 2 ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, TRIM('I_' // var_wrf(ivar)), varid)
+                sts = NF90_GET_VAR(ncidin, varid, i_rad_in(:,:,:), &
                   START = (/ xoffset, yoffset, it /), &
                   COUNT = (/ xfocus, yfocus, 2 /) )
-  
-              ELSE IF ( (it == InDimLenRec) .AND. (ifl /= SIZE(fl_input)) ) THEN
-  
-                sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
-                sts = NF90_GET_VAR(ncidin, varid, rad_in(:,:,1), &
-                  START = (/ xoffset, yoffset, it /), &
-                  COUNT = (/ xfocus, yfocus,1/))
-  
-                iflWRFin = fl_input(ifl+1) ! set to the previous wrfoutfile 
-                                            ! if it is not the first
-  
-                sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
-  
-                sts = NF90_INQ_VARID(ncidin0, TRIM(var_wrf(ivar)), varid)
-                sts = NF90_GET_VAR(ncidin0, varid, rad_in(:,:,2), &
-                  START = (/ xoffset, yoffset, 1 /), &
-                  COUNT =(/xfocus,yfocus,1 /) )
-  
-                sts = NF90_CLOSE(ncidin0)
-  
-                iflWRFin = fl_input(ifl)  !set to the current wrfout file again
-  
               END IF
+
+            ELSE IF ( (it == InDimLenRec) .AND. (ifl /= SIZE(fl_input)) ) THEN
+  
+              PRINT *, "read rad_in for one timestep from two files each"
+
+              sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
+              sts = NF90_GET_VAR(ncidin, varid, rad_in(:,:,1), &
+                START = (/ xoffset, yoffset, it /), &
+                COUNT = (/ xfocus, yfocus, 1/))
+
+              sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_J", bucket_J)
+              IF ( bucket_J > 0. ) THEN
+                IF (.not. ALLOCATED(i_rad_in)) ALLOCATE( i_rad_in ( xfocus, yfocus, 2 ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, TRIM('I_' // var_wrf(ivar)), varid)
+                sts = NF90_GET_VAR(ncidin, varid, i_rad_in(:,:,1), &
+                  START = (/ xoffset, yoffset, it /), &
+                  COUNT = (/ xfocus, yfocus, 1 /) )
+              END IF
+
+              iflWRFin = fl_input(ifl+1)
+
+              sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
+
+              sts = NF90_INQ_VARID(ncidin0, TRIM(var_wrf(ivar)), varid)
+              sts = NF90_GET_VAR(ncidin0, varid, rad_in(:,:,2), &
+                START = (/ xoffset, yoffset, 1 /), &
+                COUNT = (/ xfocus, yfocus, 1/))
+
+              sts = NF90_GET_ATT(ncidin0, NF90_GLOBAL, "BUCKET_J", bucket_J)
+              IF ( bucket_J > 0. ) THEN
+                sts = NF90_INQ_VARID(ncidin0, TRIM('I_' // var_wrf(ivar)), varid)
+                sts = NF90_GET_VAR(ncidin0, varid, i_rad_in(:,:,2), &
+                  START = (/ xoffset, yoffset, 1 /), &
+                  COUNT = (/ xfocus, yfocus, 1 /) )
+              END IF
+
+              sts = NF90_CLOSE(ncidin0)
+
+              iflWRFin = fl_input(ifl)
+  
+            ELSE
+
+              PRINT *, "no data available for average calculation any more"
+
+              calc = .FALSE.
+  
+            END IF
+  
+            PRINT *, "values in middle of domain = ", var_cmip(ivar), rad_in(xfocus/2,yfocus/2,1), rad_in(xfocus/2,yfocus/2,2)
+            PRINT *, "difference [J m-2] = ", (rad_in(xfocus/2,yfocus/2,2) - rad_in(xfocus/2,yfocus/2,1))
+            PRINT *, "mean [W m-2] = ", (rad_in(xfocus/2,yfocus/2,2) - rad_in(xfocus/2,yfocus/2,1))/ (dtHours*3600.)
+  
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! sund [s] s Duration of Sunshine
+! WMO definition >= 120 W m-2
+
+          ELSE IF (var_cmip(ivar) == "sund") THEN
+
+            IF (.not. ALLOCATED(swdown_in)) ALLOCATE( swdown_in ( xfocus, yfocus, 2 ), STAT=sts )
+
+            IF (it /= InDimLenRec) THEN
+ 
+              sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
+              sts = NF90_GET_VAR(ncidin, varid, swdown_in(:,:,:), &
+                START = (/ xoffset, yoffset, it /), &
+                COUNT = (/ xfocus, yfocus, 2 /) )
+
+            ELSE IF ( (it == InDimLenRec) .AND. (ifl /= SIZE(fl_input)) ) THEN
+
+              sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
+              sts = NF90_GET_VAR(ncidin, varid, swdown_in(:,:,1), &
+                START = (/ xoffset, yoffset, it /), &
+                COUNT = (/ xfocus, yfocus, 1/))
+
+              iflWRFin = fl_input(ifl+1)
+
+              sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
+
+              sts = NF90_INQ_VARID(ncidin0, TRIM(var_wrf(ivar)), varid)
+              sts = NF90_GET_VAR(ncidin0, varid, swdown_in(:,:,2), &
+                START = (/ xoffset, yoffset, 1 /), &
+                COUNT = (/ xfocus, yfocus, 1/))
+
+              sts = NF90_CLOSE(ncidin0)
+
+              iflWRFin = fl_input(ifl)
+
+            ELSE
+
+              PRINT *, "no data available for average calculation any more"
+
+              calc = .FALSE.
   
             END IF
 
-            PRINT *, var_cmip(ivar), rad_in(xfocus/2,yfocus/2,1), rad_in(xfocus/2,yfocus/2,2)
-            PRINT *, 'difference in J m-2', (rad_in(xfocus/2,yfocus/2,2) - rad_in(xfocus/2,yfocus/2,1))
-            PRINT *, 'in mean W m-2', (rad_in(xfocus/2,yfocus/2,2) - rad_in(xfocus/2,yfocus/2,1))/ (dtHours*3600.)
-  
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! mrso [kg m-2] i Total Soil Moisture Content
 ! was beforehand treated as averaged variable, but is defined instantaneous
@@ -3088,6 +3167,24 @@ DO ifrq = 1, 1, 1 ! 1hr
             sts = NF90_GET_VAR(ncidin, rainnc_varid, rainnc_max_in(:,:), &
               START = (/ xoffset, yoffset, it+1 /), COUNT = (/ xfocus, yfocus, 1 /) )
   
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! two possibilities with sea ice: either in SEAICE variable as fractional sea 
+! ice, or contained as binary sea ice in the landmask field during runtime
+! extent: XLAND = LU_INDEX
+
+!          ELSE IF ( (var_cmip(ivar) == "sic") .AND. (fractSeaIce .EQV. .FALSE.) ) THEN
+
+!            IF (.not. ALLOCATED(landmask_in)) ALLOCATE( landmask_in ( xfocus, yfocus ), STAT=sts ) 
+!            IF (.not. ALLOCATED(xland_in)) ALLOCATE( xland_in ( xfocus, yfocus ), STAT=sts )
+  
+!            sts = NF90_INQ_VARID(ncidin, "LANDMASK", landmask_varid)
+!            sts = NF90_INQ_VARID(ncidin, "XLAND", xland_varid)
+  
+!            sts = NF90_GET_VAR(ncidin, landmask_varid, landmask_in(:,:), &
+!              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+!            sts = NF90_GET_VAR(ncidin, xland_varid, xland_in(:,:), &
+!              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! this is all others variables which are solely based on a namelist for whom 
 ! no processing is needed whatsoever, e.g. tas, ps, huss, ...
@@ -3761,8 +3858,19 @@ DO ifrq = 1, 1, 1 ! 1hr
   
           IF (var_cmip(ivar) == "prsn") THEN
   
-            data_in(:,:) = (snownc_in(:,:,2) - snownc_in(:,:,1))/(dtHours*3600.)
+            IF (calc) THEN
+            
+              data_in(:,:) = (snownc_in(:,:,2) - snownc_in(:,:,1)) / &
+                             (dtHours*3600.)
   
+            ELSE
+
+              data_in(:,:) = mv
+
+            END IF
+
+            calc = .TRUE.
+
           END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3771,8 +3879,19 @@ DO ifrq = 1, 1, 1 ! 1hr
   
           IF (var_cmip(ivar) == "snm") THEN
   
-            data_in(:,:) = (acsnom_in(:,:,2) - acsnom_in(:,:,1))/(dtHours*3600.)
+            IF (calc) THEN
+            
+              data_in(:,:) = (acsnom_in(:,:,2) - acsnom_in(:,:,1)) / &
+                             (dtHours*3600.)
   
+            ELSE
+
+              data_in(:,:) = mv
+
+            END IF
+
+            calc = .TRUE.
+
           END IF
           
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3875,34 +3994,83 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! rlus [W m-2] a Surface Upwelling Longwave Radiation
 ! hfss [W m-2] a Surface Upward Latent Heat Flux
 ! hfls [W m-2] a Surface Upward Sensible Heat Flux
+! rlut [W m-2] a TOA Outgoing Longwave Radiation
+! rsdt [W m-2] a TOA Incident Shortwave Radiation
+! rsut [W m-2] a TOA Outgoing Shortwave Radiation
   
-          IF ( (var_cmip(ivar) == "rsds") .OR. (var_cmip(ivar) == "rlds") .OR. &
-               (var_cmip(ivar) == "rsus") .OR. (var_cmip(ivar) == "rlus") .OR. &
-               (var_cmip(ivar) == "hfss") .OR. (var_cmip(ivar) == "hfls") ) THEN
+          IF ( (var_cmip(ivar) == "rsds") &
+            .OR. (var_cmip(ivar) == "rlds") &
+            .OR. (var_cmip(ivar) == "rsus") &
+            .OR. (var_cmip(ivar) == "rlus") &
+            .OR. (var_cmip(ivar) == "hfss") &
+            .OR. (var_cmip(ivar) == "hfls") &
+            .OR. (var_cmip(ivar) == "rlut") &
+            .OR. (var_cmip(ivar) == "rsdt") &
+            .OR. (var_cmip(ivar) == "rsut") ) THEN
     
-            IF (TRIM(fnNMLvar(ivarnml)) == "runctrl.vars.nml_radiation") THEN
-             
+            IF (calc) THEN
+
               IF ( bucket_J > 0. ) THEN
 
-                data_in(:,:) = ( rad_in(:,:,2) - rad_in(:,:,1) + &
-                               ( i_rad_in(:,:,2) - i_rad_in(:,:,1) )*bucket_J ) / (dtHours*3600.)
-
+                data_in(:,:) = ( ( rad_in(:,:,2) + ( i_rad_in(:,:,2) * bucket_J ) ) - &
+                               ( rad_in(:,:,1) + ( i_rad_in(:,:,1) * bucket_J ) ) ) / &
+                               (dtHours*3600.)
+               
               ELSE
 
-                ! take difference of accumulated values
-                data_in(:,:) = (rad_in(:,:,2) - rad_in(:,:,1)) /(dtHours*3600.)
+                data_in(:,:) = (rad_in(:,:,2) - rad_in(:,:,1)) / (dtHours*3600.)
 
               END IF
 
-            ELSE IF (TRIM(fnNMLvar(ivarnml)) == "runctrl.vars.nml_radiation_alternative") THEN
-             
-              ! take mean of instantaneous values
-              data_in(:,:) = (rad_in(:,:,2) + rad_in(:,:,1)) / 2. 
-  
-            END IF 
-  
+            ELSE
+
+              data_in(:,:) = mv
+
+            END IF
+
+            calc = .TRUE.
+
           END IF
   
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! sund [s] s Duration of Sunshine
+! WMO definition >= 120 W m-2
+
+          IF ( var_cmip(ivar) == "sund" ) THEN
+    
+            IF (calc) THEN
+
+              DO i = 1,xfocus
+                DO j = 1,yfocus
+
+                  ! if both neighbouring data points are above the threshold
+                  IF ( (swdown_in(i,j,1) >= 120.) .AND. (swdown_in(i,j,2) >= 120.) ) THEN 
+                    data_in(i,j) = dtHours*3600.
+                  ELSE IF ( (swdown_in(i,j,1) < 120.) .AND. (swdown_in(i,j,2) < 120.) ) THEN 
+                    data_in(i,j) = 0.
+                  ELSE
+                    slope = ( swdown_in(i,j,2) - swdown_in(i,j,1) ) / &
+                            ( dtHours * 3600. ) 
+                    IF ( slope > 0 ) THEN 
+                      data_in(i,j) = ( dtHours * 3600. ) - ( (120. - swdown_in(i,j,1)) / slope )
+                    ELSE IF ( slope < 0 ) THEN
+                      data_in(i,j) = (120. - swdown_in(i,j,1)) / slope
+                    END IF
+                  END IF
+               
+                END DO
+              END DO
+
+            ELSE
+
+              data_in(:,:) = mv
+
+            END IF
+
+            calc = .TRUE.
+
+          END IF
+
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! mrso [kg m-2] i Total Soil Moisture Content 
 ! see comment in the variable aquisition section
@@ -3922,16 +4090,43 @@ DO ifrq = 1, 1, 1 ! 1hr
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! snc [%] i Snow Area Fraction
-! sic [%] ? Sea Ice Area Fraction
+! unit [] to [%]
+
+          IF ( (var_cmip(ivar) == "snc") ) THEN
   
-          IF ( (var_cmip(ivar) == "snc") .or. (var_cmip(ivar) == "sic") ) THEN
-  
-            data_in(:,:) = data_in(:,:)*100. !unit [] to [%]
+            data_in(:,:) = data_in(:,:)*100. 
   
           END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! sfcWind [m s-1] i Near-Surface Wind Speed
+! sic [%] ?>i Sea Ice Area Fraction
+! no temporal aggregation defined, treat as tier-2 instantaneous data, most
+! reasonable; also offers the possibility of some proper sea-ice treatment
+
+          IF ( (var_cmip(ivar) == "sic") ) THEN
+ 
+            ! fractional sea ice 
+!           IF (fractSeaIce) THEN
+
+              data_in(:,:) = data_in(:,:) * 100. 
+
+            ! binary sea ice mask, SEAICE is empty variable
+!           ELSE
+!
+!             WHERE ( xland_in == 2. )
+!
+!               xland_in = 0.
+!
+!             END WHERE
+!
+!              data_in(:,:) = ( landmask_in(:,:) - xland_in(:,:) ) * 100.
+!
+!            END IF
+  
+          END IF
+  
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! -1] i Near-Surface Wind Speed
   
           IF (var_cmip(ivar) == "sfcWind") THEN
   
