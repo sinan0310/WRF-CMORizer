@@ -11,6 +11,7 @@
 ! ***                                                                      ***
 ! *** code is under development, missing functionalities being added by KG ***
 ! ***                      during CW 15, 16, 17                            ***
+! ***                    see "missing still" below                         ***
 ! ***     ask k.goergen@fz-juelich.de if anything is unclear, needs fixing ***
 ! ***                       or shall be added                              ***
 ! ***                                                                      ***
@@ -82,6 +83,10 @@
 !     * [X] runctrl.vars.nml_radiation
 !     * [x] runctrl.vars.nml_snow (check sic once more with winter data)
 !     * [X] runctrl.vars.nml_minmax (uses 'wrfxtrm')
+!     Because the temporal aggregation is not fully implemented yet, the nml
+!     entries for temporally aggregated variables, except for the extremes, may
+!     not be all consistent with the variable tables of the protocol, i.e. which
+!     variable is to be processed with which temporal aggregation.
 !
 !   - Variables (from most recent protocol versions) not yet implemented:
 !     CORDEX:
@@ -213,8 +218,19 @@
 !      and to just use one test variable namelist; inside that namelist per 
 !      default only tas is activated. Run with this setting first and check.
 !      Then expand the list of variables to be processed, setting time1hr to .T.
+!      The namelist is 'runctrl.vars.nml_pr_tas_1hr_test'.
 !   5. Later on activate further namelists; all namelists provided are tested 
 !      and should work, see informaiton in this preamble.
+!      See around line 1250 to activate the full namelist loop.
+!
+!      If e.g. the minmax nml is to be used, set 
+!          DO ifrq = 4, 4, 1 -> activate the daily processing
+!      and 
+!          DO ivarnml = 5, 5, 1 -> select minmax nml only
+!
+!      It is possible to loop over all aggregation levels and namelists already
+!      now as all variable processing has been deactivated in the nml other than
+!      1hr (and daily for extremes).
 !
 ! CALLED FROM:
 !   Standalone command-line tool. Can ideally be combined with any processing
@@ -1171,6 +1187,8 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! - non-std F95, works for gfortran (fct & subroutine) + ifort
 ! - to not check the filesystem too often, this is done at this point
 ! - also the search results might be limited
+! - this can be made more efficient, but then it is not so generic anymore
+!   depending on the depth of the search path find takes some time
   
   PRINT *, "============================================================"
   PRINT *, "*** FILELIST CREATION ***"
@@ -1181,21 +1199,19 @@ DO ifrq = 1, 1, 1 ! 1hr
   IF ( (ts == "0000") .AND. (te == "0000") ) THEN
     fl_filter = ""
   ELSE
-    fl_filter = "*{" // ts // ".." // te // "}"
+    !fl_filter = "{" // ts // ".." // te // "}" ! does not work with SYSTEM call
+    fl_filter = ts
   END IF
   
-  PRINT *, "filelist search pattern = ", TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfout" // TRIM(fl_filter) // "*nc"
-  CALL SYSTEM("ls -1                " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfout" // TRIM(fl_filter) // "*nc > " // tmpfileFL)
+  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name wrfout*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc  > " // tmpfileFL)
   ft = 0 ! file type
   CALL GenerateFilelist
   
-  PRINT *, "filelist search pattern = ", TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfxtrm" // TRIM(fl_filter) // "*nc"
-  CALL SYSTEM("ls -1                " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfxtrm" // TRIM(fl_filter) // "*nc > " // tmpfileFL)
+  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name wrfxtrm*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc  > " // tmpfileFL)
   ft = 1
   CALL GenerateFilelist
 
-  PRINT *, "filelist search pattern = ", TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfpress" // TRIM(fl_filter) // "*nc"
-  CALL SYSTEM("ls -1                " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfpress" // TRIM(fl_filter) // "*nc > " // tmpfileFL)
+  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name wrfpress*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc  > " // tmpfileFL)
   ft = 2
   CALL GenerateFilelist
  
@@ -1280,7 +1296,7 @@ DO ifrq = 1, 1, 1 ! 1hr
     END SELECT
 
     ! nvar_nml might be determined through the namelist itself
-    ! sequence here does noy matter
+    ! sequence here does not matter
     SELECT CASE (TRIM(fnNMLvar(ivarnml)))
     CASE ("runctrl.vars.nml") ! OK
       nvar_nml = 9
@@ -1584,14 +1600,14 @@ DO ifrq = 1, 1, 1 ! 1hr
 !                     ( TimeRefArray(i,4) >= tsactDay ) .AND. &
 !                     ( TimeRefArray(i,4) < teactDay ) ) THEN !.AND. &
 !!                   ( TimeRefArray(i,5) >= tsactHour ) .AND. &
-!!                   ( TimeRefArray(i,5) <= teactHour ) ) THEN ! TODO, porblem if the end of also 00UTC > then there is no match with the hours
+!!                   ( TimeRefArray(i,5) <= teactHour ) ) THEN ! problem if the end of also 00UTC > then there is no match with the hours
 !                  ! special case, e.g. 20090620_00:00:00 to 20090627_00:00:00 = defined timespan
 !                  ! the last mean field is then 20090627_00:30:00, one less mean fields in the total time span covered
 !                  counter = counter + 1
 !                  ipos = [ipos, i]
 !                END IF
 !              END DO
-!              ! TODO see the problem with the ending, there is one timestep too
+!              ! see the problem with the ending, there is one timestep too
 !              ! few in the file if this is not done
 !              ! artifically add a further postion at the very end
 !                  IF ( cell_methods(ivar) == "point" ) THEN ! and then also automatically sub-daily
@@ -1782,6 +1798,7 @@ DO ifrq = 1, 1, 1 ! 1hr
             ! /hpc/shared/int/eva/ramod_WRF_CRPGL/WRFrv021rXXrcc3CpCdx/postpro/
             ! EUR-44/CRPGL/ECMWF-ERAINT/evaluation/r1i1p1/CRPGL-WRFARW331/v1
             pn_out = TRIM(project_id)                    // "/" // &
+                     TRIM(product)                       // "/" // &
                      TRIM(CORDEX_domain)                 // "/" // &
                      TRIM(institute_id)                  // "/" // &
                      TRIM(driving_model_id)              // "/" // &

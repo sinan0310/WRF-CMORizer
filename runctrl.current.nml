@@ -18,7 +18,7 @@
    references = "http://www.fz-juelich.de",
 /
 &globalvars_additional
-   comment = "simulation and processing: k.goergen@fz-juelich.de; postprocessing: WRF_CMORizer.f90 v0.3; excl. 10 grid point boundary relaxation zone",
+   comment = "simulation and processing: k.goergen@fz-juelich.de; postprocessing: WRF_CMORizer.f90 v0.4; excl. 10 grid point boundary relaxation zone",
 !  institute_run_id = "rv054r05_JURECAcpu_val_CdxFpsCpcmHiResNWPtestCb00tsInitWLx", ! CMx WLx, varname might also be: fzj-ibg3_id
    institute_run_id = "rv054r05_JURECAcpu_val_CdxFpsCpcmHiResNWPtestCb00tsInitCMx",
    title = "WRF381AA RCM model runs for CORDEX FPS CEM WL/CM study, reanalysis forcing",
@@ -35,7 +35,7 @@
 /
 &model_config
    ts = '2009',                           ! 2009 2012 2014 can be used for pattern matching with filenames, set to '0000' to use all files that are found
-   te = '2009',                           ! 2009 2012 2014 can be used for pattern matching with filenames, set to '0000' to use all files that are found
+   te = '2009',                           ! 2009 2012 2014 can be used for pattern matching with filenames, set to '0000' to use all files that are found, not activated at the moment, filter only by ts
    nx = 444,                              ! EUR-11 raw output x-dim, incl. relaxation zone, unstaggered, changed to 359x350 w/ EUR-15
    ny = 432,                              ! EUR-11 raw output x-dim, incl. relaxation zone, umstaggered
 !  nx = 488,                              ! ALP-3 WRF grid spec with A-runs (CM/WL)
@@ -61,8 +61,8 @@
 /
 &tool_config
    aggregation_yearly = .F.,              ! for tier-2 / initial processing, default CMOR, 1hr 3hr data are stored in yearly files, data controls files created
-   aggregation_monthly = .F.,             ! data controls monthly files created
-   aggregation_individually = .T.,        ! individual file is created, for the timespan as defined below
+   aggregation_monthly = .T.,             ! data controls monthly files created
+   aggregation_individually = .F.,        ! individual file is created, for the timespan as defined below
 ! Austria
    tsact = '2009-06-20_00:00:00',         ! tsact and teact are only needed if aggregation_individually = .TRUE.,
    teact = '2009-06-27_00:00:00',
