@@ -16,7 +16,7 @@
 !   WRF_CMORizer.f90
 !
 ! VERSION:
-!   v0.3 (= git tag) + modifications as of 2018-04-07
+!   v0.4 (= git tag) as of 2018-04-10
 !   see git tags and log for revision details, history, and versions
 !
 ! STATUS:
@@ -535,8 +535,8 @@
 !     * [X] xtrm
 !     * [ ] add missing vars > see Chus / UNICAN table
 !     * [ ] !!! fx
+!     * [ ] temporal averaging merge Aris
 !   - Later:
-!     * [ ] Aris, temporal averaging merge
 !     * [ ] grid transform
 !     * [ ] register new institute ID and model name with O.B. Christensen at 
 !           DMI.!     
@@ -722,7 +722,7 @@ END MODULE NamelistHandling
 
 !===============================================================================
 
-PROGRAM ppWRFCMIP
+PROGRAM WRF_CMORizer
 
 USE FilelistHandling
 USE RefTimeVecs
@@ -1126,9 +1126,9 @@ DO ifrq = 1, 1, 1 ! 1hr
 
   ! creates a year range, can be expanded also to use months
   IF ( (ts == "0000") .AND. (te == "0000") ) THEN
-    fl_filter = "*{" // ts // ".." // te // "}"
-  ELSE
     fl_filter = ""
+  ELSE
+    fl_filter = "*{" // ts // ".." // te // "}"
   END IF
   
   PRINT *, "filelist search pattern = ", TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/*/*wrfout" // TRIM(fl_filter) // "*nc"
@@ -1181,10 +1181,9 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! combinations
   
   !DO ivarnml = 1, 9, 1 ! loop over all regular namelists
-  !DO ivarnml = 1, 1, 1 ! recommended to all for first steps and testing: nml #1
+  DO ivarnml = 1, 1, 1 ! recommended to all for first steps and testing: nml #1
   !DO ivarnml = 1, 2, 1 ! ICTP paper data contrib
-  !DO ivarnml = 5, 5, 1 ! test min/max !xyz
-  DO ivarnml = 8, 8, 1
+  !DO ivarnml = 5, 5, 1 ! test min/max
   
     PRINT *, "============================================================"
     PRINT *, "var. namelist nr. and name: ", ivarnml, TRIM(fnNMLvar(ivarnml))
@@ -1271,8 +1270,8 @@ DO ifrq = 1, 1, 1 ! 1hr
       PRINT *, "*** ", TRIM(var_cmip(ivar)), procflag(ivar), " ***"
  
       ! shall this variable be processed at all?
-      ! either control by including/excluding brute-force from a namelist, by 
-      ! customizing the namelist list or by setting "timeXX" per temporal 
+      ! either control by i) including/excluding brute-force from a namelist, by 
+      ! customizing the namelist list or ii) by setting "timeXX" per temporal 
       ! resolution/aggregation to TRUE or FALSE (=recommended way)
       IF (procflag(ivar)) THEN
 
@@ -4255,7 +4254,7 @@ END DO ! ifrq - different temporal aggregations
 
 !===============================================================================
 
-END PROGRAM ppWRFCMIP
+END PROGRAM WRF_CMORizer
 
 !===============================================================================
 ! HTr routines for psl calculation

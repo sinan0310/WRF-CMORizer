@@ -1,13 +1,17 @@
-#
-# File to change the I/O settings of the registry. Remember to set iofields_filename in the time_control section of
-# namelist.input. The lines can not have more than 256 characters. See README.io_config for help.
-# Modification of the standard registry / model I/O to account for the CORDEX and FPS CEM archive design protocol requirements.
+# File to change the I/O settings of the registry. Remember to set 
+# iofields_filename in the time_control section of namelist.input. The lines 
+# can not have more than 256 characters. See README.io_config for help.
+# Modification of the standard registry / model I/O to account for the CORDEX 
+# and FPS CEM archive design protocol requirements.
 # Assume extremes diagnostics is ON.
-# From: UCAN, jesus.fernandez@unican.es
+# Original version from: UCAN, jesus.fernandez@unican.es; modified by 
+# k.goergen@fz-juelich.de, assuming an unmodified standard output and just 
+# adding needed variables SFCEVP, POTEVP.
 #
-+:h:3:U10MAX,V10MAX,U10STD,V10STD,T2MAX,T2MIN,TT2MIN,TT2MAX
--:h:3:SPDUV10MAX,TSPDUV10MAX,SPDUV10MEAN,SPDUV10STD,RAINCVMAX,RAINNCVMAX,TRAINCVMAX,TRAINNCVMAX,RAINCVMEAN,RAINNCVMEAN,RAINCVSTD
--:h:3:T2STD,Q2MIN,Q2MAX,TQ2MIN,TQ2MAX,Q2MEAN,Q2STD,SKINTEMPMIN,SKINTEMPMAX,TSKINTEMPMIN,TSKINTEMPMAX,SKINTEMPMEAN,SKINTEMPSTD
--:h:0:SH2O,MAPFAC_M,MAPFAC_MX,MAPFAC_MY,MAPFAC_U,MAPFAC_UX,MAPFAC_UY,MAPFAC_V
--:h:0:MAPFAC_VX,MAPFAC_VY,MF_VX_INV,NEST_POS,NOAHRES,CANWAT,EMISS,ALBEDO,P_HYD
-+:h:0:SFCEVP,POTEVP,SMSTOT???
+#+:h:3:U10MAX,V10MAX,U10STD,V10STD,T2MAX,T2MIN,TT2MIN,TT2MAX
+#-:h:3:SPDUV10MAX,TSPDUV10MAX,SPDUV10MEAN,SPDUV10STD,RAINCVMAX,RAINNCVMAX,TRAINCVMAX,TRAINNCVMAX,RAINCVMEAN,RAINNCVMEAN,RAINCVSTD
+#-:h:3:T2STD,Q2MIN,Q2MAX,TQ2MIN,TQ2MAX,Q2MEAN,Q2STD,SKINTEMPMIN,SKINTEMPMAX,TSKINTEMPMIN,TSKINTEMPMAX,SKINTEMPMEAN,SKINTEMPSTD
+#-:h:0:SH2O,MAPFAC_M,MAPFAC_MX,MAPFAC_MY,MAPFAC_U,MAPFAC_UX,MAPFAC_UY,MAPFAC_V
+#-:h:0:MAPFAC_VX,MAPFAC_VY,MF_VX_INV,NEST_POS,NOAHRES,CANWAT,EMISS,ALBEDO,P_HYD
+#+:h:0:SFCEVP,potevp,UDROFF,SMSTOT
++:h:0:SFCEVP,POTEVP
