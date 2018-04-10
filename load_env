@@ -1,0 +1,9 @@
+module --force purge &&
+module use /usr/local/software/jureca/OtherStages
+module load Stages/2017a
+module load Intel/2017.2.174-GCC-5.4.0
+module load ParaStationMPI/5.1.9-1
+module load HDF5/1.8.18
+module load HDF/4.2.12
+module load netCDF/4.4.1.1
+module load netCDF-Fortran/4.4.4

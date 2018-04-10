@@ -8,6 +8,8 @@
 ! ***      THIS PREAMBLE IS THE ONLY DOCUMENTATION OF THIS PROGRAM         ***
 ! ***          BEFORE USING THIS PROGRAM, READ THIS PREAMBLE               ***
 ! ***                                                                      ***
+! *** CODE IS UNDER DEVELOPMENT, MISSING FUNCTIONALITIES BEING ADDED BY KG ***
+! ***                                                                      ***
 ! *** AN ALL NEW IDEA FOR THIS TOOL EXISTS, AND MAY BE REALIZED WITH V2.0  ***
 ! ***                                                                      ***
 ! ****************************************************************************
@@ -25,22 +27,23 @@
 !     pass over all variables, i.e., e.g., at dt=3hr or 1hr. It processes all 
 !     variables during this pass, even those specified only at coarser temporal 
 !     resolution. Thereby the tool (i) CMORizes the WRF outputs and (ii) reduces 
-!     the output data volume. The averages may be computed later on, based on 
+!     the output data volume. The averages are to be computed later on, based on 
 !     the high-resolution CMORized data and fine-grained namelist settings, 
 !     which determine which variable shall be provided at which resolution.
 !     Most ongoing joint FPS studies require a high temporal resolution anyway. 
 !     A drawback is, that variables, which do not need high resolution, are 
 !     stored at high resolution also, albeit only as 2D fields.
 !     Missing:
-!     * Temporal averaging (6hr, day, mon, sesons) (EXISTS, must still be merged)
+!     * Temporal averaging (6hr, day, mon, sesons), has to be added still; 
 !       -> part of the structure of the code.
 !     * Fixed fields (based on geo_em files), easy to implement via namelist and
 !       search path -> part of the structure of the code
 !     * Spatial interpolation to common regular grid EUR-11i
+!     * Some variables / diagnostics, see below
 !   - Double-checked, tested and refined namelists with their respective
 !     variables and diagnostics, after code merging and refactoring, all needed
 !     extensive checking and fixing, if checked here, all vars in that namelist
-!     are covered by the code and work:
+!     are covered by the code and should be OK:
 !     * [X] runctrl.current.nml (runctrl.CORDEX-FPSCEM-CMWL.nml)
 !     * [X] runctrl.vars.nml_pr_tas_1hr_test (special testing table)
 !     * [X] runctrl.vars.nml_vars_on_plevels
@@ -50,7 +53,7 @@
 !     * [X] runctrl.vars.nml_pr_mrso
 !     * [x] runctrl.vars.nml_evp_roff    cannot finally test as I am lacking data in the output
 !     * [X] runctrl.vars.nml_radiation
-!     * [x] runctrl.vars.nml_snow        check sic once more with winter data
+!     * [x] runctrl.vars.nml_snow -- check sic once more with winter data
 !     * [X] runctrl.vars.nml_minmax (uses 'wrfxtrm')
 !   - Variables (from most recent protocol versions) not yet implemented:
 !     CORDEX:
@@ -62,6 +65,12 @@
 !     * cll
 !     * clm
 !     * clh
+!     * areacella (fx)
+!     * orog (fx)
+!     * sftlf (fx)
+!     * sftgif (fx)
+!     * mrsofc (fx)
+!     * rootd (fx)
 !     Special, additional FPS CEM variables:
 !     * ua100m
 !     * va100m
@@ -173,10 +182,10 @@
 !   PostPro.RCM.WRF.
 !
 ! CALLING SEQUENCE EXAMPLES:
-!   - ./postpro_model_WRF_to_ESGcompliancy
-!   - ./postpro_model_WRF_to_ESGcompliancy > log
-!   - ./postpro_model_WRF_to_ESGcompliancy > log 2>&1
-!   - ./postpro_model_WRF_to_ESGcompliancy 2>&1 | tee output.log
+!   - ./WRF_CMORizer
+!   - ./WRF_CMORizer > log
+!   - ./WRF_CMORizer > log 2>&1
+!   - ./WRF_CMORizer 2>&1 | tee output.log
 !   - nohup time <any_command_from_above> &
 ! 
 ! GETTING STARTED:
@@ -500,7 +509,7 @@
 !     considered: take the latest heads from various git branches and merge old-
 !     school locally without git
 !   - Walk through the code, contnuously building and checking using gfortran
-!   - Mid March 2018:
+!   - Mid March / beginning April 2018:
 !     * [X] 'master' branch out of date > Knist+Truhetz+Kartsios worked from; 
 !           most versions were running, but not ideal, just doing a fraction
 !           of the needed fixes and adjustments
@@ -530,16 +539,16 @@
 !     * [X] new filename protocol: last/first element: -/+dthours/2 if cell 
 !           method 'mean': 23UTC to 00UTC hourly precipitation: end filename is 
 !           2330, not day+1_00UTC: the mid point value is to be used 
-!     * [ ] process data for the ICTP paper >>> test on JURECA once more (Intel
-!           + multiple files), v0.2 nml #1 & #2
+!     * [X] process data for the ICTP paper >>> test on JURECA once more (Intel
+!           + multiple files), v0.3, nml #1 & #2
 !     * [X] xtrm
-!     * [ ] add missing vars > see Chus / UNICAN table
-!     * [ ] !!! fx
-!     * [ ] temporal averaging merge Aris
+!     * [ ] add missing vars, see above (see e.g. Chus / UNICAN table)
+!     * [ ] add fx data functionality (new namelist)
+!     * [ ] temporal averaging, merge Aris
 !   - Later:
 !     * [ ] grid transform
 !     * [ ] register new institute ID and model name with O.B. Christensen at 
-!           DMI.!     
+!           DMI.!
 !   - Long-term:
 !     * [ ] adjustment for different RCMs < see CCLM code from Heimo 
 !           (not yet included in merge file 1 or 2)
@@ -722,7 +731,7 @@ END MODULE NamelistHandling
 
 !===============================================================================
 
-PROGRAM WRF_CMORizer
+PROGRAM WRFCMORizer
 
 USE FilelistHandling
 USE RefTimeVecs
@@ -754,7 +763,7 @@ INTERFACE
     REAL, INTENT(IN) :: T00
   END SUBROUTINE calcslp
 
-  SUBROUTINE calcslp2(slp, PP, P_s, PHI_s, T_L, nz, ns, ew)
+  SUBROUTINE calcslptwo(slp, PP, P_s, PHI_s, T_L, nz, ns, ew)
     IMPLICIT NONE
     REAL, DIMENSION(:,:),   INTENT(OUT) :: slp
     REAL, DIMENSION(:,:,:), INTENT(IN)  :: PP
@@ -762,7 +771,7 @@ INTERFACE
     REAL, DIMENSION(:,:),   INTENT(IN)  :: PHI_s
     REAL, DIMENSION(:,:),   INTENT(IN)  :: T_L
     INTEGER,                INTENT(IN)  :: nz, ns, ew
-  END SUBROUTINE calcslp2
+  END SUBROUTINE calcslptwo
 
 END INTERFACE
 
@@ -1022,6 +1031,7 @@ ALLOCATE( Time_bnds(2,2) )
 !-------------------------------------------------------------------------------
 ! get the invariant vars which have to be added all the time from seperate file
 ! lon, lat, rlon, rlat, mass grid, etc.
+! normal order: x y z t
 
 PRINT *, "============================================================"
 PRINT *, "*** STATIC FIELDS ***"
@@ -1036,7 +1046,7 @@ sts = NF90_OPEN(TRIM(PnFnGeo), NF90_NOWRITE, ncidin)
 
 sts = NF90_INQ_VARID(ncidin, "XLONG_M", varid)
 sts = NF90_GET_VAR(ncidin, varid, GeoInLonLat(:, :, 1), &
-  START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /)) ! normal order: x y z t
+  START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /))
 
 sts = NF90_INQ_VARID(ncidin, "XLAT_M", varid)
 sts = NF90_GET_VAR(ncidin, varid, GeoInLonLat(:, :, 2), &
@@ -1214,11 +1224,11 @@ DO ifrq = 1, 1, 1 ! 1hr
       procflag(:) = timeDay(:)
       dtHours = 24.
     CASE ('mon')
-      STOP "monthly aggregation not yet implemneted"
+      STOP "monthly aggregation not yet implemented"
       cell_methods(:) = cmMon(:)
       procflag(:) = timeMon(:)
     CASE ('sem')
-      STOP "seasonal aggregation not yet implemneted"
+      STOP "seasonal aggregation not yet implemented"
       cell_methods(:) = cmSea(:)
       procflag(:) = timeSea(:)
     CASE DEFAULT
@@ -1246,7 +1256,7 @@ DO ifrq = 1, 1, 1 ! 1hr
     CASE ("runctrl.vars.nml_cape") ! OK
       nvar_nml = 2
     CASE ("runctrl.vars.nml_pr_tas_1hr_test") ! OK
-      nvar_nml = 10 
+      nvar_nml = 12 
     CASE ("runctrl.vars.nml_weathertyping") ! new stuff from HTr, no nml yet available
       nvar_nml = 6
     CASE ("runctrl.vars.nml_psl") ! new stuff from HTr, no nml yet available
@@ -3559,7 +3569,7 @@ DO ifrq = 1, 1, 1 ! 1hr
                 !PHI_s      !(input) 2D geopotential of the surface
                 !T_L        !(input) temperature at lowest level
                 !nz, ns, ew !(input) dimensions: vertical, north-south, east-west
-                CALL calcslp2(psl_in, p_in, psfc_in, ph_in(:,:,1)+phb_in(:,:,1), t_in(:,:,1), nz, yfocus, xfocus)
+                CALL calcslptwo(psl_in, p_in, psfc_in, ph_in(:,:,1)+phb_in(:,:,1), t_in(:,:,1), nz, yfocus, xfocus)
                 !                     int c    read   read          read         int c
               CASE DEFAULT
                 PRINT *, 'CAUTION: unknown setting for calcslp, proceed with default method'
@@ -3896,7 +3906,7 @@ DO ifrq = 1, 1, 1 ! 1hr
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! evspsbl [kg m-2 s-1] a Evaporation
 ! unit [kg m-2 /3hr] to [kg m-2 s-1]
-! TO CHECK STILL in principle
+! TO CHECK STILL, in principle OK
   
           IF (var_cmip(ivar) == "evspsbl") THEN
   
@@ -3918,7 +3928,7 @@ DO ifrq = 1, 1, 1 ! 1hr
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! evspblpot [kg m-2 s-1] a Potential Evapotranspiration 
 ! unit [W m-2]/[J kg-1] -> [kg m-2 s-1]
-! TO CHECK STILL in principle
+! TO CHECK STILL, in principle OK
 ! TODO / CHECK
 ! THERE IS STH WRONG WITH THE UNITS: WRF's POTEVP is accumulated and declared to be in W m-2. 
 ! It doesen't make sense to accumulate in W m-2, but even if assume it as J m-2 or derive kg m-2 
@@ -4254,7 +4264,7 @@ END DO ! ifrq - different temporal aggregations
 
 !===============================================================================
 
-END PROGRAM WRF_CMORizer
+END PROGRAM WRFCMORizer
 
 !===============================================================================
 ! HTr routines for psl calculation
@@ -4386,7 +4396,7 @@ END SUBROUTINE calcslp
 !       November 10, 2011. The equation can be found especially in the section
 !       (4.3.1) "Mean sea level pressure PP_msl (routine PPPMER)"
 
-SUBROUTINE calcslp2(slp, PP, P_s, PHI_s, T_L, nz, ns, ew)
+SUBROUTINE calcslptwo(slp, PP, P_s, PHI_s, T_L, nz, ns, ew)
 
 IMPLICIT NONE
 
@@ -4408,7 +4418,7 @@ real, PARAMETER                     :: g     = 9.81   ![m s-2] (const.) accelera
 real, PARAMETER                     :: gamma = 0.0065 ![K m-1] (const.) lapse rate at const. 0.0065 K/m, also denoted as (dT/dz)_st
 integer                             :: j,k !loop parameters
 
-!print *,'this is calcslp2 !!!'
+!print *,'this is calcslptwo !!!'
 
 P_L = PP(:,:,1)  !extract lowest layer
 
@@ -4472,7 +4482,7 @@ DO j = 1 , ew
   END DO
 END DO
   
-END SUBROUTINE calcslp2
+END SUBROUTINE calcslptwo
 
 !===============================================================================
 
@@ -4628,7 +4638,7 @@ END DO
 
 counter=1_4
 l=0_4
-DO i=1_4,LONG(ndOverall)*LONG(ntspd),1
+DO i=1_4,ndOverall*ntspd,1
   IF ( tmp2D_singlenumber(i) == tstot_singlenumber ) THEN
     j=counter
   END IF

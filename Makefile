@@ -4,11 +4,11 @@
 # Version     : See the git log
 # License     : MIT, see license.txt
 # Description : Makefile for WRF_CMORizer.f90, more compile options in preamble
-# WARNING     : veryclean for testing of the code, remove to avoid any mistakes!
 # ==============================================================================
 
 # JSC/JURECA HPC system (easybuild + modules software environment)
 # load environment first; tool is compatible with multiple stages and toolchains
+# le17a
 #FC = $(EBROOTIFORT)/bin/ifort
 #FCFLAGS = -O2
 #FCFLAGS += -warn all
@@ -24,7 +24,7 @@ FCFLAGS += -Wno-tabs
 FCFLAGS += -I/usr/include
 LDFLAGS = -L/usr/lib -lnetcdff -lnetcdf
 
-PROGRAMS = postpro_model_WRF_to_ESGcompliancy
+PROGRAMS = WRF_CMORizer
 
 all: $(PROGRAMS)
 
@@ -40,4 +40,5 @@ clean:
 	rm -f *.o *.mod *.MOD *_genmod.f90 tmpfile* log
 
 veryclean: clean
-	rm -rf *~ $(PROGRAMS) /home/kgo/Documents/sandbox/cmorization_testing/CORDEX-FPSCEM-CMWL
+	rm -rf *~ $(PROGRAMS)
+#	rm -rf *~ $(PROGRAMS) /home/kgo/Documents/sandbox/cmorization_testing/CORDEX-FPSCEM-CMWL
