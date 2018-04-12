@@ -23,7 +23,7 @@
 !   WRF_CMORizer.f90
 !
 ! VERSION:
-!   v0.4 (= git tag) as of 2018-04-10
+!   v0.4 (= git tag) as of 2018-04-11
 !   see git tags and log for revision details, history, and versions
 !
 ! PURPOSE / DESCRIPTION:
@@ -61,12 +61,13 @@
 !     stored at high resolution also, albeit only as 2D fields.
 !
 !     MISSING STILL:
-!     * Some variables / diagnostics, see below
+!     * Temporal averaging (6hr, day, mon, seasons) functionality based on 
+!       tier-2, has to be added still -> part of the structure of the code 
+!       (v0.5)
 !     * Fixed fields (based on geo_em files), easy to implement via namelist and
-!       search path -> part of the structure of the code
-!     * Temporal averaging (6hr, day, mon, seasons), has to be added still; 
-!       -> part of the structure of the code.
-!     * Spatial interpolation to common regular grid EUR-11i
+!       search path -> part of the structure of the codeA (in v0.6)
+!     * Some variables / diagnostics, see below (in v0.7)
+!     * Spatial interpolation to common regular grid EUR-11i (v0.8)
 !
 !   - Double-checked, tested and refined namelists with their respective
 !     variables and diagnostics, after code merging and refactoring, all needed
@@ -612,11 +613,11 @@
 !     * [X] process data for the ICTP paper >>> test on JURECA once more (Intel
 !           + multiple files), v0.3, nml #1 & #2
 !     * [X] xtrm
-!     * [ ] add missing vars, see above (see e.g. Chus / UNICAN table)
-!     * [ ] add fx data functionality (new namelist)
 !     * [ ] temporal averaging, merge Aris
-!   - Later:
+!     * [ ] add fx data functionality (new namelist)
+!     * [ ] add missing vars, see above (see e.g. Chus / UNICAN table)
 !     * [ ] grid transform
+!   - Later:
 !     * [ ] register new institute ID and model name with O.B. Christensen at 
 !           DMI.!
 !   - Long-term:
