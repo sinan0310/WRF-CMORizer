@@ -613,7 +613,7 @@
 !     * [X] process data for the ICTP paper >>> test on JURECA once more (Intel
 !           + multiple files), v0.3, nml #1 & #2
 !     * [X] xtrm
-!     * [ ] temporal averaging, merge Aris
+!     * [ ] temporal averaging, merge Aris // double check the find command > sorted?
 !     * [ ] add fx data functionality (new namelist)
 !     * [ ] add missing vars, see above (see e.g. Chus / UNICAN table)
 !     * [ ] grid transform
