@@ -142,7 +142,7 @@
 !   - NN | ? | LAh | WEGC -- who is this, Heimo?
 ! 
 ! SUPPORT AND TESTING:
-!   - Kirsten WARRACH-SAGI et al.
+!   - Kirsten WARRACH-SAGI, Josipa MILOVAC, et al.
 !   - Eleni KATRAGKOU et al.
 !
 ! MOTIVATION:
@@ -174,8 +174,8 @@
 !   - >=F95 compiler
 !   - Used for development and testing (latest development, should be backward
 !     compatible):
-!     * gfortran 7.2.0
-!     * ifort 17.0.2
+!     * gfortran v7.2.0
+!     * ifort v17.0.2, watch out: proven NOT to work with ifort v15
 !   - Linux/UNIX OS (-> system calls)
 !
 ! REQUIREMENTS:
@@ -519,6 +519,36 @@
 !     should be 05:30:00, even with double precision calc no chance. cdo is OK,
 !     ncview too. Seems more a ncdump issue. Others have this issue too.
 !   - Precipitation does not include graupel etc., just rainnc and rainc.
+!
+! BUGS & FIXES:
+!   - bug_v0.4_2018041700 
+!     File affected: WRF_CMORizer.f90
+!     Reported by: k.goergen@fz-juelich.de
+!     Date: 2018-04-17
+!     Information relayed to: cordex-fps-cpcm-wrf@googlegroups.com
+!     "Before rolling out the tool, I found that
+!     there were some issues of system call and the way the file list was
+!     generated; so I replaced it using 'find' but without the '| sort',
+!     rather last minute. Although the tool reads all dates and times from the
+!     input and sorts in data accordingly, in case the 'cell method' is 'mean'
+!     and two output intervals are needed and the end of file 0 is reached,
+!     the next file in the filelist is used as file 1 to calculate the mean
+!     from the last output timestep in file 0 and the first in file 1; without
+!     the 'sort', file 1 is most likely the wrong file. (I know one may run
+!     WRF with overlap at the end of a wrfout, but this is not always done).
+!     See a note on this in the "restrictions" section of the preamble. A next
+!     version will double check this."
+!   - fix_v0.4_2018041700
+!     File affected: WRF_CMORizer.f90
+!     Fix by: k.goergen@fz-juelich.de
+!     Date: 2018-04-17
+!     Information relayed to: cordex-fps-cpcm-wrf@googlegroups.com
+!     Find the 3 lines like this (around lines 1200ff):
+!     CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name wrfout*" //
+!     TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc > " // tmpfileFL)
+!     and add the "| sort", like so:
+!     CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name wrfout*" //
+!     TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc | sort > " // tmpfileFL)
 !
 ! TODO / PLANNED EXTENSIONS
 ! **see "TODO" and "CHECK" markers in the code**
@@ -1186,10 +1216,12 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! - get a file list of all wrfout, wrfxtrm and wrfpress files -- if they exist
 ! - use regex to refine the ls output and the filelist
 ! - non-std F95, works for gfortran (fct & subroutine) + ifort
-! - to not check the filesystem too often, this is done at this point
-! - also the search results might be limited
+! - in order to not check the filesystem too often, this is done at this point
+! - also the search results might be limited using the filter
 ! - this can be made more efficient, but then it is not so generic anymore
 !   depending on the depth of the search path find takes some time
+! - using find in combination with a data root directory should be OK with most
+!   ways users store their files
   
   PRINT *, "============================================================"
   PRINT *, "*** FILELIST CREATION ***"
@@ -1204,15 +1236,15 @@ DO ifrq = 1, 1, 1 ! 1hr
     fl_filter = ts
   END IF
   
-  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name wrfout*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc  > " // tmpfileFL)
+  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name wrfout*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc | sort > " // tmpfileFL)
   ft = 0 ! file type
   CALL GenerateFilelist
   
-  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name wrfxtrm*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc  > " // tmpfileFL)
+  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name wrfxtrm*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc | sort > " // tmpfileFL)
   ft = 1
   CALL GenerateFilelist
 
-  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name wrfpress*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc  > " // tmpfileFL)
+  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name wrfpress*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc | sort > " // tmpfileFL)
   ft = 2
   CALL GenerateFilelist
  

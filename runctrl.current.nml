@@ -18,7 +18,7 @@
    references = "http://www.fz-juelich.de",
 /
 &globalvars_additional
-   comment = "simulation and processing: k.goergen@fz-juelich.de; postprocessing: WRF_CMORizer.f90 v0.4; excl. 10 grid point boundary relaxation zone",
+   comment = "simulation and processing: k.goergen@fz-juelich.de (ORCID=0000-0002-4208-3444); postprocessing: WRF_CMORizer.f90 v0.4; excl. 10 grid point boundary relaxation zone",
 !  institute_run_id = "rv054r05_JURECAcpu_val_CdxFpsCpcmHiResNWPtestCb00tsInitWLx", ! CMx WLx, varname might also be: fzj-ibg3_id
    institute_run_id = "rv054r05_JURECAcpu_val_CdxFpsCpcmHiResNWPtestCb00tsInitCMx",
    title = "WRF381AA RCM model runs for CORDEX FPS CEM WL/CM study, reanalysis forcing",
