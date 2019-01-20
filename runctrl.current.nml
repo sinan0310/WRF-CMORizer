@@ -24,12 +24,12 @@
    title = "WRF381AA RCM model runs for CORDEX FPS CEM WL/CM study, reanalysis forcing",
 /
 &filesystem
-   DirInputSimResRoot = "/home/kgo/Documents/sandbox/cmorization_testing/simres.INITWL",
-   DirOutputPostProRoot = "/home/kgo/Documents/sandbox/cmorization_testing",
+!  DirInputSimResRoot = "/home/kgo/Documents/sandbox/cmorization_testing/simres.INITWL",
+!  DirOutputPostProRoot = "/home/kgo/Documents/sandbox/cmorization_testing",
 !  DirInputSimResRoot =   "/homea/slts/slts00/data/ramod_WRF_own/rv054r05_JURECAcpu_val_CdxFpsCpcmHiResNWPtestCb00tsInitWLx/simres",
-!  DirInputSimResRoot =   "/homea/slts/slts00/data/ramod_WRF_own/rv054r05_JURECAcpu_val_CdxFpsCpcmHiResNWPtestCb00tsInitCMx/simres",
+   DirInputSimResRoot =   "/homea/slts/slts00/data/ramod_WRF_own/rv054r05_JURECAcpu_val_CdxFpsCpcmHiResNWPtestCb00tsInitCMx/simres",
 !  DirOutputPostProRoot = "/homea/slts/slts00/data/ramod_WRF_own/rv054r05_JURECAcpu_val_CdxFpsCpcmHiResNWPtestCb00tsInitWLx/postpro/CMORized_v03/WL/Austria",
-!  DirOutputPostProRoot = "/homea/slts/slts00/data/ramod_WRF_own/rv054r05_JURECAcpu_val_CdxFpsCpcmHiResNWPtestCb00tsInitCMx/postpro/CMORized_v03/CM/Austria",
+   DirOutputPostProRoot = "/homea/slts/slts00/data/ramod_WRF_own/rv054r05_JURECAcpu_val_CdxFpsCpcmHiResNWPtestCb00tsInitCMx/postpro/CMORized_v03/CM/Austria",
    domain = "d01",                        ! for filename generation needed
 !  domain = "d02",                        ! for filename generation needed
 /
@@ -53,21 +53,21 @@
    tetot = '2101-01-01_00:00:00',         ! end of the main time vector, do not change
 /
 &static_fields
-   PnFnGeo = '/home/kgo/Documents/sandbox/cmorization_testing/geo_em.d01.nc'
-!  PnFnGeo = '/homea/slts/slts00/data/ramod_WRF_own/rv050r00_JURECAcpu_val_Setup/geo/alternative_geo_em_UHOH_20170728/WPS_alternative_finer_resolution_geo_em_files/geo_em.d01.nc'
+!  PnFnGeo = '/home/kgo/Documents/sandbox/cmorization_testing/geo_em.d01.nc'
+   PnFnGeo = '/homea/slts/slts00/data/ramod_WRF_own/rv050r00_JURECAcpu_val_Setup/geo/alternative_geo_em_UHOH_20170728/WPS_alternative_finer_resolution_geo_em_files/geo_em.d01.nc'
 !  PnFnGeo = '/homea/slts/slts00/data/ramod_WRF_own/rv050r00_JURECAcpu_val_Setup/geo/alternative_geo_em_UHOH_20170728/WPS_alternative_finer_resolution_geo_em_files/geo_em.d02.nc'
 !  PnFnGeo = '/homea/slts/slts00/data/ramod_WRF_own/rv055r00_JURECAcpu_val_CdxFpsCpcmHiResGenForcDatCb01/geo_CORINE_HWSD_from_JMi_cb01refined_use_this/geo_em.d01.nc'
 !  PnFnGeo = '/homea/slts/slts00/data/ramod_WRF_own/rv055r00_JURECAcpu_val_CdxFpsCpcmHiResGenForcDatCb01/geo_CORINE_HWSD_from_JMi_cb01refined_use_this/geo_em.d02.nc'
 /
 &tool_config
    aggregation_yearly = .F.,              ! for tier-2 / initial processing, default CMOR, 1hr 3hr data are stored in yearly files, data controls files created
-   aggregation_monthly = .T.,             ! data controls monthly files created
-   aggregation_individually = .F.,        ! individual file is created, for the timespan as defined below
+   aggregation_monthly = .F.,             ! data controls monthly files created
+   aggregation_individually = .T.,        ! individual file is created, for the timespan as defined below
 ! Austria
-   tsact = '2009-06-20_00:00:00',         ! tsact and teact are only needed if aggregation_individually = .TRUE.,
-   teact = '2009-06-27_00:00:00',
-!  tsact = '2009-06-01_00:00:00',
-!  teact = '2009-07-01_00:00:00',
+!  tsact = '2009-06-20_00:00:00',         ! tsact and teact are only needed if aggregation_individually = .TRUE.,
+!  teact = '2009-06-27_00:00:00',
+   tsact = '2009-06-01_00:00:00',
+   teact = '2009-07-01_00:00:00',
 ! IOP
 !  tsact = '2012-10-23_00:00:00',
 !  teact = '2012-10-28_00:00:00',
