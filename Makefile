@@ -16,7 +16,7 @@ FCFLAGS += -warn all
 FCFLAGS += -qopenmp
 FCFLAGS += -sox
 FCFLAGS += -fp-model precise -prec-div -prec-sqrt
-FCFLAGS += -xCORE-AVX2
+FCFLAGS += -xHost
 FCFLAGS += -I$(EBROOTNETCDFMINFORTRAN)/include
 LDFLAGS = -L$(EBROOTNETCDFMINFORTRAN)/lib -lnetcdff -lnetcdf
 
