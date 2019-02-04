@@ -23,7 +23,7 @@
 !   WRF_CMORizer.f90
 !
 ! VERSION:
-!   v0.4 (= git tag) as of 2018-04-11
+!   v0.4 (= git tag) as of 2019-02-03
 !   see git tags and log for revision details, history, and versions
 !
 ! PURPOSE / DESCRIPTION:
@@ -365,6 +365,8 @@
 !     * 2 = fullpos_cy38 implementation (ERA/IFS/APACHE/ALADIN) (HTr, LAh)
 !           DEFAULT for FPS as decided in Trieste Nov 2017, always set
 !     * 3 = HIRLAM method (Poisson eq.), not yet implemented, tested by WEGC
+!   - Performance: Tries to use compiler optimisations (see Makefile) and OpenMP
+!     to speed up loops.
 !
 ! PROCEDURE:
 !   The tool may be called as part of a processing chain. It is meant as an all-
@@ -1182,12 +1184,12 @@ frequency(7) = "fx"
 
 ALLOCATE ( fnNMLvar(12) )
 fnNMLvar(1) = "runctrl.vars.nml_pr_tas_1hr_test" ! OK
-fnNMLvar(2) = "runctrl.vars.nml_vars_on_plevels" ! OK
+fnNMLvar(7) = "runctrl.vars.nml_vars_on_plevels" ! OK
 fnNMLvar(3) = "runctrl.vars.nml" ! OK
 fnNMLvar(4) = "runctrl.vars.nml_pr_mrso" ! OK
 fnNMLvar(5) = "runctrl.vars.nml_minmax" ! OK
 fnNMLvar(6) = "runctrl.vars.nml_evp_roff" ! ok not yet tested: evspsbl, evspsblpot
-fnNMLvar(7) = "runctrl.vars.nml_water_column" ! OK
+fnNMLvar(2) = "runctrl.vars.nml_water_column" ! OK
 fnNMLvar(8) = "runctrl.vars.nml_radiation" ! OK
 fnNMLvar(9) = "runctrl.vars.nml_snow" ! ok not yet tested in winter: sic
 fnNMLvar(10) = "runctrl.vars.nml_cape" ! OK
@@ -1283,8 +1285,8 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! combinations
   
   !DO ivarnml = 1, 9, 1 ! loop over all regular namelists
-  DO ivarnml = 2, 2, 1 ! recommended to all for first steps and testing: nml #1
-  !DO ivarnml = 1, 2, 1 ! ICTP paper data contrib
+  !DO ivarnml = 1, 1, 1 ! recommended to all for first steps and testing: nml #1
+  DO ivarnml = 1, 2, 1 ! ICTP paper data contrib
   !DO ivarnml = 5, 5, 1 ! test min/max
   
     PRINT *, "============================================================"
@@ -3458,6 +3460,7 @@ DO ifrq = 1, 1, 1 ! 1hr
               PRINT *, "calc hus..."
               var3d_in(:,:,:) = qv_in(:,:,:)
               ! linear in log(p)
+              !$OMP PARALLEL DO
               DO i = 1,xfocus
                 DO j = 1,yfocus
                   DO nl = 1,nz - 1
@@ -3474,6 +3477,7 @@ DO ifrq = 1, 1, 1 ! 1hr
                   END DO
                 END DO
               END DO
+              !$OMP END PARALLEL DO
 
             ! check as is: strange data holes, all negative speeds are affected
             ! compare with wrfpress orig run, looks good, distribution OK
@@ -3497,6 +3501,7 @@ DO ifrq = 1, 1, 1 ! 1hr
                                   ((v_in(i,:,:)+v_in(i+1,:,:))/2.)*sinalpha_in(:,:) 
               END DO
               ! logarithmic in zg
+              !$OMP PARALLEL DO
               DO i = 1,xfocus 
                 DO j = 1,yfocus
                   DO nl = 1,nz - 1
@@ -3522,6 +3527,7 @@ DO ifrq = 1, 1, 1 ! 1hr
                   END DO
                 END DO
               END DO
+              !$OMP END PARALLEL DO
 
             ! comparison with wrfpress, same time: simple scheme about the same
             ! results
@@ -3537,6 +3543,7 @@ DO ifrq = 1, 1, 1 ! 1hr
                                   (u_in(:,j,:)+u_in(:,j+1,:))/2.*sinalpha_in(:,:) 
               END DO
               ! logarithmic in zg
+              !$OMP PARALLEL DO
               DO i = 1,xfocus 
                 DO j = 1,yfocus
                   DO nl = 1,nz - 1
@@ -3555,6 +3562,7 @@ DO ifrq = 1, 1, 1 ! 1hr
                   END DO
                 END DO
               END DO
+              !$OMP END PARALLEL DO
 
             ! comparison with orig model data between level 16 and 17
             ! OK
@@ -3568,6 +3576,7 @@ DO ifrq = 1, 1, 1 ! 1hr
               DO nl = 1,nz
                 var3d_in(:,:,nl) = ( w_in(:,:,nl) + w_in(:,:,nl+1) ) / 2.
               END DO
+              !$OMP PARALLEL DO
               DO i = 1,xfocus 
                 DO j = 1,yfocus
                   DO nl = 1,nz - 1
@@ -3580,6 +3589,7 @@ DO ifrq = 1, 1, 1 ! 1hr
                   END DO
                 END DO
               END DO              
+              !$OMP END PARALLEL DO
 
             ! vars needed: int.: ph_fl (> in: ph_in, phb_in); p_in (> in: pp_in, pb_in)
             !              out: var_pl, var3d_in
@@ -3755,6 +3765,7 @@ DO ifrq = 1, 1, 1 ! 1hr
               lcl(:,:) = -999.
               lfc(:,:) = -999.
     
+              !$OMP PARALLEL DO
               DO i = 1,xfocus
                 DO j = 1,yfocus
                   DO nl = 1,nz-1
@@ -3814,6 +3825,7 @@ DO ifrq = 1, 1, 1 ! 1hr
                   END DO
                 END DO
               END DO
+              !$OMP END PARALLEL DO
   
               IF ( var_cmip(ivar) == "cape") THEN
                 data_in(:,:) = cape(:,:)
@@ -3846,6 +3858,7 @@ DO ifrq = 1, 1, 1 ! 1hr
 
                 cldfra_inv(:,:) = 1.
   
+                !$OMP PARALLEL DO
                 DO i = 1,xfocus
                   DO j = 1,yfocus
                     IF (maxval(cldfra_in(i,j,:,k)) .lt. 0.99) THEN
@@ -3860,6 +3873,7 @@ DO ifrq = 1, 1, 1 ! 1hr
                     END IF
                   END DO ! j
                 END DO ! i
+                !$OMP END PARALLEL DO
   
                 tmp_3d(:,:,k) = (1 - cldfra_inv(:,:))*100.
   
@@ -4401,6 +4415,7 @@ ridiculous_mm5_test = .TRUE.
 ! level to extrapolate a surface pressure and temperature, which is supposed
 ! to reduce the effect of the diurnal heating cycle in the pressure field.
 tk = tk1 + T00
+!$OMP PARALLEL DO
 DO j = 1, ns
   DO i = 1, ew
 
@@ -4425,9 +4440,11 @@ DO j = 1, ns
 
   END DO ! ew
 END DO ! ns
+!$OMP END PARALLEL DO
   
 ! Get temperature PCONST Pa above surface. Use this to extrapolate 
 ! the temperature at the surface and down to sea level.
+!$OMP PARALLEL DO
 DO j = 1, ns
   DO i = 1, ew
 
@@ -4456,10 +4473,12 @@ DO j = 1, ns
 
   END DO ! ew
 END DO !ns
+!$OMP END PARALLEL DO
 
 ! If we follow a traditional computation, there is a correction to the sea level 
 ! temperature if both the surface and sea level temnperatures are *too* hot.
 IF ( ridiculous_mm5_test ) THEN
+  !$OMP PARALLEL DO
   DO j = 1, ns
     DO i = 1, ew
       l1 = t_sea_level(i,j) .LT. TC 
@@ -4472,9 +4491,11 @@ IF ( ridiculous_mm5_test ) THEN
       END IF
     END DO
   END DO
+  !$OMP END PARALLEL DO
 END IF
 
 ! The grand finale: ta da!
+!$OMP PARALLEL DO
 DO j = 1, ns
   DO i = 1, ew
     z_half_lowest=ght(i,j,1)
@@ -4482,6 +4503,7 @@ DO j = 1, ns
     !slp(i,j) = slp(i,j) * 0.01
   END DO ! ew
 END DO ! ns
+!$OMP END PARALLEL DO
 
 END SUBROUTINE calcslp
 
@@ -4518,7 +4540,8 @@ integer                             :: j,k !loop parameters
 !print *,'this is calcslptwo !!!'
 
 P_L = PP(:,:,1)  !extract lowest layer
-
+  
+!$OMP PARALLEL DO
 DO j = 1 , ew
   DO k = 1 , ns
         
@@ -4578,6 +4601,7 @@ DO j = 1 , ew
  
   END DO
 END DO
+!$OMP END PARALLEL DO
   
 END SUBROUTINE calcslptwo
 

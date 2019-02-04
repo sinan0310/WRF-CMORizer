@@ -7,14 +7,16 @@
 # ==============================================================================
 
 # JSC/JURECA HPC system (easybuild + modules software environment)
+# Intel Xeon Haswell CPUs
 # load environment first; tool is compatible with multiple stages and toolchains
 # le18a
-# OpenMP
 FC = $(EBROOTIFORT)/bin/ifort
-FCFLAGS = -O2
+FCFLAGS = -O3
 FCFLAGS += -warn all
 FCFLAGS += -qopenmp
 FCFLAGS += -sox
+FCFLAGS += -fp-model precise -prec-div -prec-sqrt
+FCFLAGS += -xCORE-AVX2
 FCFLAGS += -I$(EBROOTNETCDFMINFORTRAN)/include
 LDFLAGS = -L$(EBROOTNETCDFMINFORTRAN)/lib -lnetcdff -lnetcdf
 
