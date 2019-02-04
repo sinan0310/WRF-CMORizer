@@ -8,21 +8,24 @@
 
 # JSC/JURECA HPC system (easybuild + modules software environment)
 # load environment first; tool is compatible with multiple stages and toolchains
-# le17a
-#FC = $(EBROOTIFORT)/bin/ifort
-#FCFLAGS = -O2
-#FCFLAGS += -warn all
-#FCFLAGS += -I$(EBROOTNETCDFMINFORTRAN)/include
-#LDFLAGS = -L$(EBROOTNETCDFMINFORTRAN)/lib -lnetcdff -lnetcdf
+# le18a
+# OpenMP
+FC = $(EBROOTIFORT)/bin/ifort
+FCFLAGS = -O2
+FCFLAGS += -warn all
+FCFLAGS += -qopenmp
+FCFLAGS += -sox
+FCFLAGS += -I$(EBROOTNETCDFMINFORTRAN)/include
+LDFLAGS = -L$(EBROOTNETCDFMINFORTRAN)/lib -lnetcdff -lnetcdf
 
 # Ubuntu Desktop, -g or -O2
-FC = /usr/bin/gfortran
-FCFLAGS = -O2
-FCFLAGS += -Wall
-FCFLAGS += -ffree-line-length-none
-FCFLAGS += -Wno-tabs
-FCFLAGS += -I/usr/include
-LDFLAGS = -L/usr/lib -lnetcdff -lnetcdf
+#FC = /usr/bin/gfortran
+#FCFLAGS = -O2
+#FCFLAGS += -Wall
+#FCFLAGS += -ffree-line-length-none
+#FCFLAGS += -Wno-tabs
+#FCFLAGS += -I/usr/include
+#LDFLAGS = -L/usr/lib -lnetcdff -lnetcdf
 
 PROGRAMS = WRF_CMORizer
 

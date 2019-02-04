@@ -1283,7 +1283,7 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! combinations
   
   !DO ivarnml = 1, 9, 1 ! loop over all regular namelists
-  DO ivarnml = 1, 1, 1 ! recommended to all for first steps and testing: nml #1
+  DO ivarnml = 2, 2, 1 ! recommended to all for first steps and testing: nml #1
   !DO ivarnml = 1, 2, 1 ! ICTP paper data contrib
   !DO ivarnml = 5, 5, 1 ! test min/max
   
@@ -3420,6 +3420,7 @@ DO ifrq = 1, 1, 1 ! 1hr
               PRINT *, "calc ta..."
               var3d_in(:,:,:) = t_in(:,:,:)
               ! linear in zg
+              !$OMP PARALLEL DO
               DO i = 1,xfocus 
                 DO j = 1,yfocus
                   DO nl = 1,nz - 1
@@ -3440,6 +3441,7 @@ DO ifrq = 1, 1, 1 ! 1hr
                   END DO
                 END DO
               END DO
+              !$OMP END PARALLEL DO
 
             ! vars needed: int.: p_in (> in: pp_in, pb_in)
             !              out: var_pl, var3d_in
@@ -3593,6 +3595,7 @@ DO ifrq = 1, 1, 1 ! 1hr
               PRINT *, "calc zg..."
               var3d_in(:,:,:) = ph_fl(:,:,:)
               ! linear in log(p)
+              !$OMP PARALLEL DO
               DO i = 1,xfocus 
                 DO j = 1,yfocus
                   DO nl = 1,nz - 1
@@ -3609,6 +3612,7 @@ DO ifrq = 1, 1, 1 ! 1hr
                   END DO
                 END DO
               END DO
+              !$OMP END PARALLEL DO
             END IF
 
             ! alternative: use one routine for all
