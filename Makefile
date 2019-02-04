@@ -37,7 +37,7 @@ all: $(PROGRAMS)
 .PHONY: clean veryclean
 
 clean:
-	rm -f *.o *.mod *.MOD *_genmod.f90 tmpfile* log
+	rm -f *.o *.mod *.MOD *_genmod.f90 tmpfile* log*
 
 veryclean: clean
 	rm -rf *~ $(PROGRAMS)
