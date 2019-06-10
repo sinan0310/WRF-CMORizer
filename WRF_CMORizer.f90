@@ -1238,15 +1238,18 @@ DO ifrq = 1, 1, 1 ! 1hr
     fl_filter = ts
   END IF
   
-  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name wrfout*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc | sort > " // tmpfileFL)
+  !CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // TRIM(ts) // " -name wrfout*" // TRIM(domain) // "*_" // TRIM(fl_filter) // "*.nc | sort > " // tmpfileFL)
+  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // " -name wrfout*" // TRIM(domain) // "*_" // TRIM(ts) // "*.nc -o -name wrfout*" // TRIM(domain) // "*_" // TRIM(te) // "*.nc | sort > " // tmpfileFL)
   ft = 0 ! file type
   CALL GenerateFilelist
   
-  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name wrfxtrm*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc | sort > " // tmpfileFL)
+  !CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name wrfxtrm*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc | sort > " // tmpfileFL)
+  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // TRIM(ts) // " -name wrfxtrm*" // TRIM(domain) // "*_" // TRIM(fl_filter) // "*.nc | sort > " // tmpfileFL)
   ft = 1
   CALL GenerateFilelist
 
-  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name wrfpress*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc | sort > " // tmpfileFL)
+  !CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name wrfpress*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc | sort > " // tmpfileFL)
+  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // TRIM(ts) // " -name wrfpress*" // TRIM(domain) // "*_" // TRIM(fl_filter) // "*.nc | sort > " // tmpfileFL)
   ft = 2
   CALL GenerateFilelist
  
@@ -1285,8 +1288,8 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! combinations
   
   !DO ivarnml = 1, 9, 1 ! loop over all regular namelists
-  !DO ivarnml = 1, 1, 1 ! recommended to all for first steps and testing: nml #1
-  DO ivarnml = 1, 2, 1 ! ICTP paper data contrib
+  DO ivarnml = 1, 1, 1 ! recommended to all for first steps and testing: nml #1
+  !DO ivarnml = 1, 1, 1 ! ICTP paper data contrib
   !DO ivarnml = 5, 5, 1 ! test min/max
   
     PRINT *, "============================================================"
@@ -4372,6 +4375,11 @@ DO ifrq = 1, 1, 1 ! 1hr
   END DO ! ivarnml - namelist loop 
 
 END DO ! ifrq - different temporal aggregations
+
+!===============================================================================
+! terminator line, may be grep'ped by control script
+
+PRINT *, "CMORizer ran successfully"
 
 !===============================================================================
 
