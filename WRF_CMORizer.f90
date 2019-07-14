@@ -19,6 +19,11 @@
 ! ***                                                                      ***
 ! ****************************************************************************
 !
+! 2019-07-14_KGo
+! urgent todos wrt mrlsl and tsl
+! add proper depth bounds, right now only the thickness is given, this is wrong
+! mask the ocean areas: missing values
+!
 ! NAME:
 !   WRF_CMORizer.f90
 !
@@ -109,13 +114,16 @@
 !     * ua100m
 !     * va100m
 !     * wsgmax100m
-!     * mrsol
+!     * mrsol -> mrlsl    ---- working on this one
 !     * clbvi
 !     * clgvi
-!     * (ic_lightning) need special scheme
+!     * (ic_lightning) needs special parametrisation / online diagnostic
 !     * (cg_lightning)
 !     * (total_lightning)
 !     All other variables are covered by namelists and implemented.
+!
+!   - Additional vars implemented:
+!     * tsl ---- working on this one
 !
 !   - Desired additional diagnostics (not yet implemented):
 !     * vorticity
@@ -774,12 +782,12 @@ MODULE NamelistHandling
 
   INTEGER, PARAMETER :: nvars = 36 ! maximum number of vars per namelist
 
-  CHARACTER (len = 200) :: Conventions, contact, experiment_id, experiment, &
+  CHARACTER (len = 300) :: Conventions, contact, experiment_id, experiment, &
     driving_experiment, driving_model_id, driving_model_ensemble_member, &
     driving_experiment_name, institution, institute_id, model_id, &
     rcm_version_id, project_id, CORDEX_domain, product, references
 
-  CHARACTER (len = 200) :: comment, institute_run_id, title
+  CHARACTER (len = 300) :: comment, institute_run_id, title
 
   CHARACTER (LEN = 100), DIMENSION(nvars) :: var_wrf, var_cmip, standard_name, &
     long_name, units, filetype, cm1hr, cm3hr, cm6hr, cmDay, cmMon, cmSea, positive
@@ -787,13 +795,13 @@ MODULE NamelistHandling
   LOGICAL, DIMENSION(nvars):: time1hr, time3hr, time6hr, timeDay, timeMon, timeSea, &
      interpolate
 
-  CHARACTER (len = 200) :: DirInputSimResRoot, DirOutputPostProRoot, domain
+  CHARACTER (len = 300) :: DirInputSimResRoot, DirOutputPostProRoot, domain
 
   INTEGER ::  nx, ny, nz, xoffset, yoffset, xfocus, yfocus
   CHARACTER (len = 4) :: ts, te
   CHARACTER (len = 19) :: tstot, tetot
 
-  CHARACTER (len = 200) :: PnFnGeo
+  CHARACTER (len = 300) :: PnFnGeo
 
   LOGICAL :: aggregation_yearly, aggregation_monthly, aggregation_individually
   CHARACTER (len = 19) :: tsact, teact
@@ -896,7 +904,7 @@ REAL, PARAMETER :: gr = 9.81
 ! new netCDF file
 INTEGER :: ncid, ncidin, ncidin0
 INTEGER :: lon_dimid, lat_dimid, rec_dimid, height_dimid, &
-  nb2_dimid, x_dimid, y_dimid, plev_dimid
+  nb2_dimid, x_dimid, y_dimid, plev_dimid, depth_dimid
 INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, &
   rotated_pole_varid, height_varid, rec_varid, pp_varid, pb_varid, ph_varid, &
   phb_varid, qv_varid, qc_varid, qi_varid, qr_varid, qs_varid, &
@@ -904,7 +912,7 @@ INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, &
   rainc_varid, snownc_varid, u10_varid, v10_varid, u_varid, v_varid, w_varid, &
   sfcevp_varid, potevp_varid, sfroff_varid, udroff_varid, acsnom_varid, &
   sinalpha_varid, cosalpha_varid, plev_varid, plevbnds_varid, psfc_varid, &
-  landmask_varid, xland_varid, swdown_varid
+  landmask_varid, xland_varid, swdown_varid, depth_varid
 
 ! input data general query
 INTEGER :: ncid_in, ndims_in, nvars_in, ngatts_in, unlimdimid_in !!!, formatp_in
@@ -943,6 +951,7 @@ REAL, DIMENSION(:,:), ALLOCATABLE :: &
   landmask_in   , &
   xland_in
 REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
+  data_in_3D  , &
   pp_in       , &
   pb_in       , &
   ph_in       , &
@@ -966,6 +975,7 @@ REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   rainnc_in   , &
   rainc_in    , &
   rad_in      , &
+  hflux_in    , &
   t_p         , &
   snownc_in   , &
   acsnom_in   , &
@@ -985,11 +995,14 @@ REAL, DIMENSION(:), ALLOCATABLE :: &
 ! target pressure levels [Pa]
 REAL, DIMENSION(6) :: pout = (/100000.,92500.,85000.,70000.,50000.,20000./)
 
-! time vec stuff
-REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: &
+! time vec stuff, KIND was 8
+! http://fortranwiki.org/fortran/show/Real+precision
+!INTEGER, PARAMETER :: dp = KIND(0.d0) ! compiler-machine specific
+INTEGER, PARAMETER :: dp = selected_real_kind(15, 307) ! double precision
+REAL(KIND=dp), DIMENSION(:,:), ALLOCATABLE :: &
   TimeRefArraySubset, &
   Time_bnds
-REAL(KIND=8), DIMENSION(:), ALLOCATABLE :: &
+REAL(KIND=dp), DIMENSION(:), ALLOCATABLE :: &
   TimeRefArraySubsetMean
 
 ! bucket system
@@ -1116,6 +1129,11 @@ CLOSE(2)
 ALLOCATE( data_in( xfocus, yfocus ), STAT=sts )
 IF (sts /= 0) STOP "*** Not enough memory on this device, stopping***"
 
+! this is a dirty hack for the mrlsl and tsl variables
+! at this point it is not even clear whether this variable is needed at all
+ALLOCATE( data_in_3D( xfocus, yfocus, 4 ), STAT=sts )
+IF (sts /= 0) STOP "*** Not enough memory on this device to create data_in_3D, stopping***"
+
 ALLOCATE( TimeRefArraySubset(2,2) )
 ALLOCATE( TimeRefArraySubsetMean(2) )
 ALLOCATE( Time_bnds(2,2) )
@@ -1183,14 +1201,14 @@ frequency(6) = "sem"
 frequency(7) = "fx"
 
 ALLOCATE ( fnNMLvar(12) )
-fnNMLvar(1) = "runctrl.vars.nml_pr_tas_1hr_test" ! OK
-fnNMLvar(7) = "runctrl.vars.nml_vars_on_plevels" ! OK
-fnNMLvar(3) = "runctrl.vars.nml" ! OK
+fnNMLvar(1) = "runctrl.vars.nml_radiation" ! OK
+fnNMLvar(2) = "runctrl.vars.nml" ! OK
+fnNMLvar(3) = "runctrl.vars.nml_water_column" ! OK
 fnNMLvar(4) = "runctrl.vars.nml_pr_mrso" ! OK
-fnNMLvar(5) = "runctrl.vars.nml_minmax" ! OK
-fnNMLvar(6) = "runctrl.vars.nml_evp_roff" ! ok not yet tested: evspsbl, evspsblpot
-fnNMLvar(2) = "runctrl.vars.nml_water_column" ! OK
-fnNMLvar(8) = "runctrl.vars.nml_radiation" ! OK
+fnNMLvar(5) = "runctrl.vars.nml_vars_on_plevels" ! OK
+fnNMLvar(6) = "runctrl.vars.nml_pr_tas_1hr_test" ! OK
+fnNMLvar(7) = "runctrl.vars.nml_minmax" ! OK
+fnNMLvar(8) = "runctrl.vars.nml_evp_roff" ! ok not yet tested: evspsbl, evspsblpot
 fnNMLvar(9) = "runctrl.vars.nml_snow" ! ok not yet tested in winter: sic
 fnNMLvar(10) = "runctrl.vars.nml_cape" ! OK
 fnNMLvar(11) = "runctrl.vars.nml_weathertyping"  ! new from HTr, not implemented
@@ -1243,12 +1261,10 @@ DO ifrq = 1, 1, 1 ! 1hr
   ft = 0 ! file type
   CALL GenerateFilelist
   
-  !CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name wrfxtrm*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc | sort > " // tmpfileFL)
   CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // TRIM(ts) // " -name wrfxtrm*" // TRIM(domain) // "*_" // TRIM(fl_filter) // "*.nc | sort > " // tmpfileFL)
   ft = 1
   CALL GenerateFilelist
 
-  !CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name wrfpress*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc | sort > " // tmpfileFL)
   CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // TRIM(ts) // " -name wrfpress*" // TRIM(domain) // "*_" // TRIM(fl_filter) // "*.nc | sort > " // tmpfileFL)
   ft = 2
   CALL GenerateFilelist
@@ -1288,9 +1304,10 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! combinations
   
   !DO ivarnml = 1, 9, 1 ! loop over all regular namelists
-  DO ivarnml = 1, 1, 1 ! recommended to all for first steps and testing: nml #1
+  !DO ivarnml = 1, 1, 1 ! recommended to all for first steps and testing: nml #1
   !DO ivarnml = 1, 1, 1 ! ICTP paper data contrib
-  !DO ivarnml = 5, 5, 1 ! test min/max
+  DO ivarnml = 4, 4, 1 ! testing
+  !DO ivarnml = 1, 4, 1
   
     PRINT *, "============================================================"
     PRINT *, "var. namelist nr. and name: ", ivarnml, TRIM(fnNMLvar(ivarnml))
@@ -1344,8 +1361,8 @@ DO ifrq = 1, 1, 1 ! 1hr
       nvar_nml = 3
     CASE ("runctrl.vars.nml_vars_on_plevels") ! OK
       nvar_nml = 36
-    CASE ("runctrl.vars.nml_pr_mrso") ! OK
-      nvar_nml = 4
+    CASE ("runctrl.vars.nml_pr_mrso") ! OK --> new: tsl mrlsl, from 4 to 6
+      nvar_nml = 6
     CASE ("runctrl.vars.nml_snow") ! ok -- see above
       nvar_nml = 6 
     CASE ("runctrl.vars.nml_radiation") ! OK
@@ -1754,9 +1771,9 @@ DO ifrq = 1, 1, 1 ! 1hr
               WRITE (InDateTimeMonthStr,'(I2.2)') InDateTimeMonth(it)              
               WRITE (LastDayStr,'(I2.2)') INT(TimeRefArraySubset(0,5))
               IF ( (cell_methods(ivar) == "mean") .OR. (cell_methods(ivar) == "sum") ) THEN 
-                WRITE (FirstHourStr,'(I2.2)') INT( FLOOR( ((dthours/2.)*60.) / 60. ) )
+                WRITE (FirstHourStr,'(I2.2)') INT( FLOOR( ((dtHours/2.)*60.) / 60. ) )
                 WRITE (FirstMinuteStr,'(I2.2)') INT( MOD( (dtHours/2.)*60., 60. ) )
-                WRITE (LastHourStr,'(I2.2)') INT( FLOOR( ( (24.*60.) - (dthours/2.)*60.)  / 60. ) )
+                WRITE (LastHourStr,'(I2.2)') INT( FLOOR( ( (24.*60.) - (dtHours/2.)*60.) / 60. ) )
                 WRITE (LastMinuteStr,'(I2.2)') INT( MOD( (24.*60.) - (dtHours/2.)*60., 60. ) )
                 PRINT *, "first and last h + min strings: ", FirstHourStr, FirstMinuteStr, LastHourStr, LastMinuteStr
               ELSE
@@ -1932,6 +1949,14 @@ DO ifrq = 1, 1, 1 ! 1hr
               IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
                 sts = NF90_DEF_DIM(ncid, "plev", 1, plev_dimid)
               END IF
+              ! special 4D vars, i.e. with real depth dimension
+              ! hardcoding number of depth layers in LSM
+              ! with the nomenclature in the namelist this special case cannot
+              ! be resolved easily, standard does not foresee many 3D vars
+              IF ((TRIM(var_cmip(ivar)) == 'mrlsl') .OR. &
+                  (TRIM(var_cmip(ivar)) == 'tsl')) THEN
+                sts = NF90_DEF_DIM(ncid, "depth", 4, depth_dimid)
+              ENDIF
               sts = NF90_DEF_DIM(ncid, "time", NF90_UNLIMITED, rec_dimid)
               IF ( ( cell_methods(ivar) == "mean" ) .OR. &
                    ( cell_methods(ivar) == "sum" ) .OR. &
@@ -2016,6 +2041,19 @@ DO ifrq = 1, 1, 1 ! 1hr
                 END IF
               END IF
 
+              ! special case of 3D vars
+              ! what we enter her eis the thickness, but not the actual depth
+              ! neither staggered nor upper and lower bounds
+              IF ((TRIM(var_cmip(ivar)) == 'mrlsl') .OR. &
+                  (TRIM(var_cmip(ivar)) == 'tsl')) THEN
+                sts = nf90_def_var(ncid, "depth", NF90_DOUBLE, (/ depth_dimid /), depth_varid)
+                sts = nf90_put_att(ncid, depth_varid, "standard_name", "depth")
+                sts = nf90_put_att(ncid, depth_varid, "long_name", "Depth")
+                sts = nf90_put_att(ncid, depth_varid, "units", "m")
+                sts = nf90_put_att(ncid, depth_varid, "positive", "down")
+                sts = nf90_put_att(ncid, depth_varid, "axis", "Z")
+              ENDIF
+
               ! for vertically averaged variables need the plev bounds
               ! plev_bnds(2), always just single field per file: this is just two numbers 
               IF ( cell_methods(ivar) == "vmean" ) THEN
@@ -2090,10 +2128,12 @@ DO ifrq = 1, 1, 1 ! 1hr
               ! coordinates attribute which makes the association
               ! this is also better for coding and data reading
               !IF ( height(ivar) /= -999 ) THEN
-              !  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, height_dimid, rec_dimid /), x_varid)  
-              !ELSE
+              IF ((var_cmip(ivar) == "mrlsl") &
+                .OR. (var_cmip(ivar) == "tsl")) THEN
+                sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, depth_dimid, rec_dimid /), x_varid)  
+              ELSE
                 sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, rec_dimid /), x_varid)
-              !END IF
+              END IF
 
               ! TODO -> determine chunksizes vector beforehand otherwise
               ! this can only make it worse
@@ -2117,6 +2157,9 @@ DO ifrq = 1, 1, 1 ! 1hr
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat height")
               ELSE IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat plev") 
+              ELSE IF ((TRIM(var_cmip(ivar)) == 'mrlsl') .OR. &
+                (TRIM(var_cmip(ivar)) == 'tsl')) THEN
+                sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat depth") 
               ELSE
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat")
               END IF
@@ -2149,11 +2192,19 @@ DO ifrq = 1, 1, 1 ! 1hr
                    ( cell_methods(ivar) == "minimum" ) .OR. &
                    ( cell_methods(ivar) == "maximum" ) ) THEN
 
-                ! problem
+                ! known problem
                 ! https://www.unidata.ucar.edu/mailing_lists/archives/netcdfgroup/2015/msg00071.html
+                ! whenever cell methhod mean is used, e.g., with pr, thereare
+                ! artifacts in the time variable, with ps, tas etc. this does
+                ! not occur
                 ! use the old scheme for the time_bnds
-                ! mid-point of time interval [decimal days]
-                TimeRefArraySubsetMean (:) = TimeRefArraySubset(:,1) + ( 0.5_8 * (1._8 / (24._8/dtHours) ) )
+                ! mid-point of time interval [decimal days], variable dt shall
+                ! be possible
+                !TimeRefArraySubsetMean(:) = TimeRefArraySubset(:,1) + ( 0.5_8 * (1._8 / (24._8/dtHours) ) )
+                !TimeRefArraySubsetMean(:) = TimeRefArraySubset(:,1) !+ ( 0.5 * (1. / (24./dtHours) ) ) the 2nd part here causes the truncation errors and this is not very nice                            XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+                !TimeRefArraySubsetMean(:) = DBLE(TimeRefArraySubset(:,1)) + DBLE( 0.5 * (1. / (24./dtHours) ) )
+                !TimeRefArraySubsetMean(:) = TimeRefArraySubset(:,1) + 0.020833333_dp
+                TimeRefArraySubsetMean(:) = TimeRefArraySubset(:,1) + (0.5d0 * (1.0d0 / (24.0d0/dble(dtHours)) ))
                 PRINT *, "cell_methods:", cell_methods(ivar)
                 PRINT *, "dtHours",  dtHours, dtHours/2.
                 PRINT *, "TimeRefArraySubset", TimeRefArraySubset(:,1)
@@ -2196,6 +2247,12 @@ DO ifrq = 1, 1, 1 ! 1hr
               IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
                 sts = NF90_PUT_VAR(ncid, plev_varid, height(ivar)*100. )
               END IF
+
+              ! dirty hack
+              ! total with Noah LSM 2m depth
+              IF ((TRIM(var_cmip(ivar)) == 'mrlsl') .OR. (TRIM(var_cmip(ivar)) == 'tsl')) THEN
+                sts = NF90_PUT_VAR(ncid, depth_varid, (/ 0.1D0, 0.3D0, 0.6D0, 1.0D0 /) )
+              END IF 
 
               !-----------------------------------------------------------------
   
@@ -3026,12 +3083,61 @@ DO ifrq = 1, 1, 1 ! 1hr
             END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! hfss [W m-2] a Surface Upward Latent Heat Flux
+! hfls [W m-2] a Surface Upward Sensible Heat Flux
+! this was with the radiation before until v05 including; but for hfss and hlfs 
+! there is no bucket defined, i.e. BUCKET_J is not applicable and also the 
+! calculation below was wrong: leads to gross mistake
+  
+          ELSE IF ((var_cmip(ivar) == "hfss") &
+            .OR. (var_cmip(ivar) == "hfls")) THEN
+
+            PRINT *, "get heat flux variables"
+
+            IF (.not. ALLOCATED(hflux_in)) ALLOCATE( hflux_in ( xfocus, yfocus, 2 ), STAT=sts )
+
+            IF (it /= InDimLenRec) THEN
+ 
+              PRINT *, "read hflux_in for two times from the same file"
+
+              sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
+              sts = NF90_GET_VAR(ncidin, varid, hflux_in(:,:,:), &
+                START = (/ xoffset, yoffset, it /), &
+                COUNT = (/ xfocus, yfocus, 2 /) )
+            
+            ELSE IF ( (it == InDimLenRec) .AND. (ifl /= SIZE(fl_input)) ) THEN
+
+              sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
+              sts = NF90_GET_VAR(ncidin, varid, hflux_in(:,:,1), &
+                START = (/ xoffset, yoffset, it /), &
+                COUNT = (/ xfocus, yfocus, 1/))
+
+              iflWRFin = fl_input(ifl+1)
+
+              sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
+
+              sts = NF90_INQ_VARID(ncidin0, TRIM(var_wrf(ivar)), varid)
+              sts = NF90_GET_VAR(ncidin0, varid, hflux_in(:,:,2), &
+                START = (/ xoffset, yoffset, 1 /), &
+                COUNT = (/ xfocus, yfocus, 1/))
+
+              sts = NF90_CLOSE(ncidin0)
+
+              iflWRFin = fl_input(ifl)
+
+            ELSE
+
+              PRINT *, "no data available for average calculation any more"
+
+              calc = .FALSE.
+  
+            END IF
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! rsds [W m-2] a Surface Downwelling Shortwave Radiation
 ! rlds [W m-2] a Surface Downwelling Longwave Radiation
 ! rsus [W m-2] a Surface Upwelling Shortwave Radiation 
 ! rlus [W m-2] a Surface Upwelling Longwave Radiation
-! hfss [W m-2] a Surface Upward Latent Heat Flux
-! hfls [W m-2] a Surface Upward Sensible Heat Flux
 ! rlut [W m-2] a TOA Outgoing Longwave Radiation
 ! rsdt [W m-2] a TOA Incident Shortwave Radiation
 ! rsut [W m-2] a TOA Outgoing Shortwave Radiation
@@ -3042,8 +3148,6 @@ DO ifrq = 1, 1, 1 ! 1hr
             .OR. (var_cmip(ivar) == "rlds") &
             .OR. (var_cmip(ivar) == "rsus") &
             .OR. (var_cmip(ivar) == "rlus") &
-            .OR. (var_cmip(ivar) == "hfss") &
-            .OR. (var_cmip(ivar) == "hfls") &
             .OR. (var_cmip(ivar) == "rlut") &
             .OR. (var_cmip(ivar) == "rsdt") &
             .OR. (var_cmip(ivar) == "rsut")) THEN
@@ -3063,6 +3167,7 @@ DO ifrq = 1, 1, 1 ! 1hr
  
               sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_J", bucket_J)
               IF ( bucket_J > 0. ) THEN
+                PRINT *, "BUCKET_J = ", bucket_J
                 IF (.not. ALLOCATED(i_rad_in)) ALLOCATE( i_rad_in ( xfocus, yfocus, 2 ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, TRIM('I_' // var_wrf(ivar)), varid)
                 sts = NF90_GET_VAR(ncidin, varid, i_rad_in(:,:,:), &
@@ -3081,6 +3186,7 @@ DO ifrq = 1, 1, 1 ! 1hr
 
               sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_J", bucket_J)
               IF ( bucket_J > 0. ) THEN
+                PRINT *, "BUCKET_J = ", bucket_J
                 IF (.not. ALLOCATED(i_rad_in)) ALLOCATE( i_rad_in ( xfocus, yfocus, 2 ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, TRIM('I_' // var_wrf(ivar)), varid)
                 sts = NF90_GET_VAR(ncidin, varid, i_rad_in(:,:,1), &
@@ -3167,30 +3273,37 @@ DO ifrq = 1, 1, 1 ! 1hr
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! mrso [kg m-2] i Total Soil Moisture Content
 ! was beforehand treated as averaged variable, but is defined instantaneous
+! new, also using smois_in, would be better soil_in
+! mrlsl [kg m-2] i Water Content of Soil Layer
+! tsl [K] i Temperature of Soil
   
-          ELSE IF (var_cmip(ivar) == "mrso") THEN
- 
+          ELSE IF ((var_cmip(ivar) == "mrso") &
+            .OR. (var_cmip(ivar) == "mrlsl") &
+            .OR. (var_cmip(ivar) == "tsl")) THEN
+
             IF (.not. ALLOCATED(DZS)) ALLOCATE( DZS( 4 ), STAT=sts )
             sts = NF90_INQ_VARID(ncidin, "DZS", varid)
             IF ( sts /= NF90_NOERR ) THEN
               DZS = (/ 0.1, 0.3, 0.6, 1.0 /) ! total with Noah LSM 2m depth
+              PRINT*,'attention: using hardwired layer thickness for Noah LSM'
             ELSE
               sts = NF90_GET_VAR(ncidin, varid, DZS, &
               START = (/ 1, it /), COUNT = (/ 4, 1 /) )
-              PRINT*,'DZS ', DZS(:)
+              PRINT*,'reading layer thickness from file'
             END IF
+            PRINT*,'DZS ', DZS(:)
  
 !            IF (.not. ALLOCATED(smois_in)) ALLOCATE( smois_in( xfocus, yfocus, 4, 2 ), STAT=sts )
             IF (.not. ALLOCATED(smois_in)) ALLOCATE( smois_in( xfocus, yfocus, 4, 1 ), STAT=sts )
   
 !            IF (it /= InDimLenRec) THEN
   
-              sts = NF90_INQ_VARID(ncidin, "SMOIS", varid)
+              sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
               sts = NF90_GET_VAR(ncidin, varid, smois_in(:,:,:,:), &
                 START = (/ xoffset, yoffset, 1, it /), &
                 COUNT = (/ xfocus, yfocus, 4, 1 /) )
 !                COUNT = (/ xfocus, yfocus, 4, 2 /) )
-  
+
 !            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
   
 !              sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
@@ -4121,12 +4234,36 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! rsdt [W m-2] a TOA Incident Shortwave Radiation
 ! rsut [W m-2] a TOA Outgoing Shortwave Radiation
   
+          IF ( (var_cmip(ivar) == "hfss") &
+            .OR. (var_cmip(ivar) == "hfls") ) THEN
+    
+            IF (calc) THEN
+
+              data_in(:,:) = (hflux_in(:,:,1) + hflux_in(:,:,2)) / 2.
+
+            ELSE
+
+              data_in(:,:) = mv
+
+            END IF
+
+            calc = .TRUE.
+
+          END IF
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! rsds [W m-2] a Surface Downwelling Shortwave Radiation
+! rlds [W m-2] a Surface Downwelling Longwave Radiation
+! rsus [W m-2] a Surface Upwelling Shortwave Radiation 
+! rlus [W m-2] a Surface Upwelling Longwave Radiation
+! rlut [W m-2] a TOA Outgoing Longwave Radiation
+! rsdt [W m-2] a TOA Incident Shortwave Radiation
+! rsut [W m-2] a TOA Outgoing Shortwave Radiation
+  
           IF ( (var_cmip(ivar) == "rsds") &
             .OR. (var_cmip(ivar) == "rlds") &
             .OR. (var_cmip(ivar) == "rsus") &
             .OR. (var_cmip(ivar) == "rlus") &
-            .OR. (var_cmip(ivar) == "hfss") &
-            .OR. (var_cmip(ivar) == "hfls") &
             .OR. (var_cmip(ivar) == "rlut") &
             .OR. (var_cmip(ivar) == "rsdt") &
             .OR. (var_cmip(ivar) == "rsut") ) THEN
@@ -4198,6 +4335,9 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! mrso [kg m-2] i Total Soil Moisture Content 
 ! see comment in the variable aquisition section
 ! m3 m-3 -> kg m-2
+! double checked in July 2019 
+! SMOIS_i [m3 m-3] * DZS_i [m] * 1000 [kg m-3] = [kg m-2]
+! assume standard area 1m2, assume 1l water = 1kg, 1mm m-2 water depth = 1l
 
           IF (var_cmip(ivar) == "mrso") THEN
     
@@ -4211,6 +4351,28 @@ DO ifrq = 1, 1, 1 ! 1hr
 
           END IF
   
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! mrlsl
+
+          IF (var_cmip(ivar) == "mrlsl") THEN
+
+            DO i = 1, 4
+              data_in_3D(:,:,i) = smois_in(:,:,i,1) * DZS(i) * 1000.
+            END DO
+
+          END IF
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! tsl
+
+          IF (var_cmip(ivar) == "tsl") THEN
+
+            DO i = 1, 4
+              data_in_3D(:,:,i) = smois_in(:,:,i,1)
+            END DO
+
+          END IF
+
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! snc [%] i Snow Area Fraction
 ! unit [] to [%]
@@ -4293,13 +4455,13 @@ DO ifrq = 1, 1, 1 ! 1hr
   
           sts = NF90_OPEN( TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) &
             // "/" // TRIM(fn_out), NF90_WRITE, ncid )
-
-          ! file must exist, just from the logic of the code, nevertheless: test
-          IF (sts/=0) EXIT
-          
-          sts = NF90_INQ_VARID(ncid, TRIM(var_cmip(ivar)), x_varid)
           PRINT *, "NF90_OPEN",  sts
-  
+
+            ! file must exist, just from the logic of the code, nevertheless: test
+            IF (sts/=0) EXIT
+          
+            sts = NF90_INQ_VARID(ncid, TRIM(var_cmip(ivar)), x_varid)
+
             PRINT *, 'NF90_INQ_VARID', ncid
             PRINT *, 'var_cmip(ivar)', var_cmip(ivar)
             PRINT *, 'x_varid', x_varid
@@ -4307,15 +4469,21 @@ DO ifrq = 1, 1, 1 ! 1hr
             PRINT *, 'xfocus', xfocus
             PRINT *, 'yfocus', yfocus
     
-            ! not needed anymore, always store 3D only, have height information
-            ! in the coordinates, this was before a standard 'violation'
+            ! most CMOR vars are not 3D, pressure level data is one field and
+            ! level per file; but there are exceptions, where data is stored 3D
+            ! including the repective z-coordinates, all according to CF
+            ! convention
+            IF ((var_cmip(ivar) == "mrlsl") &
+              .OR. (var_cmip(ivar) == "tsl")) THEN
+              sts = NF90_PUT_VAR( ncid, x_varid, data_in_3D(:,:,:), &
+                START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 4, 1 /) )
             !IF ( height(ivar) /= -999 ) THEN
             !  sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
             !    START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1, 1 /) )
-            !ELSE
-              sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
+            ELSE
+              sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:), &
                 START=(/ 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1 /) )
-            !END IF
+            END IF
     
             PRINT *, 'NF90_PUT_VAR', sts
             PRINT *, 'ncid', ncid
@@ -4369,6 +4537,8 @@ DO ifrq = 1, 1, 1 ! 1hr
       prevpass = 0 ! ?????????????????????? one level inside????
 
       ENDIF ! procflag T/F TODO fix indention
+
+      ! after each loop data_in and data_in_3D should be deallocated
 
     END DO ! ivar - variable loop
 
