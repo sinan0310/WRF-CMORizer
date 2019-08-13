@@ -24,6 +24,21 @@
 ! add proper depth bounds, right now only the thickness is given, this is wrong
 ! mask the ocean areas: missing values
 !
+! 2019-08-13_KGo
+! refinement of the CORDEX archive design DRS to aacount for complex nesting
+! setups as we use them with the FPS; discussion during EGU2019 FPS CPCM 
+! splinter meeting
+! Changes for one-way, on-the-fly, double nest as used by the WRF groups:
+! - RCMVersionID in path and filename: v1... -> x1n2v1 for the ALP-3 run
+! - global attributes, for the ALP-3 run, add:
+!   rcm_version_id = same string as before in the DRS
+!   rcm_model_id = 
+!   rcm_domain = 
+!   rcm_institute = 
+! Not fully clarified whether this is the right understanding. 
+! Do not implement yet. Stay with the old system.
+! See e-mail to Stefan SOBOLOWSKI from 2019-08-13.
+!
 ! NAME:
 !   WRF_CMORizer.f90
 !
@@ -1203,11 +1218,11 @@ frequency(7) = "fx"
 ALLOCATE ( fnNMLvar(12) )
 fnNMLvar(1) = "runctrl.vars.nml" ! OK
 fnNMLvar(2) = "runctrl.vars.nml_water_column" ! OK
-fnNMLvar(3) = "runctrl.vars.nml_vars_on_plevels" ! OK
-fnNMLvar(4) = "runctrl.vars.nml_radiation" ! OK
-fnNMLvar(5) = "runctrl.vars.nml_pr_mrso" ! OK
-fnNMLvar(6) = "runctrl.vars.nml_evp_roff" ! ok not yet tested: evspsbl, evspsblpot
+fnNMLvar(3) = "runctrl.vars.nml_radiation" ! OK
+fnNMLvar(4) = "runctrl.vars.nml_pr_mrso" ! OK
+fnNMLvar(5) = "runctrl.vars.nml_evp_roff" ! ok not yet tested: evspsbl, evspsblpot
 
+fnNMLvar(6) = "runctrl.vars.nml_vars_on_plevels" ! OK
 fnNMLvar(7) = "runctrl.vars.nml_minmax" ! OK
 
 fnNMLvar(8) = "runctrl.vars.nml_pr_tas_1hr_test" ! OK
@@ -1305,7 +1320,7 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! you want to postprocess just specific variables or create your own variable 
 ! combinations
   
-  DO ivarnml = 1, 6, 1 ! 9 loop over all regular namelists
+  DO ivarnml = 1, 5, 1 ! 9 loop over all regular namelists
   !DO ivarnml = 1, 1, 1 ! recommended to all for first steps and testing: nml #1
   !DO ivarnml = 1, 1, 1 ! ICTP paper data contrib
   !DO ivarnml = 4, 4, 1 ! testing
