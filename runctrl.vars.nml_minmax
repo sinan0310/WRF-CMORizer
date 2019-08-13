@@ -13,7 +13,7 @@
    cm3hr =         'mean'                                      ,'mean'                                      ,'mean'                                 ,'mean'                                   ,
    time6hr =       F                                           ,F                                           ,F                                      ,F                                        ,
    cm6hr =         'mean'                                      ,'mean'                                      ,'mean'                                 ,'mean'                                   ,
-   timeDay =       T                                           ,T                                           ,T                                      ,T                                        ,
+   timeDay =       T                                           ,T                                           ,F                                      ,F                                        ,
    cmDay =         'minimum'                                   ,'maximum'                                   ,'maximum'                              ,'maximum'                                ,
    timeMon =       F                                           ,F                                           ,F                                      ,F                                        ,
    cmMon =         'mean'                                      ,'mean'                                      ,'mean'                                 ,'mean'                                   ,

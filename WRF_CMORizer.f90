@@ -114,7 +114,7 @@
 !     * ua100m
 !     * va100m
 !     * wsgmax100m
-!     * mrsol -> mrlsl    ---- working on this one
+!     * mrsol -> mrlsl -- working on this one, variable OK, vertical coord not
 !     * clbvi
 !     * clgvi
 !     * (ic_lightning) needs special parametrisation / online diagnostic
@@ -123,7 +123,7 @@
 !     All other variables are covered by namelists and implemented.
 !
 !   - Additional vars implemented:
-!     * tsl ---- working on this one
+!     * tsl -- working on this one, variable OK, vertical coord not
 !
 !   - Desired additional diagnostics (not yet implemented):
 !     * vorticity
@@ -1201,14 +1201,16 @@ frequency(6) = "sem"
 frequency(7) = "fx"
 
 ALLOCATE ( fnNMLvar(12) )
-fnNMLvar(1) = "runctrl.vars.nml_radiation" ! OK
-fnNMLvar(2) = "runctrl.vars.nml" ! OK
-fnNMLvar(3) = "runctrl.vars.nml_water_column" ! OK
-fnNMLvar(4) = "runctrl.vars.nml_pr_mrso" ! OK
-fnNMLvar(5) = "runctrl.vars.nml_vars_on_plevels" ! OK
-fnNMLvar(6) = "runctrl.vars.nml_pr_tas_1hr_test" ! OK
+fnNMLvar(1) = "runctrl.vars.nml" ! OK
+fnNMLvar(2) = "runctrl.vars.nml_water_column" ! OK
+fnNMLvar(3) = "runctrl.vars.nml_vars_on_plevels" ! OK
+fnNMLvar(4) = "runctrl.vars.nml_radiation" ! OK
+fnNMLvar(5) = "runctrl.vars.nml_pr_mrso" ! OK
+fnNMLvar(6) = "runctrl.vars.nml_evp_roff" ! ok not yet tested: evspsbl, evspsblpot
+
 fnNMLvar(7) = "runctrl.vars.nml_minmax" ! OK
-fnNMLvar(8) = "runctrl.vars.nml_evp_roff" ! ok not yet tested: evspsbl, evspsblpot
+
+fnNMLvar(8) = "runctrl.vars.nml_pr_tas_1hr_test" ! OK
 fnNMLvar(9) = "runctrl.vars.nml_snow" ! ok not yet tested in winter: sic
 fnNMLvar(10) = "runctrl.vars.nml_cape" ! OK
 fnNMLvar(11) = "runctrl.vars.nml_weathertyping"  ! new from HTr, not implemented
@@ -1303,10 +1305,10 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! you want to postprocess just specific variables or create your own variable 
 ! combinations
   
-  !DO ivarnml = 1, 9, 1 ! loop over all regular namelists
+  DO ivarnml = 1, 6, 1 ! 9 loop over all regular namelists
   !DO ivarnml = 1, 1, 1 ! recommended to all for first steps and testing: nml #1
   !DO ivarnml = 1, 1, 1 ! ICTP paper data contrib
-  DO ivarnml = 4, 4, 1 ! testing
+  !DO ivarnml = 4, 4, 1 ! testing
   !DO ivarnml = 1, 4, 1
   
     PRINT *, "============================================================"
@@ -4224,15 +4226,8 @@ DO ifrq = 1, 1, 1 ! 1hr
           END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! rsds [W m-2] a Surface Downwelling Shortwave Radiation
-! rlds [W m-2] a Surface Downwelling Longwave Radiation
-! rsus [W m-2] a Surface Upwelling Shortwave Radiation 
-! rlus [W m-2] a Surface Upwelling Longwave Radiation
 ! hfss [W m-2] a Surface Upward Latent Heat Flux
 ! hfls [W m-2] a Surface Upward Sensible Heat Flux
-! rlut [W m-2] a TOA Outgoing Longwave Radiation
-! rsdt [W m-2] a TOA Incident Shortwave Radiation
-! rsut [W m-2] a TOA Outgoing Shortwave Radiation
   
           IF ( (var_cmip(ivar) == "hfss") &
             .OR. (var_cmip(ivar) == "hfls") ) THEN
