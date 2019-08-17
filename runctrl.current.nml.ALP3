@@ -10,7 +10,7 @@
    institution = "Institute of Bio- and Geosciences (IBG-3, Agrosphere), Research Centre Juelich (FZJ), GERMANY",
    institute_id = "FZJ-IBG3",                             ! must be registered with CORDEX
    model_id = "FZJ-IBG3-WRF381BB",                        ! must be registered with CORDEX ! here: ClimDyn paper, CPRDEX FPS CEM
-   rcm_version_id = "v01",                                ! free string: e.g. v01S2009060100 -> identifier for the FPS CM/WL runs, v01 only for fx; v1 v1S2009060100 v1S2009062000 v1S2012100100 v1S2012102300 v1S2014100100 v1S2014110200 > which case and which initialisation
+   rcm_version_id = "v1",                                 ! free string: e.g. v01S2009060100 -> identifier for the FPS CM/WL runs, v01 only for fx; v1 v1S2009060100 v1S2009062000 v1S2012100100 v1S2012102300 v1S2014100100 v1S2014110200 > which case and which initialisation
    project_id = "CORDEX-FPSCEM",                          ! default: CORDEX
 !  CORDEX_domain = "EUR-15",                              ! ALP-3 EUR-11 EUR-15
    CORDEX_domain = "ALP-3",                               ! ALP-3 EUR-11 EUR-15
@@ -18,13 +18,13 @@
    references = "http://www.fz-juelich.de",
 /
 &globalvars_additional
-   comment = "simulation and processing: k.goergen@fz-juelich.de (ORCID=0000-0002-4208-3444); postprocessing: WRF_CMORizer.f90 v0.4 fast incl. OpenMP; excl. 10 grid point boundary relaxation zone",
+   comment = "simulation and processing: k.goergen@fz-juelich.de (ORCID=0000-0002-4208-3444); postprocessing: WRF_CMORizer.f90, date=2019-08-13, commit=a7469d6, no OpenMP; excl. 10 grid point boundary relaxation zone",
    institute_run_id = "CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014",
    title = "WRF381BB RCM model runs for CORDEX FPS CEM evaluation runs with reanalysis forcing",
 /
 &filesystem
    DirInputSimResRoot =   "/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014/simres",
-   DirOutputPostProRoot = "/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014/postpro/CMORized_v04plus_fast",
+   DirOutputPostProRoot = "/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014/postpro/CMORized_LATSIS2",
 !  domain = "d01",                        ! for filename generation needed
    domain = "d02",                        ! for filename generation needed
 /

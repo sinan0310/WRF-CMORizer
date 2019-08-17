@@ -7,7 +7,7 @@
    units =         'kg m-2'                     ,'%'                   ,'kg m-2 s-1'        ,'kg m-2 s-1'                   ,'kg m-2'                        ,'K'                  ,
    height =        -999                         ,-999                  ,-999                ,-999                           ,-999                            ,-999                 ,
    positive =      '-999'                       ,'-999'                ,'-999'              ,'-999'                         ,'-999'                          ,'-999'               ,
-   time1hr =       T                            ,F                     ,T                   ,T                              ,T                               ,T                    ,
+   time1hr =       T                            ,F                     ,F                   ,F                              ,T                               ,F                    ,
    cm1hr =         'point'                      ,'mean'                ,'mean'              ,'mean'                         ,'point'                         ,'point'              ,
    time3hr =       F                            ,F                     ,F                   ,F                              ,F                               ,F                    ,
    cm3hr =         'mean'                       ,'mean'                ,'mean'              ,'mean'                         ,'mean'                          ,'mean'               ,
