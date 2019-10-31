@@ -13,7 +13,7 @@
 FC = $(EBROOTIFORT)/bin/ifort
 FCFLAGS = -O3
 FCFLAGS += -warn all
-#FCFLAGS += -qopenmp
+FCFLAGS += -qopenmp
 FCFLAGS += -sox
 FCFLAGS += -fp-model precise -prec-div -prec-sqrt
 FCFLAGS += -xHost

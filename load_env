@@ -8,3 +8,4 @@ module load HDF/4.2.13
 module load netCDF/4.6.1
 module load netCDF-Fortran/4.4.4
 module load git/2.17.0
+module li
