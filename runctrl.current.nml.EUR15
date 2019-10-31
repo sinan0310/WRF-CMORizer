@@ -18,19 +18,19 @@
    references = "http://www.fz-juelich.de",
 /
 &globalvars_additional
-   comment = "simulation and processing: k.goergen@fz-juelich.de (ORCID=0000-0002-4208-3444); postprocessing: WRF_CMORizer.f90, date=2019-08-13, commit=a7469d6, no OpenMP; excl. 10 grid point boundary relaxation zone",
+   comment = "simulation and processing: k.goergen@fz-juelich.de (ORCID=0000-0002-4208-3444); postprocessing: WRF_CMORizer.f90, date=2019-08-17, commit=c80b86b0, no OpenMP; excl. 10 grid point boundary relaxation zone",
    institute_run_id = "CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014",
    title = "WRF381BB RCM model runs for CORDEX FPS CEM evaluation runs with reanalysis forcing",
 /
 &filesystem
    DirInputSimResRoot =   "/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014/simres",
-   DirOutputPostProRoot = "/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014/postpro/CMORized_LATSIS2",
+   DirOutputPostProRoot = "/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014/postpro/CMORized_ICRC",
    domain = "d01",                        ! for filename generation needed
 !  domain = "d02",                        ! for filename generation needed
 /
 &model_config
    ts = '__YYYY_ts__',                           ! 2009 2012 2014 can be used for pattern matching with filenames, set to '0000' to use all files that are found
-   te = '__YYYY_te__',                           ! 2009 2012 2014 can be used for pattern matching with filenames, set to '0000' to use all files that are found
+   te = '0000' ! '__YYYY_te__',                           ! 2009 2012 2014 can be used for pattern matching with filenames, set to '0000' to use all files that are found
    nx = 359,                              ! EUR-15 raw output x-dim, incl. relaxation zone, unstaggered, changed to 359x350 w/ EUR-15
    ny = 350,                              ! EUR-15 raw output x-dim, incl. relaxation zone, umstaggered
 !  nx = 490,                              ! ALP-3 WRF grid spec with A-runs (CM/WL)

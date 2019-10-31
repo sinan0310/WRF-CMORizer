@@ -1215,22 +1215,20 @@ frequency(5) = "mon"
 frequency(6) = "sem"
 frequency(7) = "fx"
 
-ALLOCATE ( fnNMLvar(12) )
-fnNMLvar(1) = "runctrl.vars.nml_radiation" ! OK
+ALLOCATE ( fnNMLvar(13) )
+fnNMLvar(1) = "runctrl.vars.nml" ! OK
 fnNMLvar(2) = "runctrl.vars.nml_pr_mrso" ! OK
-
-fnNMLvar(3) = "runctrl.vars.nml" ! OK
-fnNMLvar(4) = "runctrl.vars.nml_water_column" ! OK
+fnNMLvar(3) = "runctrl.vars.nml_water_column" ! OK
+fnNMLvar(4) = "runctrl.vars.nml_vars_on_plevels" ! OK
 fnNMLvar(5) = "runctrl.vars.nml_evp_roff" ! ok not yet tested: evspsbl, evspsblpot
-
-fnNMLvar(6) = "runctrl.vars.nml_vars_on_plevels" ! OK
+fnNMLvar(6) = "runctrl.vars.nml_radiation" ! OK
 fnNMLvar(7) = "runctrl.vars.nml_minmax" ! OK
-
 fnNMLvar(8) = "runctrl.vars.nml_pr_tas_1hr_test" ! OK
 fnNMLvar(9) = "runctrl.vars.nml_snow" ! ok not yet tested in winter: sic
 fnNMLvar(10) = "runctrl.vars.nml_cape" ! OK
 fnNMLvar(11) = "runctrl.vars.nml_weathertyping"  ! new from HTr, not implemented
 fnNMLvar(12) = "runctrl.vars.nml_psl"            ! new from HTr, not implemented
+fnNMLvar(13) = "runctrl.vars_misc.nml_link" ! special for ICRC distributed
 
 !-------------------------------------------------------------------------------
 ! individual vars contain information on whether they are treated or not, i.e.
@@ -1273,9 +1271,15 @@ DO ifrq = 1, 1, 1 ! 1hr
     !fl_filter = "{" // ts // ".." // te // "}" ! does not work with SYSTEM call
     fl_filter = ts
   END IF
-  
+  PRINT *, "fl_filter from runctrl nml: ", fl_filter
+ 
+  ! decisive for the filelist which in turn determines whether, e.g., the last
+  ! timestep in the output file can be generated when averaging
+  ! there is an interplay between the scripting and this pattern matching, which
+  ! has to be adjusted individually in the end
+  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // TRIM(ts) // " -name wrfout*" // TRIM(domain) // "*_" // "*.nc | sort > " // tmpfileFL)
   !CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // TRIM(ts) // " -name wrfout*" // TRIM(domain) // "*_" // TRIM(fl_filter) // "*.nc | sort > " // tmpfileFL)
-  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // " -name wrfout*" // TRIM(domain) // "*_" // TRIM(ts) // "*.nc -o -name wrfout*" // TRIM(domain) // "*_" // TRIM(te) // "*.nc | sort > " // tmpfileFL)
+  !CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // " -name wrfout*" // TRIM(domain) // "*_" // TRIM(ts) // "*.nc -o -name wrfout*" // TRIM(domain) // "*_" // TRIM(te) // "*.nc | sort > " // tmpfileFL)
   ft = 0 ! file type
   CALL GenerateFilelist
   
@@ -1321,11 +1325,10 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! you want to postprocess just specific variables or create your own variable 
 ! combinations
   
-  DO ivarnml = 1, 2, 1 ! 9 loop over all regular namelists
+  !DO ivarnml = 1, 9, 1 ! 9 loop over all regular namelists
   !DO ivarnml = 1, 1, 1 ! recommended to all for first steps and testing: nml #1
-  !DO ivarnml = 1, 1, 1 ! ICTP paper data contrib
   !DO ivarnml = 4, 4, 1 ! testing
-  !DO ivarnml = 1, 4, 1
+  DO ivarnml = 13, 13, 1
   
     PRINT *, "============================================================"
     PRINT *, "var. namelist nr. and name: ", ivarnml, TRIM(fnNMLvar(ivarnml))
@@ -1395,6 +1398,8 @@ DO ifrq = 1, 1, 1 ! 1hr
       nvar_nml = 1
     CASE ("runctrl.vars.nml_minmax") ! OK
       nvar_nml = 4
+    CASE ("runctrl.vars_misc.nml_link")
+      nvar_nml = 1
     END SELECT
   
     PRINT *, "number of vars inside current namelist: nvar_nml = ", nvar_nml
@@ -3831,12 +3836,24 @@ DO ifrq = 1, 1, 1 ! 1hr
               !p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
   
               prw(:,:) = 0.
-              DO nl = 1, nz
-                prw(:,:) = prw(:,:) + &
-                  (qv_in(:,:,nl) * p_in(:,:,nl)/(R*t_in(:,:,nl)) * &
-                  ((ph_in(:,:,nl+1)+phb_in(:,:,nl+1)) - (ph_in(:,:,nl)+ &
-                  phb_in(:,:,nl)))/gr)
+              !DO nl = 1, nz
+              !  prw(:,:) = prw(:,:) + &
+              !    (qv_in(:,:,nl) * p_in(:,:,nl)/(R*t_in(:,:,nl)) * &
+              !    ((ph_in(:,:,nl+1)+phb_in(:,:,nl+1)) - (ph_in(:,:,nl)+ &
+              !    phb_in(:,:,nl)))/gr)
+              !END DO
+              !$OMP PARALLEL DO
+              DO i = 1,xfocus 
+                DO j = 1,yfocus
+                  DO nl = 1, nz
+                    prw(i,j) = prw(i,j) + &
+                      (qv_in(i,j,nl) * p_in(i,j,nl)/(R*t_in(i,j,nl)) * &
+                      ((ph_in(i,j,nl+1)+phb_in(i,j,nl+1)) - (ph_in(i,j,nl)+ &
+                      phb_in(i,j,nl)))/gr)
+                  END DO
+                END DO
               END DO
+              !$OMP END PARALLEL DO
               data_in(:,:) = prw(:,:)
   
             END IF
