@@ -1,6 +1,6 @@
 #!/bin/sh
 
-#USAGE="sbatch <runctl-file>"
+#USAGE="sbatch JURECA_sbatch_OpenMp_SingleNode.sh d01"
 
 #SBATCH --job-name="CMORizer"
 #SBATCH --nodes=1
@@ -20,4 +20,4 @@
 export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
 srun ./WRF_CMORizer > /dev/zero # log.txt 2>&1 # /dev/zero 
 
-echo "1" >> ../status_d01.txt
+echo "1" >> ../status_${1}.txt
