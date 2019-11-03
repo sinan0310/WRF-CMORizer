@@ -90,7 +90,7 @@ do
   do
     print $iv
     mkdir -p ../${dom}_${iv} 
-    cp -f WRF_CMORizer load_env *.mod JURECA_sbatch_OpenMp_SingleNode.sh ../${dom}_${iv}/.
+    cp -f WRF_CMORizer load_env *.mod $sbatch_script ../${dom}_${iv}/.
     cd ../${dom}_${iv} && pwd
     ln -f -s ${dir_tools}/nml_${iv} runctrl.vars_misc.nml_link
     ln -f -s ${dir_tools}/runctrl.current.nml.${dom_name} runctrl.current.nml
