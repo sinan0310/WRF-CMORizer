@@ -18,7 +18,7 @@
    references = "http://www.fz-juelich.de",
 /
 &globalvars_additional
-   comment = "simulation and processing: k.goergen@fz-juelich.de (ORCID=0000-0002-4208-3444); postprocessing: WRF_CMORizer.f90, date=2019-10-31, commit=6d64f8, OpenMP; excl. 10 grid point boundary relaxation zone; joint experiment with IDL/Universidade de Lisboa (Rita M Cardoso, rmcardoso@fc.ul.pt; Pedro M M Soares, pmsoares@fc.ul.pt): except HPC system and compilation settings everything else identical (identical forcing files and configuration), IDL does RCP8.5, FZJ-IBG3 does Historical",
+   comment = "simulation and processing: k.goergen@fz-juelich.de (ORCID=0000-0002-4208-3444); postprocessing: WRF_CMORizer.f90, date=2019-10-31, commit=6d64f8, OpenMP, -O3; excl. 10 grid point boundary relaxation zone; joint experiment with IDL/Universidade de Lisboa (Rita M Cardoso, rmcardoso@fc.ul.pt; Pedro M M Soares, pmsoares@fc.ul.pt): except HPC system and compilation settings everything else identical (identical forcing files and configuration), IDL does RCP8.5, FZJ-IBG3 does Historical",
    institute_run_id = "CORDEX-FPSCEM_EUR-15-ALP-3_SMHI-EC-EARTH_historical_r12_FZJ-IBG3-WRF381CA_v00aJuwelsCpuProdAdHocPrjTt19952005",
    title = "WRF381CA RCM model runs for CORDEX FPS CEM climate scenario runs with CMIP5 GCM forcing; tandem experiment with IDL (rcp85)",
 /

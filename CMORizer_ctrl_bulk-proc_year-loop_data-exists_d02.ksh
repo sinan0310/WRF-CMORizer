@@ -15,11 +15,11 @@
 
 # ---- ADJUST HERE -------------------------------------------------------------
 
-dom="d01" # d01 d02
-dom_name="EUR15" # EUR15 ALP3
+dom="d02" # d01 d02
+dom_name="ALP3" # EUR15 ALP3
 expID="CA" # BB CA
 PID="2019091800" # not in use
-sbatch_script="JURECA_sbatch_OpenMp_SingleNode.sh"
+sbatch_script="JURECA_sbatch_OpenMp_SingleNode_d02.sh"
 
 #dir_tools="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014/tools/CMORization/ctrl_d01_dev"
 dir_tools="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_SMHI-EC-EARTH_historical_r12_FZJ-IBG3-WRF381CA_v00aJuwelsCpuProdAdHocPrjTt19952005/tools/CMORization/ctrl"
@@ -30,8 +30,8 @@ dir_simres="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_SMHI-EC-E
 #year_start=2000 # 2000
 #year_stop=2009 # 2014
 #year_end=2016
-year_start=1998 # 1996
-year_stop=2000 # 2005
+year_start=1996 # 1996
+year_stop=1997 # 2005
 year_end=2007
 
 #fn_pattern0="FPSCPCM_eval_BBv03a_wrf_complete_raw_output"
