@@ -31,7 +31,7 @@ dir_simres="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_SMHI-EC-E
 #year_stop=2009 # 2014
 #year_end=2016
 year_start=1996 # 1996
-year_stop=1997 # 2005
+year_stop=2005 # 2005
 year_end=2007
 
 #fn_pattern0="FPSCPCM_eval_BBv03a_wrf_complete_raw_output"
@@ -84,9 +84,14 @@ do
   # copied the ref dir by hand beforehand too
   # link set by hand beforehand fot the nml files
   # access the files of one year concurrently > unclear how well this works
-  n_var=7
-  #for iv in "pr" "prc" "prw" "tas" "ta850" "ta500" "ta200" # Bastin et al. ICRC + paper
-  for iv in "wa500" "ua500" "va500" "ua700" "va700" "pr"   "tas" # Sobolowski et al. IPCC AR6 paper
+  n_var=29
+  #for iv in "pr" "prc" "prw" "tas" "ta850" "ta500" "ta200" # Bastin et al. ICRC + paper BB
+  #for iv in "wa500" "ua500" "va500" "ua700" "va700" "pr"   "tas" # Sobolowski et al. IPCC AR6 paper CA
+  #for iv in "tas" "huss" "ts" "zmla" "uas" "vas" "sfcWind" "ps" "psl"    "prw" "clwvi" "clivi"    "evspsbl" "evspsblpot" "mrros" "mrro"  # runctrl.vars.nml runctrl.vars.nml_water_column runctrl.vars.nml_evp_roff   CA
+  #                      "pr"  
+  #for iv in "mrso" "clt"      "prc" "mrlsl" "tsl"    "rsds" "rlds" "hfls" "hfss" "rsus" "rlus" "rlut" "rsdt" "rsut" "sund"    "snw" "snc" "snd" "sic" "prsn" "snm"  # runctrl.vars.nml_pr_mrso (mrlsl not OK vertical infos) runctrl.vars.nml_radiation runctrl.vars.nml_snow   CA
+  #for iv in "ta200" "hus200" "zg200" "ua200" "va200" "wa200"   "ta500" "hus500" "zg500" "ua500" "va500" "wa500"   "ta700" "hus700" "zg700" "ua700" "va700" "wa700"   "ta850" "hus850" "zg850" "ua850" "va850" "wa850"   "ta925" "hus925" "zg925" "ua925" "va925" "wa925"   "ta1000" "hus1000" "zg1000" "ua1000" "va1000" "wa1000"
+  for iv in          "hus200" "zg200" "ua200" "va200" "wa200"           "hus500" "zg500"                           "ta700" "hus700" "zg700"                 "wa700"           "hus850" "zg850" "ua850" "va850" "wa850"   "ta925" "hus925" "zg925" "ua925" "va925" "wa925"   "ta1000" "hus1000" "zg1000" "ua1000" "va1000" "wa1000"   "sund"
   do
     print $iv
     mkdir -p ../${dom}_${iv} 

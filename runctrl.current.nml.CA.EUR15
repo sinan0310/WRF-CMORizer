@@ -24,7 +24,7 @@
 /
 &filesystem
    DirInputSimResRoot =   "/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_SMHI-EC-EARTH_historical_r12_FZJ-IBG3-WRF381CA_v00aJuwelsCpuProdAdHocPrjTt19952005/simres",
-   DirOutputPostProRoot = "/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_SMHI-EC-EARTH_historical_r12_FZJ-IBG3-WRF381CA_v00aJuwelsCpuProdAdHocPrjTt19952005/postpro/CMORized",
+   DirOutputPostProRoot = "/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_SMHI-EC-EARTH_historical_r12_FZJ-IBG3-WRF381CA_v00aJuwelsCpuProdAdHocPrjTt19952005/postpro/CMORized4",
    domain = "d01",                        ! for filename generation needed
 !  domain = "d02",                        ! for filename generation needed
 /
