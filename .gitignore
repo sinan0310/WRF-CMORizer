@@ -13,9 +13,11 @@ WRF_CMORizer
 ___*
 bak_main_tool
 doc_planning
-doc_requirements*
+doc_requirements_*
 gitlab_before_kicking_people_out_backup
 gitlab_status_on_20171115_before_taking_it_over_again
 related_other_tools
 *.tgz
 *__genmod.f90
+perf
+.DS_Store
