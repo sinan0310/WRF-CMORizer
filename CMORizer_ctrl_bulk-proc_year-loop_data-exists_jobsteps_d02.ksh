@@ -15,11 +15,11 @@
 
 # ---- ADJUST HERE -------------------------------------------------------------
 
-dom="d01" # d01 d02
-dom_name="EUR15" # EUR15 ALP3
+dom="d02" # d01 d02
+dom_name="ALP3" # EUR15 ALP3
 expID="BB" # BB CA
 PID="2019091800" # not in use
-sbatch_script="JURECA_sbatch_OpenMp_SingleNode.sh"
+sbatch_script="JURECA_sbatch_OpenMp_SingleNode_jobsteps_d02.sh"
 
  dir_tools="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014/tools/CMORization/ctrl"
 #dir_tools="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_SMHI-EC-EARTH_historical_r12_FZJ-IBG3-WRF381CA_v00aJuwelsCpuProdAdHocPrjTt19952005/tools/CMORization/ctrl"
@@ -28,7 +28,7 @@ sbatch_script="JURECA_sbatch_OpenMp_SingleNode.sh"
 #dir_simres="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_SMHI-EC-EARTH_historical_r12_FZJ-IBG3-WRF381CA_v00aJuwelsCpuProdAdHocPrjTt19952005/simres"
 
  year_start=2002 # 2000
- year_stop=2002 # 2014
+ year_stop=2014 # 2014
  year_end=2016 #+2
 #year_start=1996 # 1996
 #year_stop=2005 # 2005
@@ -77,9 +77,9 @@ do
   print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
   cd $dir_tools && pwd
   # one year at a time, not moving forward until the year is done
-  echo "0" > ../status_${dom}_mt.txt
-  cp -f runctrl.current.nml.${expID}.${dom_name} runctrl.current.nml_mt.${dom_name}
-  sed -i -e "s/__YYYY_ts__/${yi}/g" runctrl.current.nml_mt.${dom_name}
+  echo "0" > ../status_${dom}.txt
+  cp -f runctrl.current.nml.${expID}.${dom_name} runctrl.current.nml.${dom_name}
+  sed -i -e "s/__YYYY_ts__/${yi}/g" runctrl.current.nml.${dom_name}
   #sed -i -e "s/__YYYY_te__/${yi}/g" runctrl.current.nml
   #time ./WRF_CMORizer > /dev/zero #log_CMORizer_${PID}_${dom}_${yi}.txt
   ###echo "running" > status.txt
@@ -87,7 +87,7 @@ do
   # copied the ref dir by hand beforehand too
   # link set by hand beforehand fot the nml files
   # access the files of one year concurrently > unclear how well this works
-  n_var=2
+  n_var=6
   #n_var=1
   #for iv in "pr" "tas"
   #for iv in "pr" "prc" "prw" "tas" "ta850" "ta500" "ta200" # Bastin et al. ICRC + paper BB
@@ -97,19 +97,23 @@ do
   #for iv in "mrso" "clt"      "prc" "mrlsl" "tsl"    "rsds" "rlds" "hfls" "hfss" "rsus" "rlus" "rlut" "rsdt" "rsut" "sund"    "snw" "snc" "snd" "sic" "prsn" "snm"  # runctrl.vars.nml_pr_mrso (mrlsl not OK vertical infos) runctrl.vars.nml_radiation runctrl.vars.nml_snow   CA
   #for iv in "ta200" "hus200" "zg200" "ua200" "va200" "wa200"   "ta500" "hus500" "zg500" "ua500" "va500" "wa500"   "ta700" "hus700" "zg700" "ua700" "va700" "wa700"   "ta850" "hus850" "zg850" "ua850" "va850" "wa850"   "ta925" "hus925" "zg925" "ua925" "va925" "wa925"   "ta1000" "hus1000" "zg1000" "ua1000" "va1000" "wa1000"
   #for iv in          "hus200" "zg200" "ua200" "va200" "wa200"           "hus500" "zg500"                           "ta700" "hus700" "zg700"                 "wa700"           "hus850" "zg850" "ua850" "va850" "wa850"   "ta925" "hus925" "zg925" "ua925" "va925" "wa925"   "ta1000" "hus1000" "zg1000" "ua1000" "va1000" "wa1000"   "sund"
-  for iv in "va850" "zg500"
-  #for iv in "ps" "huss" "rlds" "rsds" "rsus" "rlus"
+  #for iv in "ps" "va850" "zg500" "huss" "rlds" "rsds" "rsus" "rlus"
+  for iv in "ps" "huss" "rlds" "rsds" "rsus" "rlus"
   #for iv in "tasmax"
   do
     print $iv
     mkdir -p ../${dom}_${iv} 
-    cp -f WRF_CMORizer load_env *.mod $sbatch_script ../${dom}_${iv}/.
+    #cp -f WRF_CMORizer load_env *.mod $sbatch_script ../${dom}_${iv}/.
+    cp -f WRF_CMORizer load_env *.mod ../${dom}_${iv}/.
     cd ../${dom}_${iv} && pwd
     ln -f -s ${dir_tools}/nml_${iv} runctrl.vars_misc.nml_link
-    ln -f -s ${dir_tools}/runctrl.current.nml_mt.${dom_name} runctrl.current.nml
-    sbatch $sbatch_script
+    ln -f -s ${dir_tools}/runctrl.current.nml.${dom_name} runctrl.current.nml
+    #sbatch $sbatch_script
     #sleep 60 #> not all work on the same files from the start
   done
+
+  cd $dir_tools && pwd
+  sbatch $sbatch_script
 
   # each sbatch script adds a number to the status file after sun has run > once 7x1 is in the file the code moves on
   print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
@@ -117,11 +121,12 @@ do
   counter=0
   while (( $counter < 1 ))
   do
-    grep_res=$(paste -s -d+ ../status_${dom}_mt.txt | bc)
-    if (( $grep_res < $n_var ))
+    grep_res=$(paste -s -d+ ../status_${dom}.txt | bc)
+    #if (( $grep_res < $n_var ))
+    if (( $grep_res < 1 ))
     then
       sleep 30
-    elif (( $grep_res == $n_var ))
+    elif (( $grep_res == 1 ))
     then
       ((counter+=1))
       print "all vars per year processes, move to next year in loop"
@@ -132,6 +137,8 @@ do
   #remove data after end of processing
   rm -v ${dir_simres}/${dom}/*/wrfout*${yi}*nc
   #rm -v ${dir_simres}/${dom}/*/wrfxtrm*${yi}*nc
+
+  print "finish with the year loop"
 
 done
 

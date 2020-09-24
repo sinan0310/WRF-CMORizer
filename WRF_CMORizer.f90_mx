@@ -1242,8 +1242,8 @@ fnNMLvar(13) = "runctrl.vars_misc.nml_link" ! special for ICRC distributed
 !            -> just run the outer loop over 1 frequency only
 
 !DO ifrq = 1, SIZE(frequency), 1 
-DO ifrq = 1, 1, 1 ! 1hr
-!DO ifrq = 4, 4, 1 ! check min/max day
+!DO ifrq = 1, 1, 1 ! 1hr
+DO ifrq = 4, 4, 1 ! check min/max day
 
   PRINT *, "============================================================"
   PRINT *, "freq = ", frequency(ifrq)
@@ -4980,7 +4980,6 @@ DO i=1_4,ndOverall*ntspd,1
 END DO
 
 PRINT *, "subset bounds lower upper, # elements ", j, k, l
-IF ( ALLOCATED( TimeRefArray ) ) DEALLOCATE( TimeRefArray ) ! Heimo
 ALLOCATE( TimeRefArray( l , 6 ) )
 TimeRefArray(:,1:5) = tmp2D(j:k,1:5)
 TimeRefArray(:,6) = tmp2D_singlenumber(j:k)
