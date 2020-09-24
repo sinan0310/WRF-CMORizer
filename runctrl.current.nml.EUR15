@@ -1,35 +1,35 @@
 &globalvars
    Conventions = "CF-1.4",
    contact = "cordex@fz-juelich.de",
-   experiment = "Historical run",
-   driving_experiment = "SMHI-EC-EARTH, historical, r12",
-   experiment_id = "historical",
-   driving_model_id = "SMHI-EC-EARTH",
-   driving_model_ensemble_member = "r12",
-   driving_experiment_name = "historical",
+   experiment = "Evaluation run with reanalysis forcing",
+   driving_experiment = "ECMWF-ERAINT, evaluation, r1i1p1",
+   experiment_id = "evaluation",
+   driving_model_id = "ECMWF-ERAINT",
+   driving_model_ensemble_member = "r1i1p1",
+   driving_experiment_name = "evaluation",
    institution = "Institute of Bio- and Geosciences (IBG-3, Agrosphere), Research Centre Juelich (FZJ), GERMANY",
    institute_id = "FZJ-IBG3",                             ! must be registered with CORDEX
-   model_id = "FZJ-IBG3-WRF381CA",                        ! must be registered with CORDEX ! here: ClimDyn paper, CPRDEX FPS CEM
+   model_id = "FZJ-IBG3-WRF381BB",                        ! must be registered with CORDEX ! here: ClimDyn paper, CPRDEX FPS CEM
    rcm_version_id = "v1",                                 ! free string: e.g. v01S2009060100 -> identifier for the FPS CM/WL runs, v01 only for fx; v1 v1S2009060100 v1S2009062000 v1S2012100100 v1S2012102300 v1S2014100100 v1S2014110200 > which case and which initialisation
-   project_id = "cordex-fpsc",                            ! default: CORDEX
+   project_id = "CORDEX-FPSCEM",                          ! default: CORDEX
    CORDEX_domain = "EUR-15",                              ! ALP-3 EUR-11 EUR-15
 !  CORDEX_domain = "ALP-3",                               ! ALP-3 EUR-11 EUR-15
    product = "output",
    references = "http://www.fz-juelich.de",
 /
 &globalvars_additional
-   comment = "simulation and processing: k.goergen@fz-juelich.de (ORCID=0000-0002-4208-3444); postprocessing: WRF_CMORizer.f90, date=2019-10-31, commit=6d64f8, OpenMP, -O3; excl. 10 grid point boundary relaxation zone; joint experiment with IDL/Universidade de Lisboa (Rita M Cardoso, rmcardoso@fc.ul.pt; Pedro M M Soares, pmsoares@fc.ul.pt): except HPC system and compilation settings everything else identical (identical forcing files and configuration), IDL does RCP8.5, FZJ-IBG3 does Historical",
-   institute_run_id = "CORDEX-FPSCEM_EUR-15-ALP-3_SMHI-EC-EARTH_historical_r12_FZJ-IBG3-WRF381CA_v00aJuwelsCpuProdAdHocPrjTt19952005",
-   title = "WRF381CA RCM model runs for CORDEX FPS CEM climate scenario runs with CMIP5 GCM forcing; tandem experiment with IDL (rcp85)",
+   comment = "simulation and processing: k.goergen@fz-juelich.de (ORCID=0000-0002-4208-3444); postprocessing: WRF_CMORizer.f90, date=2020-02-21, commit=ffe71350, OpenMP -O3; excl. 10 grid point boundary relaxation zone",
+   institute_run_id = "CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014",
+   title = "WRF381BB RCM model runs for CORDEX FPS CEM evaluation runs with reanalysis forcing",
 /
 &filesystem
-   DirInputSimResRoot =   "/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_SMHI-EC-EARTH_historical_r12_FZJ-IBG3-WRF381CA_v00aJuwelsCpuProdAdHocPrjTt19952005/simres",
-   DirOutputPostProRoot = "/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_SMHI-EC-EARTH_historical_r12_FZJ-IBG3-WRF381CA_v00aJuwelsCpuProdAdHocPrjTt19952005/postpro/CMORized4",
+   DirInputSimResRoot =   "/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014/simres",
+   DirOutputPostProRoot = "/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014/postpro/CMORized_ADD",
    domain = "d01",                        ! for filename generation needed
 !  domain = "d02",                        ! for filename generation needed
 /
 &model_config
-   ts = '2005',                           ! 2009 2012 2014 can be used for pattern matching with filenames, set to '0000' to use all files that are found
+   ts = '2014',                           ! 2009 2012 2014 can be used for pattern matching with filenames, set to '0000' to use all files that are found
    te = '0000' ! '__YYYY_te__',                           ! 2009 2012 2014 can be used for pattern matching with filenames, set to '0000' to use all files that are found
    nx = 359,                              ! EUR-15 raw output x-dim, incl. relaxation zone, unstaggered, changed to 359x350 w/ EUR-15
    ny = 350,                              ! EUR-15 raw output x-dim, incl. relaxation zone, umstaggered

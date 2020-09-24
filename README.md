@@ -1,15 +1,15 @@
+2020-09-24 k.goergen@fz-juelich.de
+
 See the preamble of the main program for complete documentation.
 
-Development notes:
+## Test case
 
-Optimisation of runtime: SMP (OpenMP), more aggressive compiler options
-
-
-test case: 
 Knist et al., Clim Dyn, 2018 WRF data postprocessing
 1h, 3km
 tas, pr, prw, psl > weather type classification tool HTr
 hist+scen1+scen2
+
+## Performance
 
   xHost   O3   OpenMP   LogFile   runtime
 1 x       x    x        x
@@ -17,3 +17,33 @@ hist+scen1+scen2
 3              x        x
 4                       x
 5
+
+## Adjust the CMORization engine and start
+
+```shell
+   source load_env
+   vim Makefile
+   make veryclean
+   make
+   vim runctrl.current.nml.BB.EUR15
+   vim CMORizer_ctrl_bulk-proc_year-loop_data-exists.ksh
+   vim JURECA_sbatch_OpenMp_SingleNode.sh
+```
+## Running 
+
+```shell
+   nohup ./CMORizer_ctrl_bulk-proc_year-loop_data-exists.ksh > log &
+```
+
+## If a processing chain needs killing follow this sequence
+ 
+* driver
+* tar
+* sbatch
+
+## Alternative ways of running CMORizer tool
+
+* Front node / any Linux box: serial, one variable after the other, no run control scripts needed, controlled entirely by large namelists
+* On compute node, each variable on a single node, OpenMP-enabled: `CMORizer_ctrl_bulk-proc_year-loop_data-exists(_d02).ksh` + `JURECA_sbatch_OpenMp_SingleNode(_d02).sh`
+* On compute node, several serial processing streams sharing a single node: `CMORizer_ctrl_bulk-proc_year-loop_data-exists_jobsteps(_d02).ksh` + `JURECA_sbatch_OpenMp_SingleNode_jobsteps(_d02).sh`
+* ...
