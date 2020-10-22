@@ -1,6 +1,12 @@
 2020-09-24 k.goergen@fz-juelich.de
 
-See the preamble of the main program for complete documentation.
+# CMORizer for WRF RCM raw simulation outputs
+
+See the preamble of the main program `WRF_CMORizer.f90` for a complete documentation.
+
+## Concept
+
+Model output exists ideally in tar archives, these are extracted before processing; scalable selective processing running distributed on multiple compute nodes using OpenMP per processing stream with a very low memory footprint.
 
 ## Test case
 
@@ -11,14 +17,25 @@ hist+scen1+scen2
 
 ## Performance
 
-  xHost   O3   OpenMP   LogFile   runtime
-1 x       x    x        x
-2         x    x        x
-3              x        x
-4                       x
-5
+|TestNr|xHost |O3    |OpenMP|LogY/N|runtime|
+|:----:|:----:|:----:|:----:|:----:|:----: |
+| 1    | x    | x    | x    | x    | ?     |
+| 2    |      | x    | x    | x    | ?     |
+| 3    |      |      | x    | x    | ?     |
+| 4    |      |      |      | x    | ?     |
+| 5    |      |      |      |      | ?     |
 
-## Adjust the CMORization engine and start
+## Ways of running CMORizer tool
+
+Different namelists are needed
+
+* Front node / any Linux box: serial, one variable after the other, no run control scripts needed, controlled entirely by large namelists
+* Multiple front nodes, distributed
+* Common, see examples below: On compute node, each variable on a single node, OpenMP-enabled (for pressure level data with computation): `CMORizer_ctrl_bulk-proc_year-loop_data-exists(_d02).ksh` + `JURECA_sbatch_OpenMp_SingleNode(_d02).sh`
+* Common, see examples below: On compute node, several serial processing streams sharing a single node (for surface variables without much processing): `CMORizer_ctrl_bulk-proc_year-loop_data-exists_jobsteps(_d02).ksh` + `JURECA_sbatch_OpenMp_SingleNode_jobsteps(_d02).sh`
+* ...
+
+## Example adjustments of the CMORization engine before starting
 
 ```shell
    source load_env
@@ -29,21 +46,14 @@ hist+scen1+scen2
    vim CMORizer_ctrl_bulk-proc_year-loop_data-exists.ksh
    vim JURECA_sbatch_OpenMp_SingleNode.sh
 ```
-## Running 
+## Starting
 
 ```shell
    nohup ./CMORizer_ctrl_bulk-proc_year-loop_data-exists.ksh > log &
 ```
 
 ## If a processing chain needs killing follow this sequence
- 
-* driver
-* tar
-* sbatch
 
-## Alternative ways of running CMORizer tool
-
-* Front node / any Linux box: serial, one variable after the other, no run control scripts needed, controlled entirely by large namelists
-* On compute node, each variable on a single node, OpenMP-enabled: `CMORizer_ctrl_bulk-proc_year-loop_data-exists(_d02).ksh` + `JURECA_sbatch_OpenMp_SingleNode(_d02).sh`
-* On compute node, several serial processing streams sharing a single node: `CMORizer_ctrl_bulk-proc_year-loop_data-exists_jobsteps(_d02).ksh` + `JURECA_sbatch_OpenMp_SingleNode_jobsteps(_d02).sh`
-* ...
+* driver script
+* untarring of inputs
+* sbatch processing scripts
