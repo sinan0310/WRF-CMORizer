@@ -29,7 +29,7 @@
    domain = "d02",                        ! for filename generation needed
 /
 &model_config
-   ts = '2001',                           ! 2009 2012 2014 can be used for pattern matching with filenames, set to '0000' to use all files that are found
+   ts = '2009',                           ! 2009 2012 2014 can be used for pattern matching with filenames, set to '0000' to use all files that are found
    te = '0000' ! '__YYYY_te__',                           ! 2009 2012 2014 can be used for pattern matching with filenames, set to '0000' to use all files that are found
 !  nx = 359,                              ! EUR-15 raw output x-dim, incl. relaxation zone, unstaggered, changed to 359x350 w/ EUR-15
 !  ny = 350,                              ! EUR-15 raw output x-dim, incl. relaxation zone, umstaggered

@@ -4980,6 +4980,7 @@ DO i=1_4,ndOverall*ntspd,1
 END DO
 
 PRINT *, "subset bounds lower upper, # elements ", j, k, l
+IF ( ALLOCATED( TimeRefArray ) ) DEALLOCATE( TimeRefArray ) ! Heimo
 ALLOCATE( TimeRefArray( l , 6 ) )
 TimeRefArray(:,1:5) = tmp2D(j:k,1:5)
 TimeRefArray(:,6) = tmp2D_singlenumber(j:k)

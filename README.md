@@ -1,6 +1,12 @@
-2020-09-24 k.goergen@fz-juelich.de
+# RCM Fortran CMORizer WRF
+
+2020-09-26 k.goergen@fz-juelich.de
 
 See the preamble of the main program for complete documentation.
+
+## Purpose
+
+Standard (WRF) RCM raw model output > single-pass flexible, runtime or postprocessing CMORization according to EURO-CORDEX archive protocol > fully CMORized, standard-compliant netCDF data repository ready for ESGF staging
 
 ## Test case
 
@@ -11,12 +17,16 @@ hist+scen1+scen2
 
 ## Performance
 
-  xHost   O3   OpenMP   LogFile   runtime
-1 x       x    x        x
-2         x    x        x
-3              x        x
-4                       x
-5
+Optimisation options and their impact on total processing time:
+
+| |xHost  |O3 or  |OpenMP |LogFile|runtime|
+| |y/n    |O2     |y/n    |y/n    |[sec]  |
+|-|:-----:|:-----:|:-----:|:-----:|:-----:|
+|1| x     | x     | x     | x     |       |
+|2|       | x     | x     | x     |       |
+|3|       |       | x     | x     |       |
+|4|       |       |       | x     |       |
+|5|       |       |       |       |       |
 
 ## Adjust the CMORization engine and start
 
@@ -29,8 +39,10 @@ hist+scen1+scen2
    vim CMORizer_ctrl_bulk-proc_year-loop_data-exists.ksh
    vim JURECA_sbatch_OpenMp_SingleNode.sh
 ```
+
 ## Running 
 
+Most basic (serial):
 ```shell
    nohup ./CMORizer_ctrl_bulk-proc_year-loop_data-exists.ksh > log &
 ```
