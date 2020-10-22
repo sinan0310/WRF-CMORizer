@@ -27,8 +27,8 @@ sbatch_script="JURECA_sbatch_OpenMp_SingleNode.sh"
  dir_simres="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014/simres"
 #dir_simres="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_SMHI-EC-EARTH_historical_r12_FZJ-IBG3-WRF381CA_v00aJuwelsCpuProdAdHocPrjTt19952005/simres"
 
- year_start=2002 # 2000
- year_stop=2002 # 2014
+ year_start=2001 # 2000
+ year_stop=2001 # 2014
  year_end=2016 #+2
 #year_start=1996 # 1996
 #year_stop=2005 # 2005
@@ -56,6 +56,7 @@ do
 
   # tar files handling
   for mi in {01..12}
+  #for mi in 12
   do
     print "--------------------------------------------------------------------------------"
     print "unpacking $yi $mi"
@@ -87,7 +88,7 @@ do
   # copied the ref dir by hand beforehand too
   # link set by hand beforehand fot the nml files
   # access the files of one year concurrently > unclear how well this works
-  n_var=2
+  n_var=1
   #n_var=1
   #for iv in "pr" "tas"
   #for iv in "pr" "prc" "prw" "tas" "ta850" "ta500" "ta200" # Bastin et al. ICRC + paper BB
@@ -97,7 +98,7 @@ do
   #for iv in "mrso" "clt"      "prc" "mrlsl" "tsl"    "rsds" "rlds" "hfls" "hfss" "rsus" "rlus" "rlut" "rsdt" "rsut" "sund"    "snw" "snc" "snd" "sic" "prsn" "snm"  # runctrl.vars.nml_pr_mrso (mrlsl not OK vertical infos) runctrl.vars.nml_radiation runctrl.vars.nml_snow   CA
   #for iv in "ta200" "hus200" "zg200" "ua200" "va200" "wa200"   "ta500" "hus500" "zg500" "ua500" "va500" "wa500"   "ta700" "hus700" "zg700" "ua700" "va700" "wa700"   "ta850" "hus850" "zg850" "ua850" "va850" "wa850"   "ta925" "hus925" "zg925" "ua925" "va925" "wa925"   "ta1000" "hus1000" "zg1000" "ua1000" "va1000" "wa1000"
   #for iv in          "hus200" "zg200" "ua200" "va200" "wa200"           "hus500" "zg500"                           "ta700" "hus700" "zg700"                 "wa700"           "hus850" "zg850" "ua850" "va850" "wa850"   "ta925" "hus925" "zg925" "ua925" "va925" "wa925"   "ta1000" "hus1000" "zg1000" "ua1000" "va1000" "wa1000"   "sund"
-  for iv in "va850" "zg500"
+  for iv in "va850"
   #for iv in "ps" "huss" "rlds" "rsds" "rsus" "rlus"
   #for iv in "tasmax"
   do

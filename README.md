@@ -1,4 +1,4 @@
-2020-09-24 k.goergen@fz-juelich.de
+2020-09-26 k.goergen@fz-juelich.de
 
 # CMORizer for WRF RCM raw simulation outputs
 
@@ -7,6 +7,10 @@ See the preamble of the main program `WRF_CMORizer.f90` for a complete documenta
 ## Concept
 
 Model output exists ideally in tar archives, these are extracted before processing; scalable selective processing running distributed on multiple compute nodes using OpenMP per processing stream with a very low memory footprint.
+
+## Purpose
+
+Standard (WRF) RCM raw model output > single-pass flexible, runtime or postprocessing CMORization according to EURO-CORDEX archive protocol > fully CMORized, standard-compliant netCDF data repository ready for ESGF staging
 
 ## Test case
 
@@ -17,13 +21,16 @@ hist+scen1+scen2
 
 ## Performance
 
-|TestNr|xHost |O3    |OpenMP|LogY/N|runtime|
-|:----:|:----:|:----:|:----:|:----:|:----: |
-| 1    | x    | x    | x    | x    | ?     |
-| 2    |      | x    | x    | x    | ?     |
-| 3    |      |      | x    | x    | ?     |
-| 4    |      |      |      | x    | ?     |
-| 5    |      |      |      |      | ?     |
+Optimisation options and their impact on total processing time:
+
+| |xHost  |O3 or  |OpenMP |LogFile|runtime|
+| |y/n    |O2     |y/n    |y/n    |[sec]  |
+|-|:-----:|:-----:|:-----:|:-----:|:-----:|
+|1| x     | x     | x     | x     |       |
+|2|       | x     | x     | x     |       |
+|3|       |       | x     | x     |       |
+|4|       |       |       | x     |       |
+|5|       |       |       |       |       |
 
 ## Ways of running CMORizer tool
 
@@ -46,8 +53,10 @@ Different namelists are needed
    vim CMORizer_ctrl_bulk-proc_year-loop_data-exists.ksh
    vim JURECA_sbatch_OpenMp_SingleNode.sh
 ```
-## Starting
 
+## Running 
+
+Most basic (serial):
 ```shell
    nohup ./CMORizer_ctrl_bulk-proc_year-loop_data-exists.ksh > log &
 ```

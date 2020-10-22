@@ -4,9 +4,9 @@
 
 #SBATCH --job-name="CMORizerD01"
 #SBATCH --nodes=1
-#SBATCH --ntasks=6
-#SBATCH --cpus-per-task=4
-#SBATCH --time=00:40:00
+#SBATCH --ntasks=3
+#SBATCH --cpus-per-task=1
+#SBATCH --time=00:25:00
 #SBATCH --partition=batch
 #SBATCH --account=jjsc39
 #SBATCH --output=CMORizerOutErr.%j
@@ -20,7 +20,7 @@ export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
 #srun ./WRF_CMORizer > /dev/zero # log.txt 2>&1 # /dev/zero 
 
 
-for iv in "ps" "huss" "rlds" "rsds" "rsus" "rlus"
+for iv in "tasmin" "tasmax" "sfcWindmax"
 do
 
     cd /p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014/tools/CMORization/d01_${iv}

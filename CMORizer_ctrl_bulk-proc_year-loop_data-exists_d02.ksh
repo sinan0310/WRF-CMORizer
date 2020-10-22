@@ -27,8 +27,8 @@ sbatch_script="JURECA_sbatch_OpenMp_SingleNode_d02.sh"
  dir_simres="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014/simres"
 #dir_simres="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_SMHI-EC-EARTH_historical_r12_FZJ-IBG3-WRF381CA_v00aJuwelsCpuProdAdHocPrjTt19952005/simres"
 
- year_start=2001 # 2000
- year_stop=2001 # 2014
+ year_start=2006 # 2000
+ year_stop=2009 # 2014
  year_end=2016 #+2
 #year_start=1996 # 1996
 #year_stop=2005 # 2005
@@ -55,21 +55,21 @@ do
   pwd
 
   # tar files handling
-# for mi in {01..12}
-# do
-#   print "--------------------------------------------------------------------------------"
-#   print "unpacking $yi $mi"
-#   pn_fn_tar="${dir_simres}/${dom}/${fn_pattern0}_${dom}_${yi}${mi}.tar" # adjust
-#   print $pn_fn_tar
-#   time tar --wildcards -xvf $pn_fn_tar *wrfout*.nc # adjust
-# done
-# ((yi_next=$yi+1))
-# if (( yi_next < $year_end ))
-# then
-#   pn_fn_tar_next="${dir_simres}/${dom}/${fn_pattern0}_${dom}_${yi_next}01.tar" # adjust
-#   print $pn_fn_tar_next
-#   time tar --wildcards -xvf $pn_fn_tar_next *wrfout*${yi_next}0101*.nc # adjust
-# fi
+  for mi in {01..12}
+  do
+    print "--------------------------------------------------------------------------------"
+    print "unpacking $yi $mi"
+    pn_fn_tar="${dir_simres}/${dom}/${fn_pattern0}_${dom}_${yi}${mi}.tar" # adjust
+    print $pn_fn_tar
+    time tar --wildcards -xvf $pn_fn_tar *wrfout*.nc # adjust
+  done
+  ((yi_next=$yi+1))
+  if (( yi_next < $year_end ))
+  then
+    pn_fn_tar_next="${dir_simres}/${dom}/${fn_pattern0}_${dom}_${yi_next}01.tar" # adjust
+    print $pn_fn_tar_next
+    time tar --wildcards -xvf $pn_fn_tar_next *wrfout*${yi_next}0101*.nc # adjust
+  fi
   #rm /p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014/simres/${dom}/2011/wrfout_${dom}_20110615000000.nc
 
   # runctrl files are all adjusted to the filesystem structure and names etc.
@@ -128,7 +128,7 @@ do
   done
 
   #remove data after end of processing
-  #rm -v ${dir_simres}/${dom}/*/wrfout*${yi}*nc
+  rm -v ${dir_simres}/${dom}/*/wrfout*${yi}*nc
 
 done
 
