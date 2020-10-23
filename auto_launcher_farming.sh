@@ -3,6 +3,7 @@
 #./auto_launcher_farming.sh 
 
 # at present this ool does not make any sense to be used with the CMORizer
+# it needs manually prepared directory structures with inbdividually compiled tool versions
 
 base_dir="/homea/slts/slts00/tools/postpro/WRF_CMORizer/current_dev_from_notebook"
 
