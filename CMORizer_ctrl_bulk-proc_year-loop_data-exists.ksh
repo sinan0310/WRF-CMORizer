@@ -17,8 +17,8 @@
 
 dom="d01" # d01 d02
 dom_name="EUR15" # EUR15 ALP3
-expID="BB" # BB CA
-PID="2019091800" # not in use
+expID="BBdcOFF" # BB CA
+PID="2020102500" # used only for the log files
 sbatch_script="JURECA_sbatch_OpenMp_SingleNode.sh"
 
 #dir_exp="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014"
@@ -26,11 +26,12 @@ sbatch_script="JURECA_sbatch_OpenMp_SingleNode.sh"
  dir_exp="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BBdcOFF_v03aJurecaCpuProdTt20002009JVTrStudy"
 #dir_exp="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BBdcOFFscOFF_v03aJurecaCpuProdTt20002009JVTrStudy"
 
-dir_tools="${dir_exp}/tools/CMORization/ctrl"
+#dir_tools="${dir_exp}/tools/CMORization/ctrl"
+ dir_tools="${dir_exp}/tools/CMORizer"
 dir_simres="${dir_exp}/simres"
 
- year_start=2001 # 2000
- year_stop=2010 # 2014
+ year_start=2000 # 2000
+ year_stop=2000 # 2014 2009
  year_end=2012 #+2
 #year_start=1996 # 1996
 #year_stop=2005 # 2005
@@ -38,9 +39,10 @@ dir_simres="${dir_exp}/simres"
 
 #fn_pattern0="FPSCPCM_eval_BBv03a_wrf_complete_raw_output"
 #fn_pattern0="FPSCPCM_hist_ECEARTH_CAv00a_wrf_complete_raw_output"
- fn_pattern0="FPSCPCM_eval_BBdcOFFv03aSensSt_wrf_complete_raw_output_d01_200101.tar"
-#fn_pattern0="FPSCPCM_eval_BBdcOFFscOFFv03aSensSt_wrf_complete_raw_output_d01_200203.tar"
+ fn_pattern0="FPSCPCM_eval_BBdcOFFv03aSensSt_wrf_complete_raw_output"
+#fn_pattern0="FPSCPCM_eval_BBdcOFFscOFFv03aSensSt_wrf_complete_raw_output"
 
+# select either one
 mode_front_node_serial="y"
 mode_compute_node_parallel_distributed="n"
 
@@ -80,6 +82,7 @@ do
     time tar --wildcards -xvf $pn_fn_tar_next *wrfout*${yi_next}0101*.nc # adjust
   fi
 
+  # different processing modes
   if [[ $front_node_serial = "y" ]]
   then
 
@@ -91,8 +94,9 @@ do
     cp -f runctrl.current.nml.${expID}.${dom_name} runctrl.current.nml # adjust
     sed -i -e "s/__YYYY_ts__/${yi}/g" runctrl.current.nml
     sed -i -e "s/__YYYY_te__/${yi}/g" runctrl.current.nml
-    # inside CMORizer variable namelists are activated, inside the namelist files different vars are activated
-    time ./WRF_CMORizer > /dev/zero #log_CMORizer_${PID}_${dom}_${yi}.txt
+    # inside the CMORizer F90 code variable namelists are activated and inside those namelist files different vars are activated
+    # avoid logging
+    time ./WRF_CMORizer > log_CMORizer_${PID}_${dom}_${yi}.txt # /dev/zero #
 
   elif [[ $mode_compute_node_parallel_distributed = "y" ]]
   then

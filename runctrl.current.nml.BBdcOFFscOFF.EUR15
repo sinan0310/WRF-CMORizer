@@ -18,13 +18,13 @@
    references = "http://www.fz-juelich.de",
 /
 &globalvars_additional
-   comment = "simulation and processing: k.goergen@fz-juelich.de (ORCID=0000-0002-4208-3444); postprocessing: WRF_CMORizer.f90, date=2020-02-21, commit=ffe71350, OpenMP -O3; excl. 10 grid point boundary relaxation zone",
-   institute_run_id = "CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014",
-   title = "WRF381BB RCM model runs for CORDEX FPS CEM evaluation runs with reanalysis forcing",
+   comment = "simulation and processing: k.goergen@fz-juelich.de (ORCID=0000-0002-4208-3444); postprocessing: WRF_CMORizer.f90, date=2020-10-25, commit=84934b0, OpenMP -O3; excl. 10 grid point boundary relaxation zone",
+   institute_run_id = "CORDEX-FPSCEM_EUR-15_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BBdcOFFscOFF_v03aJurecaCpuProdTt20002009JVTrStudy",
+   title = "WRF381BB RCM model runs for CORDEX FPSCONV CCPS sideline study, deep conv. scheme OFF, shallo conv. scheme OFF",
 /
 &filesystem
-   DirInputSimResRoot =   "/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014/simres",
-   DirOutputPostProRoot = "/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014/postpro/CMORized_ADD",
+   DirInputSimResRoot =   "/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BBdcOFFscOFF_v03aJurecaCpuProdTt20002009JVTrStudy/simres",
+   DirOutputPostProRoot = "/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BBdcOFFscOFF_v03aJurecaCpuProdTt20002009JVTrStudy/postpro/CMORized",
    domain = "d01",                        ! for filename generation needed
 !  domain = "d02",                        ! for filename generation needed
 /
