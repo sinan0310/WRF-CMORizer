@@ -49,7 +49,7 @@ Wrapping the CMORizer in control scripts:
 2. On (multiple) compute node(s), each variable on a single node, OpenMP-enabled (for pressure level data with computation): `CMORizer_ctrl_bulk-proc_year-loop_data-exists(_d02).ksh` + `JURECA_sbatch_OpenMp_SingleNode(_d02).sh`; incl. data extraction
 3. On compute node, several serial processing streams sharing a single node (for surface variables without much processing): `CMORizer_ctrl_bulk-proc_year-loop_data-exists_jobsteps(_d02).ksh` + `JURECA_sbatch_OpenMp_SingleNode_jobsteps(_d02).sh`; incl. data extraction
 4. One single compute node, multiple, serial jobs, all manually prepared, no data extraction: `JURECA_sbatch_MultipleSerial_ManuallyPinned.ksh`
-5. Original bulk-propcessing script: `CMORizer_ctrl_bulk-proc_year-loop_data-exists_serial_orig.ksh` (-> merge with Nr.2), CMORizer on front node, multiple vars after each other, year-per-year, could also start CMORizer via sbatch script
+5. Original bulk-propcessing script: `CMORizer_ctrl_bulk-proc_year-loop_data-exists_serial_orig.ksh` (-> merged with Nr.2), CMORizer on front node, multiple vars after each other, year-per-year, could also start CMORizer via sbatch script
 
 ## Example adjustments of the CMORization engine before starting
 

@@ -10,12 +10,10 @@
 # Intel Xeon Haswell CPUs
 # load environment first; tool is compatible with multiple stages and toolchains
 # le18a
-# KGo old:
-#FCFLAGS = -O3
 # Heimo:
 #FCFLAGS = -O3 -assume realloc_lhs
 FC = $(EBROOTIFORT)/bin/ifort
-FCFLAGS = -O2
+FCFLAGS = -O3
 FCFLAGS += -warn all
 FCFLAGS += -qopenmp
 FCFLAGS += -sox
