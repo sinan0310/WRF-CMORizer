@@ -18,7 +18,7 @@
    references = "http://www.fz-juelich.de",
 /
 &globalvars_additional
-   comment = "simulation and processing: k.goergen@fz-juelich.de (ORCID=0000-0002-4208-3444); postprocessing: WRF_CMORizer.f90, date=2020-10-25, commit=84934b0, OpenMP -O3; excl. 10 grid point boundary relaxation zone",
+   comment = "simulation and processing: k.goergen@fz-juelich.de (ORCID=0000-0002-4208-3444); postprocessing: WRF_CMORizer.f90, date=2020-10-25, commit=84934b0, OpenMP -O3, JUWELS; excl. 10 grid point boundary relaxation zone",
    institute_run_id = "CORDEX-FPSCEM_EUR-15_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BBdcOFF_v03aJurecaCpuProdTt20002009JVTrStudy",
    title = "WRF381BB RCM model runs for CORDEX FPSCONV CCPS sideline study, deep conv. scheme OFF",
 /

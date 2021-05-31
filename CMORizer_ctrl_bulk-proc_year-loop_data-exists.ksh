@@ -12,39 +12,56 @@
 # USAGE="source load_env && nohup ./CMORizer_ctrl_bulk-proc_year-loop_data-exists.ksh > log &"
 # USAGE="source load_env && nohup ./CMORizer_ctrl_bulk-proc_year-loop_data-exists.ksh > log 2>&1"
 # USAGE="source load_env && nohup ./CMORizer_ctrl_bulk-proc_year-loop_data-exists.ksh 2>&1 | tee log"
+# ./CMORizer_ctrl_bulk-proc_year-loop_data-exists.ksh > log.txt &
 
 # ---- ADJUST HERE -------------------------------------------------------------
 
-dom="d01" # d01 d02
-dom_name="EUR15" # EUR15 ALP3
-expID="BBdcOFF" # BB CA
-PID="2020102500" # used only for the log files
+dom="d02" # d01 d02
+dom_name="ALP3" # EUR15 ALP3
+expID="BB" # BB CA
+PID="2020102700" # used only for the log files
 sbatch_script="JURECA_sbatch_OpenMp_SingleNode.sh"
 
-#dir_exp="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014"
+ dir_exp="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014"
 #dir_exp="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_SMHI-EC-EARTH_historical_r12_FZJ-IBG3-WRF381CA_v00aJuwelsCpuProdAdHocPrjTt19952005"
- dir_exp="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BBdcOFF_v03aJurecaCpuProdTt20002009JVTrStudy"
+#dir_exp="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BBdcOFF_v03aJurecaCpuProdTt20002009JVTrStudy"
 #dir_exp="/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BBdcOFFscOFF_v03aJurecaCpuProdTt20002009JVTrStudy"
 
 #dir_tools="${dir_exp}/tools/CMORization/ctrl"
- dir_tools="${dir_exp}/tools/CMORizer"
+ dir_tools="${dir_exp}/tools/CMORizer2"
 dir_simres="${dir_exp}/simres"
 
  year_start=2000 # 2000
- year_stop=2000 # 2014 2009
+ year_stop=2009 # 2014 2009
  year_end=2012 #+2
 #year_start=1996 # 1996
 #year_stop=2005 # 2005
 #year_end=2007 #+2
 
-#fn_pattern0="FPSCPCM_eval_BBv03a_wrf_complete_raw_output"
+ fn_pattern0="FPSCPCM_eval_BBv03a_wrf_complete_raw_output"
 #fn_pattern0="FPSCPCM_hist_ECEARTH_CAv00a_wrf_complete_raw_output"
- fn_pattern0="FPSCPCM_eval_BBdcOFFv03aSensSt_wrf_complete_raw_output"
+#fn_pattern0="FPSCPCM_eval_BBdcOFFv03aSensSt_wrf_complete_raw_output"
 #fn_pattern0="FPSCPCM_eval_BBdcOFFscOFFv03aSensSt_wrf_complete_raw_output"
 
 # select either one
 mode_front_node_serial="y"
 mode_compute_node_parallel_distributed="n"
+
+# ------------------------------------------------------------------------------
+# JUWELS
+source /gpfs/software/juwels/lmod/lmod/init/ksh
+module --force purge &&
+module use /gpfs/software/juwels/otherstages
+module load Stages/2018a
+module load StdEnv
+module load Intel/2018.2.199-GCC-5.5.0
+module load ParaStationMPI/5.2.1-1
+module load HDF5/1.8.20
+module load HDF/4.2.13
+module load netCDF/4.6.1
+module load netCDF-Fortran/4.4.4
+module load git/2.17.0
+module li
 
 # ------------------------------------------------------------------------------
 
@@ -65,10 +82,11 @@ do
 
   # tar files handling
   for mi in {01..12}
-  #for mi in 12
+  #for mi in 01
   do
     print "--------------------------------------------------------------------------------"
     print "unpacking $yi $mi"
+    date
     pn_fn_tar="${dir_simres}/${dom}/${fn_pattern0}_${dom}_${yi}${mi}.tar" # adjust
     print $pn_fn_tar
     time tar --wildcards -xvf $pn_fn_tar *wrfout*.nc # adjust
@@ -77,18 +95,21 @@ do
   ((yi_next=$yi+1))
   if (( yi_next < $year_end ))
   then
+    print "--------------------------------------------------------------------------------"
+    print "unpacking $yi_next 01"
+    date
     pn_fn_tar_next="${dir_simres}/${dom}/${fn_pattern0}_${dom}_${yi_next}01.tar" # adjust
     print $pn_fn_tar_next
     time tar --wildcards -xvf $pn_fn_tar_next *wrfout*${yi_next}0101*.nc # adjust
   fi
 
   # different processing modes
-  if [[ $front_node_serial = "y" ]]
+  if [[ $mode_front_node_serial = "y" ]]
   then
 
     print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
     print "raw WRF output CMORization: front node serial (access to /p/largedata, /p/scratch, /p/project, /p/fastdata), compute node OpenMP parallel (access to /p/scratch, /p/project, /p/fastdata)"
-    print "run per year and domain on front node, serially"
+    print "run per year and domain on front node, serially, take all files which are there, a month or a year worth of data"
     cd $dir_tools && pwd
     # runctrl files are all adjusted to the filesystem structure and names etc.
     cp -f runctrl.current.nml.${expID}.${dom_name} runctrl.current.nml # adjust
@@ -96,7 +117,8 @@ do
     sed -i -e "s/__YYYY_te__/${yi}/g" runctrl.current.nml
     # inside the CMORizer F90 code variable namelists are activated and inside those namelist files different vars are activated
     # avoid logging
-    time ./WRF_CMORizer > log_CMORizer_${PID}_${dom}_${yi}.txt # /dev/zero #
+    time ./WRF_CMORizer > /dev/zero # log_CMORizer_${PID}_${dom}_${yi}.txt # 
+    print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
 
   elif [[ $mode_compute_node_parallel_distributed = "y" ]]
   then

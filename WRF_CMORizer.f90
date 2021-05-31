@@ -1216,9 +1216,9 @@ frequency(6) = "sem"
 frequency(7) = "fx"
 
 ALLOCATE ( fnNMLvar(13) )
-fnNMLvar(1) = "runctrl.vars.nml" ! OK
-fnNMLvar(2) = "runctrl.vars.nml_pr_mrso" ! OK
-fnNMLvar(3) = "runctrl.vars.nml_radiation" ! OK
+fnNMLvar(1) = "runctrl.vars.nml_radiation" ! OK
+fnNMLvar(2) = "runctrl.vars.nml" ! OK
+fnNMLvar(3) = "runctrl.vars.nml_pr_mrso" ! OK
 fnNMLvar(4) = "runctrl.vars.nml_water_column" ! OK
 fnNMLvar(5) = "runctrl.vars.nml_vars_on_plevels" ! OK
 fnNMLvar(6) = "runctrl.vars.nml_evp_roff" ! ok not yet tested: evspsbl, evspsblpot
@@ -1325,10 +1325,10 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! you want to postprocess just specific variables or create your own variable 
 ! combinations
   
-  !DO ivarnml = 1, 1, 1 ! recommended to all for first steps and testing: nml #1
+  DO ivarnml = 1, 1, 1 ! recommended to all for first steps and testing: nml #1
   !DO ivarnml = 1, 9, 1 ! 9 loop over all regular namelists
   !DO ivarnml = 4, 4, 1 ! testing
-  DO ivarnml = 1, 3, 1 ! 
+  !DO ivarnml = 1, 3, 1 ! 
   !DO ivarnml = 13, 13, 1
   
     PRINT *, "============================================================"
