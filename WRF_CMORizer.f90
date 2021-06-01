@@ -1325,9 +1325,9 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! you want to postprocess just specific variables or create your own variable 
 ! combinations
   
-  DO ivarnml = 1, 1, 1 ! recommended to all for first steps and testing: nml #1
+  !DO ivarnml = 1, 1, 1 ! recommended to all for first steps and testing: nml #1
   !DO ivarnml = 1, 9, 1 ! 9 loop over all regular namelists
-  !DO ivarnml = 4, 4, 1 ! testing
+  DO ivarnml = 8, 8, 1 ! testing
   !DO ivarnml = 1, 3, 1 ! 
   !DO ivarnml = 13, 13, 1
   

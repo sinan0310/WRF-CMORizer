@@ -1,4 +1,4 @@
-2020-10-23 k.goergen@fz-juelich.de
+2021-05-31 k.goergen@fz-juelich.de
 
 # CMORizer for WRF RCM raw simulation outputs
 
@@ -54,7 +54,7 @@ Wrapping the CMORizer in control scripts:
 ## Example adjustments of the CMORization engine before starting
 
 ```shell
-   source load_env
+   source load_env_jureca-dc
    vim Makefile
    make veryclean
    make

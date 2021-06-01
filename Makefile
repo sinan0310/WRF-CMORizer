@@ -12,10 +12,10 @@
 # le18a
 # Heimo:
 #FCFLAGS = -O3 -assume realloc_lhs
+#FCFLAGS += -qopenmp
 FC = $(EBROOTIFORT)/bin/ifort
 FCFLAGS = -O3
 FCFLAGS += -warn all
-FCFLAGS += -qopenmp
 FCFLAGS += -sox
 FCFLAGS += -fp-model precise -prec-div -prec-sqrt
 FCFLAGS += -xHost
