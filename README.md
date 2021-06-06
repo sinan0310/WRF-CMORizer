@@ -75,3 +75,7 @@ Most basic (serial):
 * `kill -9`: driver script
 * `kill -9`: untarring of inputs
 * `scancel`: sbatch processing scripts
+
+## Inputs and setup
+
+`geo_em` files are given incl. the boundary relaxation zone

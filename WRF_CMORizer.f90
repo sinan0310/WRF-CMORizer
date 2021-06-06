@@ -913,6 +913,14 @@ REAL, PARAMETER :: n = L*0.622*a/cp !
 REAL, PARAMETER :: mv = 1.e20 ! missing value as specified
 REAL, PARAMETER :: gr = 9.81
 
+! as indices are relative to 1 and the model_config namelist sets the boundary
+! relaxation zone with its total width, this adjustment is needed to get the 
+! correct start index in x and y direction, i.e. usually xoffset=10 then the 
+! 1st index to read is 11 see also https://www.unidata.ucar.edu/software/netcdf/
+! docs-fortran/f90-variables.html#f90-reading-data-values-nf90_get_var
+xoffset = xoffset + 1
+yoffset = yoffset + 1
+
 ! auxilliary vars, just needed during development
 ! INTEGER, PARAMETER :: nt = 8
 
