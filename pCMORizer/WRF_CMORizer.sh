@@ -1,0 +1,113 @@
+#!/bin/bash
+
+Project_name=TestWegC
+
+for YY in `seq -w 2000 2001`; do
+ 
+  mkdir $YY
+  cd $YY
+
+  let YY1=$((YY))+1
+
+  cat > WRF_CMORizer.sh_$YY << EOF
+#!/bin/bash
+#SBATCH --job-name="WRF_CMORizer_$YY"
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=128
+#SBATCH --time=00:45:00
+#SBATCH --partition=dc-cpu
+#SBATCH --mail-type=all
+#SBATCH --mail-user=k.goergen@fz-juelich.de
+#SBATCH --account=jjsc39
+EOF
+#
+		if ! [ -z ${job_wrf} ]; then
+			cat >> WRF_CMORizer.sh_$YY << EOF
+#SBATCH -d afterok:${job_wrf}
+EOF
+    fi
+    
+  cat >> WRF_CMORizer.sh_$YY << EOF
+
+source ../compile.settings
+
+set -x
+
+let nvar=13
+
+  cp -f ../runctrl.current.nml_template_d01 runctrl.current.nml_d01
+  cp -f ../runctrl.current.nml_template_d02 runctrl.current.nml_d02
+  sed -i "s/XXXX/${YY}/g" runctrl.current.nml_d01
+  sed -i "s/XXXX/${YY}/g" runctrl.current.nml_d02
+
+let s=0
+let e=-1
+let e+=\${nvar}
+let ii=0
+#for MM in {01..12}; do
+#for MM in {01..02}; do
+for MM in 01; do
+  echo "-------------------------- $MM"
+  let ii+=1
+  #cd \${MM}
+  
+  #ln -sf ../wrfout_d0?_${YY}-\${MM}* .
+  ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfout_d0?_${YY}\${MM}* .
+  ln -sf ../WRF_CMORizer_MPI . 
+  ln -sf ../runctrl.vars.nml .
+  chmod a+x WRF_CMORizer_MPI
+  
+  ln -sf runctrl.current.nml_d01 runctrl.current.nml
+  sleep 2
+  a=\`seq \$s \$e\`
+  list=\`echo \$a | sed "s# #,#g"\`
+  #srun -n \$nvar --distribution=block:block:block --cpu-bind=map_cpu:\$list --overlap ./WRF_CMORizer_MPI > WRF_CMORizer_d01_log_m\${MM} 2>&1 & # complicated but still very fast, not good load balancing still
+  #srun --exclusive --overlap --cpu-bind=threads --distribution=block:cyclic:fcyclic -n \$nvar ./WRF_CMORizer_MPI > WRF_CMORizer_d01_log_m\${MM} 2>&1 & # does not work
+  #srun --overlap --cpu-bind=cores --distribution=block:cyclic:cyclic -n \$nvar ./WRF_CMORizer_MPI > WRF_CMORizer_d01_log_m\${MM} 2>&1 & # works and simple
+  srun --overlap --cpu-bind=cores --distribution=block:cyclic:cyclic -n \$nvar ./WRF_CMORizer_MPI > /dev/zero 2>&1 &
+  pid01[\${ii}]=\$!
+  let e+=\$nvar
+  let s+=\$nvar
+  sleep 30
+
+  ln -sf runctrl.current.nml_d02 runctrl.current.nml
+  sleep 2
+  a=\`seq \$s \$e\`
+  list=\`echo \$a | sed "s# #,#g"\`
+  #srun -n \$nvar --distribution=block:block:block --cpu-bind=map_cpu:\$list --overlap ./WRF_CMORizer_MPI > WRF_CMORizer_d02_log_m\${MM} 2>&1 & # complicated but still very fast, not good load balancing still
+  #srun --exclusive --overlap --cpu-bind=threads --distribution=block:cyclic:fcyclic -n \$nvar ./WRF_CMORizer_MPI > WRF_CMORizer_d02_log_m\${MM} 2>&1 & # does not work
+  #srun --overlap --cpu-bind=cores --distribution=block:cyclic:cyclic -n \$nvar ./WRF_CMORizer_MPI > WRF_CMORizer_d02_log_m\${MM} 2>&1 & # works and simple
+  srun --overlap --cpu-bind=cores --distribution=block:cyclic:cyclic -n \$nvar ./WRF_CMORizer_MPI > /dev/zero 2>&1 &
+  pid02[\${ii}]=\$!
+  let e+=\$nvar
+  let s+=\$nvar
+  sleep 30
+
+  #cd ..
+done
+for (( jj=1; jj<=\${ii}; jj++ )); do
+  wait \${pid01[\${jj}]}
+  [ \$? -ne 0 ] &&  echo "ERROR: WRF_CMORizer_MPI d01 "\${jj}" did not work "\${pid01[\${jj}]} && exit -1
+  wait \${pid02[\${jj}]}
+  [ \$? -ne 0 ] &&  echo "ERROR: WRF_CMORizer_MPI d02 "\${jj}" did not work "\${pid02[\${jj}]} && exit -1
+done
+wait
+
+#cd postpro
+
+#rm \`find . -type f -name "_*$YY1*"\`
+
+#cd ..
+
+#find . -name "wrfout_d0?_${YY}*" -type l -delete
+
+EOF
+
+#  read -a job_wrfa <<< `sbatch WRF_CMORizer.sh_$YY`
+#  job_wrf=${job_wrfa[3]}
+
+chmod +x WRF_CMORizer.sh_$YY
+
+cd ../
+
+done

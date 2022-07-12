@@ -1,0 +1,96 @@
+#!/bin/bash
+
+Project_name=TestWegC
+
+for YY in `seq -w 1996 2005`; do
+  
+  let YY1=$((YY))+1
+
+  cat > WRF_CMORizer.sh_$YY << EOF
+#!/bin/bash
+#SBATCH --job-name="WRF_CMORizer_$YY"
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=256
+#SBATCH --time=01:00:00
+#SBATCH --partition=dc-cpu
+#SBATCH --mail-type=all
+#SBATCH --mail-user=k.goergen@fz-juelich.de
+#SBATCH --account=jjsc39
+EOF
+#
+		if ! [ -z ${job_wrf} ]; then
+			cat >> WRF_CMORizer.sh_$YY << EOF
+#SBATCH -d afterok:${job_wrf}
+EOF
+    fi
+    
+  cat >> WRF_CMORizer.sh_$YY << EOF
+
+source compile.settings
+
+set -x
+
+let nvar=2
+
+  cp -f runctrl.current.nml_template_d01 runctrl.current.nml_d01
+  cp -f runctrl.current.nml_template_d02 runctrl.current.nml_d02
+  sed -i "s/XXXX/${YY}/g" runctrl.current.nml_d01
+  sed -i "s/XXXX/${YY}/g" runctrl.current.nml_d02
+
+let s=0
+let e=-1
+let e+=\${nvar}
+let ii=0
+for MM in {01..12}; do
+  let ii+=1
+  cd \${MM}
+  
+  ln -sf ../wrfout_d0?_${YY}-\${MM}* .
+  ln -sf ../WRF_CMORizer . 
+  ln -sf ../runctrl.vars.nml .
+  chmod a+x WRF_CMORizer
+  
+  ln -sf ../runctrl.current.nml_d01 runctrl.current.nml
+  sleep 2
+  a=\`seq \$s \$e\`
+  list=\`echo \$a | sed "s# #,#g"\`
+  srun -n \$nvar --distribution=block:block:block --cpu-bind=map_cpu:\$list ./WRF_CMORizer > WRF_CMORizer_d01_log_\${MM} 2>&1 &
+  pid01[\${ii}]=\$!
+  let e+=\$nvar
+  let s+=\$nvar
+  sleep 30
+
+  ln -sf ../runctrl.current.nml_d02 runctrl.current.nml
+  sleep 2
+  a=\`seq \$s \$e\`
+  list=\`echo \$a | sed "s# #,#g"\`
+  srun -n \$nvar --distribution=block:block:block --cpu-bind=map_cpu:\$list ./WRF_CMORizer > WRF_CMORizer_d02_log_\${MM} 2>&1 &
+  pid02[\${ii}]=\$!
+  let e+=\$nvar
+  let s+=\$nvar
+  sleep 30
+
+  cd ..
+done
+for (( jj=1; jj<=\${ii}; jj++ )); do
+  wait \${pid01[\${jj}]}
+  [ \$? -ne 0 ] &&  echo "ERROR: WRF_CMORizer d01 "\${jj}" did not work "\${pid01[\${jj}]} && exit -1
+  wait \${pid02[\${jj}]}
+  [ \$? -ne 0 ] &&  echo "ERROR: WRF_CMORizer d02 "\${jj}" did not work "\${pid02[\${jj}]} && exit -1
+done
+wait
+
+cd postpro
+
+#rm \`find . -type f -name "_*$YY1*"\`
+
+cd ..
+
+#find . -name "wrfout_d0?_${YY}*" -type l -delete
+
+EOF
+
+#  read -a job_wrfa <<< `sbatch WRF_CMORizer.sh_$YY`
+#  job_wrf=${job_wrfa[3]}
+
+done
