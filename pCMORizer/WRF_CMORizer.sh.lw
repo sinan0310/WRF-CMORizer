@@ -1,0 +1,40 @@
+#!/bin/bash -x
+#SBATCH --job-name="WRF_CMORizer_2000"
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=128
+#SBATCH --time=01:30:00
+#SBATCH --partition=dc-cpu
+#SBATCH --mail-type=all
+#SBATCH --mail-user=k.goergen@fz-juelich.de
+#SBATCH --account=jjsc39
+#SBATCH --disable-turbomode
+
+source ../compile.settings
+
+let nvar=2
+
+cp -f ../runctrl.current.nml_template_d01 runctrl.current.nml_d01
+cp -f ../runctrl.current.nml_template_d02 runctrl.current.nml_d02
+sed -i "s/XXXX/2000/g" runctrl.current.nml_d01
+sed -i "s/XXXX/2000/g" runctrl.current.nml_d02
+
+let MM=1
+MM=$(printf "%02d" $MM)
+echo $MM
+
+ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfout_d0?_2000${MM}* .
+ln -sf ../runctrl.vars.nml .
+ln -sf ../WRF_CMORizer_MPI .
+chmod a+x WRF_CMORizer_MPI
+
+ln -sf runctrl.current.nml_d01 runctrl.current.nml
+sleep 2
+srun --exact --cpu-bind=threads --distribution=block:cyclic:fcyclic --ntasks=$nvar ./WRF_CMORizer_MPI > /dev/zero 2>&1 &
+sleep 30
+
+ln -sf runctrl.current.nml_d02 runctrl.current.nml
+sleep 2
+srun --exact --cpu-bind=threads --distribution=block:cyclic:fcyclic --ntasks=$nvar ./WRF_CMORizer_MPI > /dev/zero 2>&1 &
+sleep 30
+
+wait

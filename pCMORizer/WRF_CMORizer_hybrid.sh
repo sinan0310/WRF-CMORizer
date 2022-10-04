@@ -2,7 +2,7 @@
 
 Project_name=TestWegC
 
-for YY in `seq -w 1996 2005`; do
+for YY in `seq -w 2000 2001`; do
  
   mkdir $YY
   cd $YY
@@ -13,13 +13,18 @@ for YY in `seq -w 1996 2005`; do
 #!/bin/bash
 #SBATCH --job-name="WRF_CMORizer_$YY"
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=128
-#SBATCH --time=01:30:00
+#SBATCH --ntasks-per-node=4
+#SBATCH --cpus-per-task=4
+#SBATCH --time=01:00:00
 #SBATCH --partition=dc-cpu
 #SBATCH --mail-type=all
 #SBATCH --mail-user=k.goergen@fz-juelich.de
 #SBATCH --account=jjsc39
 #SBATCH --disable-turbomode
+
+export OMP_NUM_THREADS=\${SLURM_CPUS_PER_TASK}
+print \${OMP_NUM_THREADS}
+
 EOF
 #
 		if ! [ -z ${job_wrf} ]; then
@@ -65,7 +70,12 @@ for MM in 01; do
   #srun -n \$nvar --distribution=block:block:block --cpu-bind=map_cpu:\$list --overlap ./WRF_CMORizer_MPI > WRF_CMORizer_d01_log_m\${MM} 2>&1 & # complicated but still very fast, not good load balancing still
   #srun --exclusive --overlap --cpu-bind=threads --distribution=block:cyclic:fcyclic -n \$nvar ./WRF_CMORizer_MPI > WRF_CMORizer_d01_log_m\${MM} 2>&1 & # does not work
   #srun --overlap --cpu-bind=cores --distribution=block:cyclic:cyclic -n \$nvar ./WRF_CMORizer_MPI > WRF_CMORizer_d01_log_m\${MM} 2>&1 & # works and simple
-  srun --exact --cpu-bind=threads --distribution=block:cyclic:fcyclic --ntasks=\$nvar ./WRF_CMORizer_MPI > /dev/zero 2>&1 &
+  #srun --overlap --cpu-bind=cores --distribution=block:cyclic:cyclic -n \$nvar ./WRF_CMORizer_MPI > /dev/zero 2>&1 & # ta850, hus700 15min 32threads
+  #srun --overlap --cpu-bind=threads --distribution=block:block:block -n \$nvar ./WRF_CMORizer_MPI > WRF_CMORizer_d01_log_m\${MM} 2>&1 &
+  #srun ./WRF_CMORizer_MPI > /dev/zero 2>&1 &
+  #srun --distribution=block:block:block -n \$nvar ./WRF_CMORizer_MPI > /dev/zero 2>&1 &
+  #srun --overlap --cpu-bind=threads --distribution=block:cyclic:fcyclic --ntasks=\$nvar --cpus-per-task=\${OMP_NUM_THREADS} ./WRF_CMORizer_MPI > /dev/zero 2>&1 &
+  srun --exact --cpu-bind=verbose,threads --distribution=block:cyclic:fcyclic --ntasks=\$nvar --cpus-per-task=\${OMP_NUM_THREADS} ./WRF_CMORizer_MPI > /dev/zero 2>&1 &
   pid01[\${ii}]=\$!
   let e+=\$nvar
   let s+=\$nvar
@@ -78,7 +88,12 @@ for MM in 01; do
   #srun -n \$nvar --distribution=block:block:block --cpu-bind=map_cpu:\$list --overlap ./WRF_CMORizer_MPI > WRF_CMORizer_d02_log_m\${MM} 2>&1 & # complicated but still very fast, not good load balancing still
   #srun --exclusive --overlap --cpu-bind=threads --distribution=block:cyclic:fcyclic -n \$nvar ./WRF_CMORizer_MPI > WRF_CMORizer_d02_log_m\${MM} 2>&1 & # does not work
   #srun --overlap --cpu-bind=cores --distribution=block:cyclic:cyclic -n \$nvar ./WRF_CMORizer_MPI > WRF_CMORizer_d02_log_m\${MM} 2>&1 & # works and simple
-  srun --exact --cpu-bind=threads --distribution=block:cyclic:fcyclic --ntasks=\$nvar ./WRF_CMORizer_MPI > /dev/zero 2>&1 &
+  #srun --overlap --cpu-bind=cores --distribution=block:cyclic:cyclic -n \$nvar ./WRF_CMORizer_MPI > /dev/zero 2>&1 & # ta850, hus700 15min 32threads
+  #srun --overlap --cpu-bind=threads --distribution=block:block:block -n \$nvar ./WRF_CMORizer_MPI > WRF_CMORizer_d02_log_m\${MM} 2>&1 &
+  #srun --distribution=block:block:block -n \$nvar ./WRF_CMORizer_MPI > /dev/zero 2>&1 &
+  ##srun --cpu-bind=threads --distribution=block:cyclic:fcyclic --ntasks=\$nvar --cpus-per-task=\${OMP_NUM_THREADS} ./WRF_CMORizer_MPI > /dev/zero 2>&1 &
+  #srun --overlap --cpu-bind=threads --distribution=block:cyclic:fcyclic --ntasks=\$nvar --cpus-per-task=\${OMP_NUM_THREADS} ./WRF_CMORizer_MPI > /dev/zero 2>&1 &
+  srun --exact --cpu-bind=verbose,threads --distribution=block:cyclic:fcyclic --ntasks=\$nvar --cpus-per-task=\${OMP_NUM_THREADS} ./WRF_CMORizer_MPI > /dev/zero 2>&1 &
   pid02[\${ii}]=\$!
   let e+=\$nvar
   let s+=\$nvar
