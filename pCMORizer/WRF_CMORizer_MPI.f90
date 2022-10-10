@@ -416,7 +416,7 @@ CLOSE(2)
 ALLOCATE( data_in( xfocus, yfocus ), STAT=sts )
 IF (sts /= 0) STOP "*** Not enough memory on this device, stopping***"
 
-! this is a dirty hack for the mrlsl and tsl variables
+! this is a dirty hack for the mrsol and tsl variables
 ! at this point it is not even clear whether this variable is needed at all
 ALLOCATE( data_in_3D( xfocus, yfocus, 4 ), STAT=sts )
 IF (sts /= 0) STOP "*** Not enough memory on this device to create data_in_3D, stopping***"
@@ -1356,9 +1356,9 @@ DO ifrq = 1, 1, 1 ! 1hr
               ! hardcoding number of depth layers in LSM
               ! with the nomenclature in the namelist this special case cannot
               ! be resolved easily, standard does not foresee many 3D vars
-              IF ((TRIM(var_cmip(ivar)) == 'mrlsl') .OR. &
+              IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. &
                   (TRIM(var_cmip(ivar)) == 'tsl')) THEN
-                sts = NF90_DEF_DIM(ncid, "depth", 4, depth_dimid)
+                sts = NF90_DEF_DIM(ncid, "soil_layer", 4, depth_dimid)
               ENDIF
               sts = NF90_DEF_DIM(ncid, "time", NF90_UNLIMITED, rec_dimid)
               IF ( ( cell_methods(ivar) == "mean" ) .OR. &
@@ -1448,11 +1448,11 @@ DO ifrq = 1, 1, 1 ! 1hr
               ! special case of 3D vars
               ! what we enter her eis the thickness, but not the actual depth
               ! neither staggered nor upper and lower bounds
-              IF ((TRIM(var_cmip(ivar)) == 'mrlsl') .OR. &
+              IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. &
                   (TRIM(var_cmip(ivar)) == 'tsl')) THEN
-                sts = nf90_def_var(ncid, "depth", NF90_DOUBLE, (/ depth_dimid /), depth_varid)
+                sts = nf90_def_var(ncid, "soil_layer", NF90_DOUBLE, (/ depth_dimid /), depth_varid)
                 sts = nf90_put_att(ncid, depth_varid, "standard_name", "depth")
-                sts = nf90_put_att(ncid, depth_varid, "long_name", "Depth")
+                sts = nf90_put_att(ncid, depth_varid, "long_name", "Soil layer depth")
                 sts = nf90_put_att(ncid, depth_varid, "units", "m")
                 sts = nf90_put_att(ncid, depth_varid, "positive", "down")
                 sts = nf90_put_att(ncid, depth_varid, "axis", "Z")
@@ -1538,7 +1538,7 @@ DO ifrq = 1, 1, 1 ! 1hr
               ! this is also better for coding and data reading
               !IF ( height(ivar) /= -999 ) THEN
               ! HTr: only 2nd option
-              IF ((var_cmip(ivar) == "mrlsl") &
+              IF ((var_cmip(ivar) == "mrsol") &
                 .OR. (var_cmip(ivar) == "tsl")) THEN
                 sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, depth_dimid, rec_dimid /), x_varid)  
               ELSE
@@ -1567,9 +1567,9 @@ DO ifrq = 1, 1, 1 ! 1hr
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat height")
               ELSE IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat plev") 
-              ELSE IF ((TRIM(var_cmip(ivar)) == 'mrlsl') .OR. &
+              ELSE IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. &
                 (TRIM(var_cmip(ivar)) == 'tsl')) THEN
-                sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat depth") 
+                sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat soil_layer") 
               ELSE
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat")
               END IF
@@ -1652,7 +1652,7 @@ DO ifrq = 1, 1, 1 ! 1hr
 
               ! dirty hack
               ! total with Noah LSM 2m depth
-              IF ((TRIM(var_cmip(ivar)) == 'mrlsl') .OR. (TRIM(var_cmip(ivar)) == 'tsl')) THEN
+              IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. (TRIM(var_cmip(ivar)) == 'tsl')) THEN
                 sts = NF90_PUT_VAR(ncid, depth_varid, (/ 0.1D0, 0.3D0, 0.6D0, 1.0D0 /) )
               END IF 
 
@@ -2676,11 +2676,11 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! mrso [kg m-2] i Total Soil Moisture Content
 ! was beforehand treated as averaged variable, but is defined instantaneous
 ! new, also using smois_in, would be better soil_in
-! mrlsl [kg m-2] i Water Content of Soil Layer
+! mrsol [kg m-2] i Water Content of Soil Layer
 ! tsl [K] i Temperature of Soil
   
           ELSE IF ((var_cmip(ivar) == "mrso") &
-            .OR. (var_cmip(ivar) == "mrlsl") &
+            .OR. (var_cmip(ivar) == "mrsol") &
             .OR. (var_cmip(ivar) == "tsl")) THEN
  
             IF (.not. ALLOCATED(DZS)) ALLOCATE( DZS( 4 ), STAT=sts )
@@ -3785,9 +3785,9 @@ DO ifrq = 1, 1, 1 ! 1hr
           END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! mrlsl
+! mrsol
 
-          IF (var_cmip(ivar) == "mrlsl") THEN
+          IF (var_cmip(ivar) == "mrsol") THEN
 
             DO i = 1, 4
               data_in_3D(:,:,i) = smois_in(:,:,i,1) * DZS(i) * 1000.
@@ -3911,7 +3911,7 @@ DO ifrq = 1, 1, 1 ! 1hr
             ! level per file; but there are exceptions, where data is stored 3D
             ! including the repective z-coordinates, all according to CF
             ! convention
-            IF ((var_cmip(ivar) == "mrlsl") &
+            IF ((var_cmip(ivar) == "mrsol") &
               .OR. (var_cmip(ivar) == "tsl")) THEN
               sts = NF90_PUT_VAR( ncid, x_varid, data_in_3D(:,:,:), &
                 START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 4, 1 /) )
