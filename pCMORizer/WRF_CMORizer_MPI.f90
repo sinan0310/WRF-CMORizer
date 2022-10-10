@@ -44,9 +44,11 @@ MODULE NamelistHandling
   CHARACTER (len = 300) :: Conventions, contact, experiment_id, experiment, &
     driving_experiment, driving_model_id, driving_model_ensemble_member, &
     driving_experiment_name, institution, institute_id, model_id, &
-    rcm_version_id, project_id, CORDEX_domain, product, references
+    rcm_version_id, project_id, CORDEX_domain, product, references, &
+    conventionsURL
 
-  CHARACTER (len = 300) :: comment, institute_run_id, title
+  CHARACTER (len = 1000) :: comment, institute_run_id, title, &
+    nesting_levels, comment_nesting, comment_1nest, comment_2nest
 
   CHARACTER (LEN = 100), DIMENSION(nvars) :: var_wrf, var_cmip, standard_name, &
     long_name, units, filetype, cm1hr, cm3hr, cm6hr, cmDay, cmMon, cmSea, positive
@@ -69,9 +71,11 @@ MODULE NamelistHandling
   NAMELIST / globalvars / Conventions, contact, experiment_id, experiment, &
     driving_experiment, driving_model_id, driving_model_ensemble_member, &
     driving_experiment_name, institution, institute_id, model_id, &
-    rcm_version_id, project_id, CORDEX_domain, product, references
+    rcm_version_id, project_id, CORDEX_domain, product, references, &
+    conventionsURL
 
-  NAMELIST / globalvars_additional / comment, institute_run_id, title
+  NAMELIST / globalvars_additional / comment, institute_run_id, title, &
+    nesting_levels, comment_nesting, comment_1nest, comment_2nest
 
   NAMELIST / vars / var_wrf, var_cmip, standard_name, long_name, units, &
     height, time1hr, time3hr, time6hr, timeDay, timeMon, timeSea, filetype, &
@@ -1412,6 +1416,7 @@ DO ifrq = 1, 1, 1 ! 1hr
 
               ! always included, restriction to one domain only
               sts = nf90_def_var(ncid, "rotated_pole", NF90_CHAR, rotated_pole_varid)
+              sts = nf90_put_att(ncid, rotated_pole_varid, "long_name", "Coordinates of the rotated North Pole")
               sts = nf90_put_att(ncid, rotated_pole_varid, "grid_mapping_name", "rotated_latitude_longitude")
               sts = nf90_put_att(ncid, rotated_pole_varid, "grid_north_pole_latitude", GeoNPLat)
               sts = nf90_put_att(ncid, rotated_pole_varid, "grid_north_pole_longitude", GeoNPLon)
@@ -1486,6 +1491,7 @@ DO ifrq = 1, 1, 1 ! 1hr
               
               ! always included -- global attributes
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "Conventions", Conventions)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "conventionsURL", conventionsURL)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "contact", contact)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "creation_date", creationDate)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "experiment", experiment)
@@ -1503,12 +1509,16 @@ DO ifrq = 1, 1, 1 ! 1hr
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "CORDEX_domain", CORDEX_domain)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "product", product)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "references", references)
-!              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "tracking_id", trackingID)
-              
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "tracking_id", trackingID)
+             
               ! optional global variables
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "title", title)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "comment", comment)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "institute_run_id", institute_run_id)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "nesting_levels", nesting_levels)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "comment_nesting", comment_nesting)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "comment_1nest", comment_1nest)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "comment_2nest", comment_2nest)
 
               !-----------------------------------------------------------------
               ! always included -- definition of the individual variable
