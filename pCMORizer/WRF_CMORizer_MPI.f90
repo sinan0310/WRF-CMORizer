@@ -179,7 +179,7 @@ INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, &
   rainc_varid, snownc_varid, u10_varid, v10_varid, u_varid, v_varid, w_varid, &
   sfcevp_varid, potevp_varid, sfroff_varid, udroff_varid, acsnom_varid, &
   sinalpha_varid, cosalpha_varid, plev_varid, plevbnds_varid, psfc_varid, &
-  landmask_varid, xland_varid, swdown_varid, depth_varid
+  landmask_varid, xland_varid, swdown_varid, depth_varid, soillayerbnds_varid
 
 ! input data general query
 INTEGER :: ncid_in, ndims_in, nvars_in, ngatts_in, unlimdimid_in !!!, formatp_in
@@ -1359,6 +1359,7 @@ DO ifrq = 1, 1, 1 ! 1hr
               IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. &
                   (TRIM(var_cmip(ivar)) == 'tsl')) THEN
                 sts = NF90_DEF_DIM(ncid, "soil_layer", 4, depth_dimid)
+                sts = NF90_DEF_DIM(ncid, "bnds", 2, nb2_dimid)
               ENDIF
               sts = NF90_DEF_DIM(ncid, "time", NF90_UNLIMITED, rec_dimid)
               IF ( ( cell_methods(ivar) == "mean" ) .OR. &
@@ -1446,7 +1447,7 @@ DO ifrq = 1, 1, 1 ! 1hr
               END IF
 
               ! special case of 3D vars
-              ! what we enter her eis the thickness, but not the actual depth
+              ! what we enter here is the thickness, but not the actual depth
               ! neither staggered nor upper and lower bounds
               IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. &
                   (TRIM(var_cmip(ivar)) == 'tsl')) THEN
@@ -1456,6 +1457,9 @@ DO ifrq = 1, 1, 1 ! 1hr
                 sts = nf90_put_att(ncid, depth_varid, "units", "m")
                 sts = nf90_put_att(ncid, depth_varid, "positive", "down")
                 sts = nf90_put_att(ncid, depth_varid, "axis", "Z")
+                sts = nf90_put_att(ncid, depth_varid, "bounds", "soil_layer_bnds")
+
+                sts = nf90_def_var(ncid, "soil_layer_bnds", NF90_DOUBLE, (/ nb2_dimid, depth_dimid /), soillayerbnds_varid)
               ENDIF
 
               ! for vertically averaged variables need the plev bounds
@@ -1651,9 +1655,12 @@ DO ifrq = 1, 1, 1 ! 1hr
               END IF
 
               ! dirty hack
-              ! total with Noah LSM 2m depth
+              ! total with Noah LSM 2m depth thickness of the layers in Noahi LSM / 0.1D0, 0.3D0, 0.6D0, 1.0D0 /
+              ! add the center points of the depth layers, the bnds gives then the info onthe actual thickness
               IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. (TRIM(var_cmip(ivar)) == 'tsl')) THEN
-                sts = NF90_PUT_VAR(ncid, depth_varid, (/ 0.1D0, 0.3D0, 0.6D0, 1.0D0 /) )
+                !sts = NF90_PUT_VAR(ncid, depth_varid, (/ 0.1D0, 0.3D0, 0.6D0, 1.0D0 /) )
+                sts = NF90_PUT_VAR(ncid, depth_varid, (/ 0.05D0, 0.25D0, 0.7D0, 1.5D0 /) )
+                sts = NF90_PUT_VAR(ncid, soillayerbnds_varid, (/ 0.0D0, 0.1D0, 0.1D0, 0.4D0, 0.4D0, 1.0D0, 1.0D0, 2.0D0 /), (/4,2/) )
               END IF 
 
               !-----------------------------------------------------------------
