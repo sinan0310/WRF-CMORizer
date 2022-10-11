@@ -349,6 +349,8 @@ INTEGER :: vint_type = 1
 !logical :: contiguous, shuffle, fletcher32
 !integer :: xtype, ndims, natts
 
+CHARACTER (len = 3) :: FileNrStr
+
 !-------------------------------------------------------------------------------
 ! system calls
 
@@ -733,7 +735,7 @@ DO ifrq = 1, 1, 1 ! 1hr
       nvar_nml = 6
     CASE ("runctrl.vars.nml_Sophie") 
       nvar_nml = 2
-     END SELECT
+    END SELECT
   
     PRINT *, "number of vars inside current namelist: nvar_nml = ", nvar_nml
   
@@ -1295,37 +1297,49 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! turn standard checking in Makefile off
 ! trackingID = "xxxxxxxx-xxxx-Mxxx-Nxxx-xxxxxxxxxxxx"
 ! creationDate = "YYYY-MM-DD-THH:MM:SSZ"
+! with MPI, avoid same UUID / creation_date for all files and overlaps
+! generate an individual tmp file per MPI rank (=var)
 
-            IF ( rank == 0 ) THEN
+!            IF ( rank == 0 ) THEN
+!              CALL SYSTEM(cmdUUID)
+!            END IF
+!
+!            CALL mpi_barrier(MPI_COMM_WORLD, ierr)
+!            IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
+!              
+!              OPEN(1,FILE="tmpfileUUID",STATUS='old')
+!              READ(1,*) trackingID
+!              CLOSE(1)
+!              PRINT *, "uuidgen externally generated trackingID = ", trackingID
+!
+!            IF ( rank == 0 ) THEN
+!              CALL SYSTEM(cmdDate)
+!            END IF 
+!
+!            CALL mpi_barrier(MPI_COMM_WORLD, ierr)
+!            IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
+!              
+!              OPEN(1,FILE="tmpfileDate",STATUS='old')
+!              READ(1,*) creationDate
+!              CLOSE(1)
+!              PRINT *, "date externally generated creation date = ", creationDate
 
-              CALL SYSTEM(cmdUUID)
+              WRITE(FileNrStr,'(i3)') rank
 
-            END IF
-
-            CALL mpi_barrier(MPI_COMM_WORLD, ierr)
-            IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
-              
-              OPEN(1,FILE="tmpfileUUID",STATUS='old')
+              CALL SYSTEM("uuidgen -t > tmpfileUUID " // TRIM(FileNrStr))
+              OPEN(1,FILE="tmpfileUUID"//TRIM(FileNrStr),STATUS='old')
               READ(1,*) trackingID
               CLOSE(1)
               PRINT *, "uuidgen externally generated trackingID = ", trackingID
 
-            IF ( rank == 0 ) THEN
-
-              CALL SYSTEM(cmdDate)
-
-            END IF 
-
-            CALL mpi_barrier(MPI_COMM_WORLD, ierr)
-            IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
-              
-              OPEN(1,FILE="tmpfileDate",STATUS='old')
+              CALL SYSTEM("date -u +%Y-%m-%d-T%H:%M:%SZ > tmpfileDate" // TRIM(FileNrStr))
+              OPEN(1,FILE="tmpfileDate"//TRIM(FileNrStr),STATUS='old')
               READ(1,*) creationDate
               CLOSE(1)
               PRINT *, "date externally generated creation date = ", creationDate
 
-            CALL mpi_barrier(MPI_COMM_WORLD, ierr)
-            IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
+              CALL mpi_barrier(MPI_COMM_WORLD, ierr)
+              IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
              
 !-------------------------------------------------------------------------------
 ! create netCDF file, must be NetCDF4 'classic data model' and compression lvl=1
