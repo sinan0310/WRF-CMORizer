@@ -449,6 +449,8 @@ PRINT *, TRIM(PnFnGeo)
 
 ALLOCATE( GeoInLonLat(yfocus, xfocus, 2) ) ! F95 order
 PRINT *, SHAPE(GeoInLonLat)
+ALLOCATE( landmask_in(yfocus, xfocus) )
+PRINT *, SHAPE(landmask_in)
 ALLOCATE( GeoInRLat(yfocus) )
 ALLOCATE( GeoInRLon(xfocus) )
 
@@ -478,6 +480,12 @@ sts = NF90_GET_VAR(ncidin, varid, GeoInRLat(:), &
 sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "POLE_LAT", GeoNPLat)
 sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "POLE_LON", GeoNPLon)
 
+! binary, land=1, water=0, compared to LANDUSEF class 16, water fraction, 
+! all larger 0.5 water fraction is water, including large lakes
+sts = NF90_INQ_VARID(ncidin, "LANDMASK", varid)
+sts = NF90_GET_VAR(ncidin, varid, landmask_in(:, :), &
+  START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /))
+  
 sts = NF90_CLOSE(ncidin)
 
 !PRINT *, "rlon = "
@@ -3578,8 +3586,12 @@ DO ifrq = 1, 1, 1 ! 1hr
   
             IF (calc) THEN
             
-              data_in(:,:) = (acsnom_in(:,:,2) - acsnom_in(:,:,1)) / &
-                             (dtHours*3600.)
+              WHERE (landmask_in(:,:) == 1)
+                data_in(:,:) = (acsnom_in(:,:,2) - acsnom_in(:,:,1)) / &
+                               (dtHours*3600.)
+              ELSEWHERE
+                data_in(:,:) = mv
+              END WHERE
   
             ELSE
 
@@ -3647,8 +3659,12 @@ DO ifrq = 1, 1, 1 ! 1hr
   
             IF (calc) THEN
 
-              data_in(:,:) = (sfroff_in(:,:,2) - sfroff_in(:,:,1)) / &
-                             (dtHours*3600.)
+              WHERE (landmask_in(:,:) == 1)
+                data_in(:,:) = (sfroff_in(:,:,2) - sfroff_in(:,:,1)) / &
+                               (dtHours*3600.)
+              ELSEWHERE
+                data_in(:,:) = mv
+              END WHERE
   
             ELSE
 
@@ -3670,10 +3686,14 @@ DO ifrq = 1, 1, 1 ! 1hr
   
             IF (calc) THEN
 
-              data_in(:,:) = ( (sfroff_in(:,:,2) - sfroff_in(:,:,1)) + &
-                               (udroff_in(:,:,2) - udroff_in(:,:,1)) ) / &
-                             (dtHours*3600.) 
-  
+              WHERE (landmask_in(:,:) == 1)
+                data_in(:,:) = ( (sfroff_in(:,:,2) - sfroff_in(:,:,1)) + &
+                                 (udroff_in(:,:,2) - udroff_in(:,:,1)) ) / &
+                                 (dtHours*3600.) 
+              ELSEWHERE
+                data_in(:,:) = mv
+              END WHERE
+
             ELSE
 
               data_in(:,:) = mv
@@ -3792,37 +3812,52 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! double checked in July 2019 
 ! SMOIS_i [m3 m-3] * DZS_i [m] * 1000 [kg m-3] = [kg m-2]
 ! assume standard area 1m2, assume 1l water = 1kg, 1mm m-2 water depth = 1l
+! masking over ocean, with mv initialized
 
           IF (var_cmip(ivar) == "mrso") THEN
     
             !data_in(:,:) = ((smois_in(:,:,1,1)*DZS(1) + smois_in(:,:,2,1)*DZS(2) + smois_in(:,:,3,1)*DZS(3) + smois_in(:,:,4,1)*DZS(4) ) + &
             !                (smois_in(:,:,1,2)*DZS(1) + smois_in(:,:,2,2)*DZS(2) + smois_in(:,:,3,2)*DZS(3) + smois_in(:,:,4,2)*DZS(4) ))/2.*1000. 
   
-            data_in(:,:) =  (smois_in(:,:,1,1)*DZS(1) + &
-                             smois_in(:,:,2,1)*DZS(2) + &
-                             smois_in(:,:,3,1)*DZS(3) + &
-                             smois_in(:,:,4,1)*DZS(4)) * 1000.
+            WHERE (landmask_in(:,:) == 1)
+              data_in(:,:) =  (smois_in(:,:,1,1)*DZS(1) + &
+                               smois_in(:,:,2,1)*DZS(2) + &
+                               smois_in(:,:,3,1)*DZS(3) + &
+                               smois_in(:,:,4,1)*DZS(4)) * 1000.
+            ELSEWHERE
+              data_in(:,:) = mv
+            END WHERE
 
           END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! mrsol
+! masking over ocean, with mv initialized
 
           IF (var_cmip(ivar) == "mrsol") THEN
 
             DO i = 1, 4
-              data_in_3D(:,:,i) = smois_in(:,:,i,1) * DZS(i) * 1000.
+              WHERE (landmask_in(:,:) == 1)
+                data_in_3D(:,:,i) = smois_in(:,:,i,1) * DZS(i) * 1000.
+              ELSEWHERE
+                data_in_3D(:,:,i) = mv
+              END WHERE
             END DO
 
           END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! tsl
+! masking over ocean, with mv initialized
 
           IF (var_cmip(ivar) == "tsl") THEN
 
             DO i = 1, 4
-              data_in_3D(:,:,i) = smois_in(:,:,i,1)
+              WHERE (landmask_in(:,:) == 1)
+                data_in_3D(:,:,i) = smois_in(:,:,i,1)
+              ELSEWHERE
+                data_in_3D(:,:,i) = mv
+              END WHERE
             END DO
 
           END IF
@@ -3830,10 +3865,15 @@ DO ifrq = 1, 1, 1 ! 1hr
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! snc [%] i Snow Area Fraction
 ! unit [] to [%]
+! masking over ocean, with mv initialized
 
           IF ( (var_cmip(ivar) == "snc") ) THEN
   
-            data_in(:,:) = data_in(:,:)*100. 
+            WHERE (landmask_in(:,:) == 1)
+              data_in(:,:) = data_in(:,:)*100. 
+            ELSEWHERE
+              data_in(:,:) = mv
+            END WHERE
   
           END IF
   
