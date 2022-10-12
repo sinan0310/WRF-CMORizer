@@ -3878,6 +3878,23 @@ DO ifrq = 1, 1, 1 ! 1hr
           END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! snd [m] i Snow Depth
+! snw [kg m-2] i Surface Snow Amount
+! masking over ocean, with mv initialized
+! variables are just passed through and need some masking
+
+          IF ( (var_cmip(ivar) == "snd") &
+            .OR. (var_cmip(ivar) == "snw") ) THEN
+ 
+            WHERE (landmask_in(:,:) == 1)
+              data_in(:,:) = data_in(:,:)
+            ELSEWHERE
+              data_in(:,:) = mv
+            END WHERE
+  
+          END IF
+  
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! sic [%] ?>i Sea Ice Area Fraction
 ! no temporal aggregation defined, treat as tier-2 instantaneous data, most
 ! reasonable; also offers the possibility of some proper sea-ice treatment
