@@ -28,7 +28,7 @@ source compile.settings
 echo $SLURM_JOB_NAME
 
 let Y=$Y
-let nvar=0
+let nvar=38
 
 dir_work=$(pwd)
 mkdir ${dir_work}/${Y}
@@ -37,8 +37,8 @@ mkdir ${dir_work}/${Y}
 #cp $SLURM_JOB_NAME "${dir_work}/${Y}/."
 cd "${dir_work}/${Y}"
 
-cp -f ../runctrl.current.nml_template_d01 runctrl.current.nml_d01
-cp -f ../runctrl.current.nml_template_d02 runctrl.current.nml_d02
+cp -f ../runctrl.current.nml_template_d01_DA runctrl.current.nml_d01
+cp -f ../runctrl.current.nml_template_d02_DA runctrl.current.nml_d02
 sed -i "s/__YYYY__/$Y/g" runctrl.current.nml_d01
 sed -i "s/__YYYY__/$Y/g" runctrl.current.nml_d02
 sed -i "s/__nvar__/$nvar/g" runctrl.current.nml_d01
@@ -48,12 +48,12 @@ let M=1
 M=$(printf "%02d" $M)
 echo $Y $M
 
-#ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfout_d0?_${Y}${M}* .
+ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfout_d0?_${Y}${M}* .
 #ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfout_d0?_${Y}* .
 #ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfxtrm_d0?_${Y}${M}* .
 
 #ln -sf ../runctrl.vars.nml.std_vars_13 runctrl.vars.nml
-#ln -sf ../runctrl.vars.nml.std_vars_38 runctrl.vars.nml
+ln -sf ../runctrl.vars.nml.std_vars_38 runctrl.vars.nml
 #ln -sf ../runctrl.vars.nml.3D_vars_2 runctrl.vars.nml
 #ln -sf ../runctrl.vars.nml.vars_on_plevels_36 runctrl.vars.nml
 #ln -sf ../runctrl.vars.nml.heavy_vars_2 runctrl.vars.nml
@@ -62,16 +62,19 @@ echo $Y $M
 ln -sf ../WRF_CMORizer_MPI .
 chmod a+x WRF_CMORizer_MPI
 
+#log_d01="/dev/zero"
+#log_d02="/dev/zero"
+log_d01="log_d01"
+log_d02="log_d02"
+
 ln -sf runctrl.current.nml_d01 runctrl.current.nml
 sleep 2
-#srun --exact --cpu-bind=threads --distribution=block:cyclic:fcyclic --ntasks=$nvar ./WRF_CMORizer_MPI > /dev/zero 2>&1 &
-srun --exact --cpu-bind=threads --distribution=block:cyclic:fcyclic --ntasks=$nvar ./WRF_CMORizer_MPI > log_d01 2>&1 &
+srun --exact --cpu-bind=threads --distribution=block:cyclic:fcyclic --ntasks=$nvar ./WRF_CMORizer_MPI > $log_d01 2>&1 &
 sleep 30
 
 ln -sf runctrl.current.nml_d02 runctrl.current.nml
 sleep 2
-#srun --exact --cpu-bind=threads --distribution=block:cyclic:fcyclic --ntasks=$nvar ./WRF_CMORizer_MPI > /dev/zero 2>&1 &
-srun --exact --cpu-bind=threads --distribution=block:cyclic:fcyclic --ntasks=$nvar ./WRF_CMORizer_MPI > log_d02 2>&1 &
+srun --exact --cpu-bind=threads --distribution=block:cyclic:fcyclic --ntasks=$nvar ./WRF_CMORizer_MPI > $log_d02 2>&1 &
 sleep 30
 
 wait

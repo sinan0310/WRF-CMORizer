@@ -3,7 +3,7 @@
    conventionsURL = "http://www.cfconventions.org",
    contact = "cordex@fz-juelich.de",
    experiment = "Historical run with forcing from SMHI-EC-EARTH, r12i1p1, 1st-nest run", 
-!  experiment = "Historical run with forcing from downscaled SMHI-EC-EARTH, r12i1p1, 2nd-nest run"
+!  experiment = "Historical run with forcing from downscaled SMHI-EC-EARTH, r12i1p1, 2nd-nest run",
    driving_experiment = "SMHI-EC-EARTH; historical; r12i1p1",
    experiment_id = "historical",
    driving_model_id = "SMHI-EC-EARTH",
@@ -12,8 +12,8 @@
    institution = "Institute of Bio- and Geosciences (IBG-3, Agrosphere), Research Centre Juelich / Forschungszentrum Juelich (FZJ), GERMANY; Instituto Dom Luiz (IDL), Universidade de Lisboa, PORTUGAL",
    institute_id = "FZJ-IDL",
    model_id = "FZJ-WRF381DA",
-   rcm_version_id = "fpsconv-x0n1-v1”,
-!  rcm_version_id = “fpsconv-x1n2-v1”,
+   rcm_version_id = "fpsconv-x0n1-v1",
+!  rcm_version_id = "fpsconv-x1n2-v1",
    project_id = "CORDEX-FPSCONV",
    CORDEX_domain = "EUR-15",
 !  CORDEX_domain = "ALP-3",
@@ -27,8 +27,8 @@
    nesting_levels = "2",
    comment_nesting = "These are the results for the 1st nest of a 2-nest approach; both tests are run at the same time; there are some differences in the configurations of both nests (deep convection parametrisation is OFF); contact the responsible groups for more details",
 !  comment_nesting = "These are the results for the 2nd nest of a 2-nest approach; both tests are run at the same time; there are some differences in the configurations of both nests (deep convection parametrisation is OFF); contact the responsible groups for more details",
-   comment_1stNest = "CMIP5 SMHI-EC-EARTH, r12i1p1, RCP8.5 driven simulation (direct downscaling) for the EUR-15 domain using WRF v3.8.1; 1st nesting step",
-   comment_2ndNest = "Actual convection-permitting FPSCONV simulation for the mandatory km-scale ALP-3 domain using WRF v3.8.1; the LBCs are from the the 1st-Nest simulation results; one-way double nest",
+   comment_1nest = "CMIP5 SMHI-EC-EARTH, r12i1p1, RCP8.5 driven simulation (direct downscaling) for the EUR-15 domain using WRF v3.8.1; 1st nesting step",
+   comment_2nest = "Actual convection-permitting FPSCONV simulation for the mandatory km-scale ALP-3 domain using WRF v3.8.1; the LBCs are from the the 1st-Nest simulation results; one-way double nest",
 /
 &filesystem
 !  DirInputSimResRoot =   "/p/scratch/cjjsc39/jjsc3900/sim/tmp/simres",

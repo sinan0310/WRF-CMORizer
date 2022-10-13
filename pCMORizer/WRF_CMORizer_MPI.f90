@@ -41,13 +41,13 @@ MODULE NamelistHandling
 
   INTEGER, PARAMETER :: nvars = 38 ! maximum number of vars per namelist
 
-  CHARACTER (len = 300) :: Conventions, contact, experiment_id, experiment, &
-    driving_experiment, driving_model_id, driving_model_ensemble_member, &
+  CHARACTER (len = 300) :: Conventions, conventionsURL, contact, experiment, &
+    driving_experiment, experiment_id, driving_model_id, driving_model_ensemble_member, &
     driving_experiment_name, institution, institute_id, model_id, &
-    rcm_version_id, project_id, CORDEX_domain, product, references, &
-    conventionsURL
+    rcm_version_id, project_id, CORDEX_domain, product, references
+    
 
-  CHARACTER (len = 1000) :: comment, institute_run_id, title, &
+  CHARACTER (len = 1000) :: title, institute_run_id, comment, &
     nesting_levels, comment_nesting, comment_1nest, comment_2nest
 
   CHARACTER (LEN = 100), DIMENSION(nvars) :: var_wrf, var_cmip, standard_name, &
@@ -1334,14 +1334,14 @@ DO ifrq = 1, 1, 1 ! 1hr
 
               WRITE(FileNrStr,'(i3)') rank
 
-              CALL SYSTEM("uuidgen -t > tmpfileUUID " // TRIM(FileNrStr))
-              OPEN(1,FILE="tmpfileUUID"//TRIM(FileNrStr),STATUS='old')
+              CALL SYSTEM("uuidgen -t > tmpfileUUID"//domain//TRIM(ADJUSTL(FileNrStr)))
+              OPEN(1,FILE="tmpfileUUID"//domain//TRIM(ADJUSTL(FileNrStr)),STATUS='old')
               READ(1,*) trackingID
               CLOSE(1)
               PRINT *, "uuidgen externally generated trackingID = ", trackingID
 
-              CALL SYSTEM("date -u +%Y-%m-%d-T%H:%M:%SZ > tmpfileDate" // TRIM(FileNrStr))
-              OPEN(1,FILE="tmpfileDate"//TRIM(FileNrStr),STATUS='old')
+              CALL SYSTEM("date -u +%Y-%m-%d-T%H:%M:%SZ > tmpfileDate"//domain//TRIM(ADJUSTL(FileNrStr)))
+              OPEN(1,FILE="tmpfileDate"//domain//TRIM(ADJUSTL(FileNrStr)),STATUS='old')
               READ(1,*) creationDate
               CLOSE(1)
               PRINT *, "date externally generated creation date = ", creationDate
