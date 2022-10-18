@@ -1,0 +1,24 @@
+FC = /opt/openmpi/4.1.4/bin/mpifort
+FCFLAGS = -O3 
+#FCFLAGS += -Wrealloc-lhs 
+FCFLAGS += -ffree-line-length-none
+FCFLAGS += -I/usr/include
+LDFLAGS = -L/usr/lib/x86_64-linux-gnu -lnetcdff -lnetcdf
+
+PROGRAMS = WRF_CMORizer_MPI
+
+all: $(PROGRAMS)
+
+%: %.o
+	$(FC) $(FCFLAGS) -o $@ $^ $(LDFLAGS)
+
+%.o: %.f90
+	$(FC) $(FCFLAGS) -c $<
+
+.PHONY: clean veryclean
+
+clean:
+	rm -f *.o *.mod *.MOD *_genmod.f90 tmpfile* log
+
+veryclean: clean
+	rm -rf *~ $(PROGRAMS)
