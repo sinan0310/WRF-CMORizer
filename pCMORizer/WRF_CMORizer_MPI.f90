@@ -45,7 +45,6 @@ MODULE NamelistHandling
     driving_experiment, experiment_id, driving_model_id, driving_model_ensemble_member, &
     driving_experiment_name, institution, institute_id, model_id, &
     rcm_version_id, project_id, CORDEX_domain, product, references
-    
 
   CHARACTER (len = 1000) :: title, institute_run_id, comment, &
     nesting_levels, comment_nesting, comment_1nest, comment_2nest
@@ -104,7 +103,7 @@ USE NamelistHandling
 USE netcdf
 
 USE MPI
-USE OMP_LIB
+!USE OMP_LIB
 
 IMPLICIT NONE
 
@@ -286,7 +285,15 @@ INTEGER :: t00_varid, p00_varid
 REAL :: zg_pout
 
 ! soil layer thickness may vary from simulation to simulation
+! either DZS is read from WRF outout, or it can be hardcoded, see below
 REAL, DIMENSION(:), ALLOCATABLE :: DZS
+REAL, DIMENSION(:), ALLOCATABLE :: DZSmp
+
+! subsurface layer thickness prescribed, e.g., compatible to ParFlow, hardcoded (hc)
+! any number of soil layers is possible
+!REAL, DIMENSION(4) :: DZShc = (/0.10D0, 0.30D0, 0.60D0, 1.00D0/)
+REAL, DIMENSION(4) :: DZShc = (/0.1, 0.3, 0.6, 1.0/)
+REAL, DIMENSION(:,:), ALLOCATABLE :: soillayer_bnds
 
 ! meta information about the geographic projection used (coordinates of the rotated pole)
 REAL :: GeoNPLat, GeoNPLon
@@ -447,9 +454,9 @@ PRINT *, "============================================================"
 PRINT *, "*** STATIC FIELDS ***"
 PRINT *, TRIM(PnFnGeo)
 
-ALLOCATE( GeoInLonLat(yfocus, xfocus, 2) ) ! F95 order
+ALLOCATE( GeoInLonLat(xfocus, yfocus, 2) )
 PRINT *, SHAPE(GeoInLonLat)
-ALLOCATE( landmask_in(yfocus, xfocus) )
+ALLOCATE( landmask_in(xfocus, yfocus) )
 PRINT *, SHAPE(landmask_in)
 ALLOCATE( GeoInRLat(yfocus) )
 ALLOCATE( GeoInRLon(xfocus) )
@@ -481,7 +488,7 @@ sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "POLE_LAT", GeoNPLat)
 sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "POLE_LON", GeoNPLon)
 
 ! binary, land=1, water=0, compared to LANDUSEF class 16, water fraction, 
-! all larger 0.5 water fraction is water, including large lakes
+! >0.5 water fraction is water, including large lakes
 sts = NF90_INQ_VARID(ncidin, "LANDMASK", varid)
 sts = NF90_GET_VAR(ncidin, varid, landmask_in(:, :), &
   START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /))
@@ -496,10 +503,11 @@ sts = NF90_CLOSE(ncidin)
 !PRINT *, SHAPE(GeoInRLat)
 !PRINT *, GeoInRLat
 
-!PRINT *, "GeoInLonLat = "
-!PRINT *, SHAPE(GeoInLonLat)
+!PRINT *, "GeoInLonLat shape = ", SHAPE(GeoInLonLat)
 !PRINT *, "lon = ", GeoInLonLat(:,:,1)
 !PRINT *, "lat = ", GeoInLonLat(:,:,2)
+
+!PRINT *, 'landmask_in shape = ', SHAPE(landmask_in)
 
 !-------------------------------------------------------------------------------
 ! setup of loop control vectors
@@ -1334,14 +1342,14 @@ DO ifrq = 1, 1, 1 ! 1hr
 
               WRITE(FileNrStr,'(i3)') rank
 
-              CALL SYSTEM("uuidgen -t > tmpfileUUID"//domain//TRIM(ADJUSTL(FileNrStr)))
-              OPEN(1,FILE="tmpfileUUID"//domain//TRIM(ADJUSTL(FileNrStr)),STATUS='old')
+              CALL SYSTEM("uuidgen -t > tmpfileUUID"//TRIM(domain)//TRIM(ADJUSTL(FileNrStr)))
+              OPEN(1,FILE="tmpfileUUID"//TRIM(domain)//TRIM(ADJUSTL(FileNrStr)),STATUS='old')
               READ(1,*) trackingID
               CLOSE(1)
               PRINT *, "uuidgen externally generated trackingID = ", trackingID
 
-              CALL SYSTEM("date -u +%Y-%m-%d-T%H:%M:%SZ > tmpfileDate"//domain//TRIM(ADJUSTL(FileNrStr)))
-              OPEN(1,FILE="tmpfileDate"//domain//TRIM(ADJUSTL(FileNrStr)),STATUS='old')
+              CALL SYSTEM("date -u +%Y-%m-%d-T%H:%M:%SZ > tmpfileDate"//TRIM(domain)//TRIM(ADJUSTL(FileNrStr)))
+              OPEN(1,FILE="tmpfileDate"//TRIM(domain)//TRIM(ADJUSTL(FileNrStr)),STATUS='old')
               READ(1,*) creationDate
               CLOSE(1)
               PRINT *, "date externally generated creation date = ", creationDate
@@ -1380,7 +1388,7 @@ DO ifrq = 1, 1, 1 ! 1hr
               ! be resolved easily, standard does not foresee many 3D vars
               IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. &
                   (TRIM(var_cmip(ivar)) == 'tsl')) THEN
-                sts = NF90_DEF_DIM(ncid, "soil_layer", 4, depth_dimid)
+                sts = NF90_DEF_DIM(ncid, "soil_layer", SIZE(DZShc), depth_dimid)
                 sts = NF90_DEF_DIM(ncid, "bnds", 2, nb2_dimid)
               ENDIF
               sts = NF90_DEF_DIM(ncid, "time", NF90_UNLIMITED, rec_dimid)
@@ -1471,6 +1479,7 @@ DO ifrq = 1, 1, 1 ! 1hr
               ! special case of 3D vars
               ! what we enter here is the thickness, but not the actual depth
               ! neither staggered nor upper and lower bounds
+              ! as defined in ancilliary document
               IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. &
                   (TRIM(var_cmip(ivar)) == 'tsl')) THEN
                 sts = nf90_def_var(ncid, "soil_layer", NF90_DOUBLE, (/ depth_dimid /), depth_varid)
@@ -1481,7 +1490,11 @@ DO ifrq = 1, 1, 1 ! 1hr
                 sts = nf90_put_att(ncid, depth_varid, "axis", "Z")
                 sts = nf90_put_att(ncid, depth_varid, "bounds", "soil_layer_bnds")
 
+                ! 1st version has correct shape but it empty due to sorting
+                ! 2nd version ha sincorrect shape and is filled form sorting
+                ! -> fix the sorting
                 sts = nf90_def_var(ncid, "soil_layer_bnds", NF90_DOUBLE, (/ nb2_dimid, depth_dimid /), soillayerbnds_varid)
+                !sts = nf90_def_var(ncid, "soil_layer_bnds", NF90_DOUBLE, (/ depth_dimid, nb2_dimid/), soillayerbnds_varid)
               ENDIF
 
               ! for vertically averaged variables need the plev bounds
@@ -1595,7 +1608,8 @@ DO ifrq = 1, 1, 1 ! 1hr
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat plev") 
               ELSE IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. &
                 (TRIM(var_cmip(ivar)) == 'tsl')) THEN
-                sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat soil_layer") 
+                !sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat soil_layer") 
+                sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat") 
               ELSE
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat")
               END IF
@@ -1676,13 +1690,28 @@ DO ifrq = 1, 1, 1 ! 1hr
                 sts = NF90_PUT_VAR(ncid, plev_varid, height(ivar)*100. )
               END IF
 
-              ! dirty hack
               ! total with Noah LSM 2m depth thickness of the layers in Noahi LSM / 0.1D0, 0.3D0, 0.6D0, 1.0D0 /
-              ! add the center points of the depth layers, the bnds gives then the info onthe actual thickness
+              ! add the center points of the depth layers, the bnds gives then the info on the actual thickness
               IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. (TRIM(var_cmip(ivar)) == 'tsl')) THEN
-                !sts = NF90_PUT_VAR(ncid, depth_varid, (/ 0.1D0, 0.3D0, 0.6D0, 1.0D0 /) )
-                sts = NF90_PUT_VAR(ncid, depth_varid, (/ 0.05D0, 0.25D0, 0.7D0, 1.5D0 /) )
-                sts = NF90_PUT_VAR(ncid, soillayerbnds_varid, (/ 0.0D0, 0.1D0, 0.1D0, 0.4D0, 0.4D0, 1.0D0, 1.0D0, 2.0D0 /), (/4,2/) )
+!                ALLOCATE(DZSmp(SIZE(DZShc)))
+!                ALLOCATE(soillayer_bnds(SIZE(DZShc),2))
+!                PRINT *, 'soil layer calc'
+!                DO i=1,SIZE(DZShc)
+!                  soillayer_bnds(1,i) = SUM(DZShc(1:i))-DZShc(i)
+!                  soillayer_bnds(2,i) = SUM(DZShc(1:i))
+!                  PRINT '(2(1X,F4.2))', soillayer_bnds(:,i)
+!                  DZSmp(i) = soillayer_bnds(1,i) + DZShc(i)/2
+!                  PRINT '(1X,F4.2)', DZSmp(i)
+!                END DO
+!                PRINT *, 'shape soillayer_bnds', SHAPE(soillayer_bnds)
+!                ! depth (mid-point) of the layers, orientation: Z down
+!                sts = NF90_PUT_VAR(ncid, soillayerbnds_varid, soillayer_bnds(:,:))
+!                ! upper and lower bound of the layers
+!                sts = NF90_PUT_VAR(ncid, depth_varid, DZSmp(:))
+!                ! alternatively hardcode here
+                !sts = NF90_PUT_VAR(ncid, depth_varid, (/ 0.1D0, 0.3D0, 0.6D0, 1.0D0 /) ) ! wrong
+                sts = NF90_PUT_VAR(ncid, depth_varid, (/ 0.05D0, 0.25D0, 0.7D0, 1.5D0 /) ) ! center points of the depth layers, hardcoded
+                sts = NF90_PUT_VAR(ncid, soillayerbnds_varid, RESHAPE((/ 0.0D0, 0.1D0, 0.1D0, 0.4D0, 0.4D0, 1.0D0, 1.0D0, 2.0D0 /), (/2,4/))) ! bnds hardcoded
               END IF 
 
               !-----------------------------------------------------------------
@@ -2712,16 +2741,19 @@ DO ifrq = 1, 1, 1 ! 1hr
             .OR. (var_cmip(ivar) == "mrsol") &
             .OR. (var_cmip(ivar) == "tsl")) THEN
  
-            IF (.not. ALLOCATED(DZS)) ALLOCATE( DZS( 4 ), STAT=sts )
-            sts = NF90_INQ_VARID(ncidin, "DZS", varid)
-            IF ( sts /= NF90_NOERR ) THEN
-              DZS = (/ 0.1, 0.3, 0.6, 1.0 /) ! total with Noah LSM 2m depth
-              PRINT*,'attention: using hardwired layer thickness for Noah LSM'
-            ELSE
-              sts = NF90_GET_VAR(ncidin, varid, DZS, &
-              START = (/ 1, it /), COUNT = (/ 4, 1 /) )
-              PRINT*,'reading layer thickness from file'
-            END IF
+!            IF (.not. ALLOCATED(DZS)) ALLOCATE( DZS( 4 ), STAT=sts )
+!            sts = NF90_INQ_VARID(ncidin, "DZS", varid)
+!            IF ( sts /= NF90_NOERR ) THEN
+!              DZS = (/ 0.1, 0.3, 0.6, 1.0 /) ! total with Noah LSM 2m depth
+!              PRINT*,'attention: using hardwired layer thickness for Noah LSM'
+!            ELSE
+!              sts = NF90_GET_VAR(ncidin, varid, DZS, &
+!              START = (/ 1, it /), COUNT = (/ 4, 1 /) )
+!              PRINT*,'reading layer thickness from file'
+!            END IF
+!           use hardcoded
+            IF (.not. ALLOCATED(DZS)) ALLOCATE( DZS( SIZE(DZShc) ), STAT=sts )
+            DZS(:) = DZShc(:)
             PRINT*,'DZS ', DZS(:)
  
 !            IF (.not. ALLOCATED(smois_in)) ALLOCATE( smois_in( xfocus, yfocus, 4, 2 ), STAT=sts )
@@ -2732,7 +2764,7 @@ DO ifrq = 1, 1, 1 ! 1hr
               sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
               sts = NF90_GET_VAR(ncidin, varid, smois_in(:,:,:,:), &
                 START = (/ xoffset, yoffset, 1, it /), &
-                COUNT = (/ xfocus, yfocus, 4, 1 /) )
+                COUNT = (/ xfocus, yfocus, SIZE(DZS), 1 /) )
 !                COUNT = (/ xfocus, yfocus, 4, 2 /) )
   
 !            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
@@ -3585,20 +3617,11 @@ DO ifrq = 1, 1, 1 ! 1hr
           IF (var_cmip(ivar) == "snm") THEN
   
             IF (calc) THEN
-            
-              WHERE (landmask_in(:,:) == 1)
-                data_in(:,:) = (acsnom_in(:,:,2) - acsnom_in(:,:,1)) / &
-                               (dtHours*3600.)
-              ELSEWHERE
-                data_in(:,:) = mv
-              END WHERE
-  
+              data_in(:,:) = (acsnom_in(:,:,2) - acsnom_in(:,:,1)) / (dtHours*3600.)
+              WHERE (landmask_in == 0) data_in = mv
             ELSE
-
               data_in(:,:) = mv
-
             END IF
-
             calc = .TRUE.
 
           END IF
@@ -3658,20 +3681,12 @@ DO ifrq = 1, 1, 1 ! 1hr
           IF (var_cmip(ivar) == "mrros") THEN
   
             IF (calc) THEN
-
-              WHERE (landmask_in(:,:) == 1)
-                data_in(:,:) = (sfroff_in(:,:,2) - sfroff_in(:,:,1)) / &
-                               (dtHours*3600.)
-              ELSEWHERE
-                data_in(:,:) = mv
-              END WHERE
-  
+              data_in(:,:) = (sfroff_in(:,:,2) - sfroff_in(:,:,1)) / &
+                             (dtHours*3600.)
+              WHERE (landmask_in == 0) data_in = mv
             ELSE
-
               data_in(:,:) = mv
-
             END IF
-
             calc = .TRUE.
 
           END IF
@@ -3685,21 +3700,13 @@ DO ifrq = 1, 1, 1 ! 1hr
           IF (var_cmip(ivar) == "mrro") THEN
   
             IF (calc) THEN
-
-              WHERE (landmask_in(:,:) == 1)
-                data_in(:,:) = ( (sfroff_in(:,:,2) - sfroff_in(:,:,1)) + &
-                                 (udroff_in(:,:,2) - udroff_in(:,:,1)) ) / &
-                                 (dtHours*3600.) 
-              ELSEWHERE
-                data_in(:,:) = mv
-              END WHERE
-
+              data_in(:,:) = ( (sfroff_in(:,:,2) - sfroff_in(:,:,1)) + &
+                               (udroff_in(:,:,2) - udroff_in(:,:,1)) ) / &
+                               (dtHours*3600.) 
+              WHERE (landmask_in == 0) data_in = mv
             ELSE
-
               data_in(:,:) = mv
-
             END IF
-
             calc = .TRUE.
 
           END IF
@@ -3819,14 +3826,11 @@ DO ifrq = 1, 1, 1 ! 1hr
             !data_in(:,:) = ((smois_in(:,:,1,1)*DZS(1) + smois_in(:,:,2,1)*DZS(2) + smois_in(:,:,3,1)*DZS(3) + smois_in(:,:,4,1)*DZS(4) ) + &
             !                (smois_in(:,:,1,2)*DZS(1) + smois_in(:,:,2,2)*DZS(2) + smois_in(:,:,3,2)*DZS(3) + smois_in(:,:,4,2)*DZS(4) ))/2.*1000. 
   
-            WHERE (landmask_in(:,:) == 1)
-              data_in(:,:) =  (smois_in(:,:,1,1)*DZS(1) + &
-                               smois_in(:,:,2,1)*DZS(2) + &
-                               smois_in(:,:,3,1)*DZS(3) + &
-                               smois_in(:,:,4,1)*DZS(4)) * 1000.
-            ELSEWHERE
-              data_in(:,:) = mv
-            END WHERE
+            data_in(:,:) =  (smois_in(:,:,1,1)*DZS(1) + &
+                             smois_in(:,:,2,1)*DZS(2) + &
+                             smois_in(:,:,3,1)*DZS(3) + &
+                             smois_in(:,:,4,1)*DZS(4)) * 1000.
+            WHERE (landmask_in == 0) data_in = mv
 
           END IF
   
@@ -3868,13 +3872,22 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! masking over ocean, with mv initialized
 
           IF ( (var_cmip(ivar) == "snc") ) THEN
-  
-            WHERE (landmask_in(:,:) == 1)
-              data_in(:,:) = data_in(:,:)*100. 
-            ELSEWHERE
-              data_in(:,:) = mv
-            END WHERE
-  
+
+            !PRINT *, 'shape data_in with snc', SHAPE(data_in)
+            !PRINT *, 'landmask_in test snc middle', data_in(180, :)*100. 
+            !PRINT *, 'landmask_in', SHAPE(landmask_in)
+            !PRINT *, 'landmask_in middle', landmask_in(180, :)
+            !data_in = landmask_in
+
+            data_in(:,:) = data_in(:,:)*100. 
+            WHERE (landmask_in == 0) data_in = mv
+
+            !WHERE (landmask_in == 1)
+            !  data_in = data_in*100. 
+            !ELSEWHERE
+            !  data_in = mv
+            !END WHERE
+
           END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3886,11 +3899,12 @@ DO ifrq = 1, 1, 1 ! 1hr
           IF ( (var_cmip(ivar) == "snd") &
             .OR. (var_cmip(ivar) == "snw") ) THEN
  
-            WHERE (landmask_in(:,:) == 1)
-              data_in(:,:) = data_in(:,:)
-            ELSEWHERE
-              data_in(:,:) = mv
-            END WHERE
+            WHERE (landmask_in == 0) data_in = mv
+            !WHERE (landmask_in(:,:) == 1)
+            !  data_in(:,:) = data_in(:,:)
+            !ELSEWHERE
+            !  data_in(:,:) = mv
+            !END WHERE
   
           END IF
   

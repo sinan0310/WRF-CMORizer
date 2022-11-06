@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=128
-#SBATCH --time=00:45:00
-#SBATCH --partition=dc-cpu
+#SBATCH --time=00:10:00
+#SBATCH --partition=dc-cpu-devel
 #SBATCH --mail-type=all
 #SBATCH --mail-user=k.goergen@fz-juelich.de
 #SBATCH --account=jjsc39
