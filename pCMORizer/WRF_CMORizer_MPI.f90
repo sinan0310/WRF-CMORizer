@@ -339,10 +339,11 @@ REAL :: stat_mean, slope
 
 !-------------------------------------------------------------------------------
 ! general
+! some special switch for input handling
 
 INTEGER :: i, j, k, sts, ivar, ifrq, ifl, it, counter, np, nl, ii, ivarnml, &
   prevpass = 0, AllocateStatus, DeAllocateStatus
-LOGICAL :: FileExists, newpass, time_match, calc = .TRUE.
+LOGICAL :: FileExists, newpass, time_match, calc = .TRUE., inputtimesteptruncate = .FALSE.
 REAL :: cpuTs, cpuTe
 INTEGER, ALLOCATABLE :: ipos(:)
 ! choose how psl is calculated, 0 OK, 1 OK, 2 OK, no not change throughout
@@ -908,13 +909,16 @@ DO ifrq = 1, 1, 1 ! 1hr
         DO it = 1, InDimLenRec, 1
   
 ! HTr: skip last record for "sum" or "mean" to avoid re-initialisation of next file with nans, if 
-!       the next file is computed in parallel
-! unclear what the effect is here
-! interplay with the structure of the output
-          IF ( ( it .EQ. InDimLenRec ) .AND. ( ( cell_methods(ivar) == "mean" ) .OR. &
-               ( cell_methods(ivar) == "sum" ) ) ) THEN
-            PRINT *, "skip last input timestep to avoid NaNs in the following aggregation file ", InDimLenRec
-            EXIT
+!      the next file is computed in parallel
+! KGo: this does not work with my input data 00-23 per wrfout file
+!      if inputtimesteptruncate=T, then there is a gap in the data, i.e., one timestep
+!      at the end / beginning of new day remains missing
+          IF (inputtimesteptruncate) THEN 
+            IF ( ( it .EQ. InDimLenRec ) .AND. ( ( cell_methods(ivar) == "mean" ) .OR. &
+                 ( cell_methods(ivar) == "sum" ) ) ) THEN
+              PRINT *, "skip last input timestep to avoid NaNs in the following aggregation file ", InDimLenRec
+              EXIT
+            END IF
           END IF
 
           PRINT *, "-----------------------------------------------------------"
@@ -1790,7 +1794,8 @@ DO ifrq = 1, 1, 1 ! 1hr
           ! HTr: read actual value of base state temperature T00
           ! vector, 1 value /timestep, usually constant
           ! default changed over time with WRF versions, was 290K, is 300K
-          T00(1) = 300.0
+          ! but for DA: checked with registry and namelist -> 290 is used
+          T00(1) = 290.0 !300.0
           !sts = NF90_INQ_VARID(ncidin, "T00", t00_varid)
           !IF ( sts /= NF90_NOERR ) THEN
           !  T00(1) = 300.0

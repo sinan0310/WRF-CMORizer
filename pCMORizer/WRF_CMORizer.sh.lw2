@@ -1,14 +1,16 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=128
-#SBATCH --time=00:10:00
-#SBATCH --partition=dc-cpu-devel
+#SBATCH --time=00:30:00
+#SBATCH --partition=dc-cpu
 #SBATCH --mail-type=all
 #SBATCH --mail-user=k.goergen@fz-juelich.de
 #SBATCH --account=jjsc39
 #SBATCH --disable-turbomode
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
+
+#-devel
 
 # USAGE="export Y=1998 && sbatch --export=ALL,Y=$Y --job-name=pCMORizerWRF$Y WRF_CMORizer.sh.lw2"
 
@@ -62,10 +64,10 @@ ln -sf ../runctrl.vars.nml.std_vars_38 runctrl.vars.nml
 ln -sf ../WRF_CMORizer_MPI .
 chmod a+x WRF_CMORizer_MPI
 
-#log_d01="/dev/zero"
-#log_d02="/dev/zero"
-log_d01="log_d01"
-log_d02="log_d02"
+log_d01="/dev/zero"
+log_d02="/dev/zero"
+#log_d01="log_d01"
+#log_d02="log_d02"
 
 ln -sf runctrl.current.nml_d01 runctrl.current.nml
 sleep 2
