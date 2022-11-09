@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=128
-#SBATCH --time=00:30:00
+#SBATCH --time=00:15:00
 #SBATCH --partition=dc-cpu
 #SBATCH --mail-type=all
 #SBATCH --mail-user=k.goergen@fz-juelich.de
@@ -30,7 +30,7 @@ source compile.settings
 echo $SLURM_JOB_NAME
 
 let Y=$Y
-let nvar=38
+let nvar=39
 
 dir_work=$(pwd)
 mkdir ${dir_work}/${Y}

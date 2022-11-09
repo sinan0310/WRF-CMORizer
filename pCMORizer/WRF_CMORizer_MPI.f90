@@ -6,7 +6,7 @@ MODULE FilelistHandling
   IMPLICIT NONE
   SAVE
 
-  CHARACTER (len = 200):: tmpfileFL
+  CHARACTER (len = 200):: tmpfileFL_std, tmpfileFL_xtrm, tmpfileFL_3d
   CHARACTER (len = 200), DIMENSION(:), ALLOCATABLE :: &
     fl_wrfout   , &
     fl_wrfxtr   , & 
@@ -39,7 +39,7 @@ MODULE NamelistHandling
   IMPLICIT NONE
   SAVE
 
-  INTEGER, PARAMETER :: nvars = 38 ! maximum number of vars per namelist
+  INTEGER, PARAMETER :: nvars = 39 ! maximum number of vars per namelist
 
   CHARACTER (len = 300) :: Conventions, conventionsURL, contact, experiment, &
     driving_experiment, experiment_id, driving_model_id, driving_model_ensemble_member, &
@@ -157,15 +157,24 @@ REAL, PARAMETER :: cp = 1004.0 ! [J kg-1 K-1]
 REAL, PARAMETER :: R = 287.04 ! [J kg-1 K-1]
 REAL, PARAMETER :: L = 2501000.0 ! [J kg-1]
 REAL, PARAMETER :: a = 610.78 ! [Pa]
-REAL, PARAMETER :: b = 17.27 !
+REAL, PARAMETER :: b = 17.27 ! 17.2693882
 REAL, PARAMETER :: c = 273.15 !
 REAL, PARAMETER :: d = 35.86 !
 REAL, PARAMETER :: n = L*0.622*a/cp !
 REAL, PARAMETER :: mv = 1.e20 ! missing value as specified
 REAL, PARAMETER :: gr = 9.81
+REAL, PARAMETER :: epsil = 0.6220
 
 ! auxilliary vars, just needed during development
 ! INTEGER, PARAMETER :: nt = 8
+
+! constants for hurs calc
+real(kind=8), parameter :: a1=-2.8365744e3,a2=-6.028076559e3,a3=19.54263612,a4=-2.737830188e-2
+real(kind=8), parameter :: a5=1.6261698e-5,a6=7.0229056e-10,a7=-1.8680009e-13,a8=2.7150305
+real(kind=8), parameter :: b1=-5.8666426e3,b2=22.32870244,b3=1.39387003e-2,b4=-3.4262402e-5
+real(kind=8), parameter :: b5=2.7040955e-8,b6=6.7063522e-1
+real(kind=8), parameter :: fi1=3.62183e-4,fi2=2.6061244e-5,fi3=3.8667770e-7,fi4=3.8268958e-9,fi5=-10.7604,fi6=6.3987441e-2,fi7=-2.6351566e-4,fi8=1.6725084e-6
+real(kind=8), parameter :: fw1=3.536240e-4,fw2=2.932836e-5,fw3=2.616898e-7,fw4=8.581361e-9,fw5=-10.75880,fw6=6.326813e-2,fw7=-2.536893e-4,fw8=6.340529e-7
 
 ! new netCDF file
 INTEGER :: ncid, ncidin, ncidin0
@@ -176,7 +185,7 @@ INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, &
   phb_varid, qv_varid, qc_varid, qi_varid, qr_varid, qs_varid, &
   theta_varid, t2_varid, recbnds_varid, rainnc_varid, &
   rainc_varid, snownc_varid, u10_varid, v10_varid, u_varid, v_varid, w_varid, &
-  sfcevp_varid, potevp_varid, sfroff_varid, udroff_varid, acsnom_varid, &
+  sfcevp_varid, potevp_varid, sfroff_varid, udroff_varid, acsnom_varid, q2_varid, &
   sinalpha_varid, cosalpha_varid, plev_varid, plevbnds_varid, psfc_varid, &
   landmask_varid, xland_varid, swdown_varid, depth_varid, soillayerbnds_varid
 
@@ -194,25 +203,30 @@ CHARACTER (len = 19), DIMENSION(:), ALLOCATABLE :: InVarDataRec
 
 ! data
 REAL, DIMENSION(:,:), ALLOCATABLE :: &
-  data_in     , &
-  psl_in      , &
-  !t2_in       , &
-  cldfra_inv  , &
-  u10_in      , &
-  v10_in      , &
-  cape        , &
-  cin         , &
-  lcl         , &
-  lfc         , &
-  prw         , &
-  clwvi       , &
-  clivi       , &
-  sinalpha_in , &
-  cosalpha_in , &
+  data_in       , &
+  psl_in        , &
+  t2_in         , &
+  q2_in         , &
+  cldfra_inv    , &
+  u10_in        , &
+  v10_in        , &
+  cape          , &
+  cin           , &
+  lcl           , &
+  lfc           , &
+  prw           , &
+  clwvi         , &
+  clivi         , &
+  sinalpha_in   , &
+  cosalpha_in   , &
   !!var_pl      , &
-  psfc_in     , &
-  tmp_2d      , &
-  rainc_max_in, &
+  psfc_in       , &
+  tmp_2d        , &
+  tmp1_2d       , &
+  tmp2_2d       , &
+  tmp3_2d       , &
+  tmp4_2d       , &
+  rainc_max_in  , &
   rainnc_max_in , &
   landmask_in   , &
   xland_in
@@ -374,7 +388,6 @@ CHARACTER (len = 21) :: creationDate
 
 INTEGER, DIMENSION(:), ALLOCATABLE :: ivar_list
 INTEGER :: ierr, rank, numtasks
-
 
 ! Initialise MPI evironment
   CALL MPI_INIT(ierr)
@@ -574,7 +587,9 @@ DO ifrq = 1, 1, 1 ! 1hr
   PRINT *, "============================================================"
   PRINT *, "*** FILELIST CREATION ***"
   
-  tmpfileFL = "tmpfileFL"
+  tmpfileFL_std = "tmpfileFLstd" // TRIM(domain)
+  tmpfileFL_3d = "tmpfileFL3d" // TRIM(domain)
+  tmpfileFL_xtrm = "tmpfileFLxtrm" // TRIM(domain)
 
   ! creates a year range, can be expanded also to use months
   IF ( (ts == "0000") .AND. (te == "0000") ) THEN
@@ -594,38 +609,26 @@ DO ifrq = 1, 1, 1 ! 1hr
   !CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // " -name wrfout*" // TRIM(domain) // "*_" // TRIM(ts) // "*.nc -o -name wrfout*" // TRIM(domain) // "*_" // TRIM(te) // "*.nc | sort > " // tmpfileFL)
 
   IF ( rank == 0 ) THEN
-  
-    CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name 'wrfout*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc' | sort > " // tmpfileFL)
-
+    CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name 'wrfout*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc' | sort > " // tmpfileFL_std)
   END IF
-
   CALL mpi_barrier(MPI_COMM_WORLD, ierr)
   IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
-   
   ft = 0 ! file type
   CALL GenerateFilelist
 
   IF ( rank == 0 ) THEN 
-  
-    CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name 'wrfxtrm*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc' | sort > " // tmpfileFL)
-
+    CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name 'wrfxtrm*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc' | sort > " // tmpfileFL_xtrm)
   END IF
-
   CALL mpi_barrier(MPI_COMM_WORLD, ierr)
   IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
- 
   ft = 1
   CALL GenerateFilelist
 
   IF ( rank == 0) THEN
-
-    CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name 'wrfpress*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc' | sort > " // tmpfileFL)
-
+    CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name 'wrfpress*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc' | sort > " // tmpfileFL_3d)
   END IF
-  
   CALL mpi_barrier(MPI_COMM_WORLD, ierr)
   IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
- 
   ft = 2
   CALL GenerateFilelist
  
@@ -1911,11 +1914,6 @@ DO ifrq = 1, 1, 1 ! 1hr
             ! read data as needed
             ! these 5 vars are always calculated
 
-            !IF (.not. ALLOCATED(t2_in)) ALLOCATE( t2_in ( xfocus, yfocus ), STAT=sts )
-            !sts = NF90_INQ_VARID(ncidin, "T2", t2_varid)
-            !sts = NF90_GET_VAR(ncidin, t2_varid, t2_in(:,:), &
-            !  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-          
             IF ( ( var_cmip(ivar) == "prw" )   .OR. &
                  ( var_cmip(ivar) == "psl" )   .OR. &
                  ( height(ivar) > 10  )        .OR. &
@@ -2795,6 +2793,24 @@ DO ifrq = 1, 1, 1 ! 1hr
   
 !            END IF
   
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! hurs [%] i Near-Surface Relative Humidity
+
+          ELSE IF (var_cmip(ivar) == "hurs") THEN
+
+            IF (.not. ALLOCATED(t2_in)) ALLOCATE( t2_in ( xfocus, yfocus ), STAT=sts )
+            sts = NF90_INQ_VARID(ncidin, "T2", t2_varid)
+            sts = NF90_GET_VAR(ncidin, t2_varid, t2_in(:,:), &
+              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+            IF (.not. ALLOCATED(q2_in)) ALLOCATE( q2_in ( xfocus, yfocus ), STAT=sts )
+            sts = NF90_INQ_VARID(ncidin, "Q2", q2_varid)
+            sts = NF90_GET_VAR(ncidin, q2_varid, q2_in(:,:), &
+              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+            IF (.not. ALLOCATED(psfc_in)) ALLOCATE( psfc_in ( xfocus, yfocus ), STAT=sts )
+            sts = NF90_INQ_VARID(ncidin, "PSFC", psfc_varid)
+            sts = NF90_GET_VAR(ncidin, psfc_varid, psfc_in(:,:), &
+              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! sfcWind [m s-1] i Near-Surface Wind Speed
 
@@ -3976,6 +3992,47 @@ DO ifrq = 1, 1, 1 ! 1hr
 
           END IF
 
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! hurs [%] i Near-Surface Relative Humidity
+! for compatibility, copy the approach as implemented by IDL (Soares, Cardoso, Careto): RCM_convection_sfc_hum.f90 line 305ff 
+! Following WMO, supercooled water is assumed for temperatures below 0ºC and esat is always calculated in reference to water.
+! Enhancement factor is used calculate the effective esat in the presence of other gases
+! REFERENCES
+! Wexler, A., Vapor Pressure Formulation for Water in Range 0 to 100°C. A Revision, Journal of Research of the National Bureau of Standards  A. Physics and Chemistry, September  December 1976, Vol. 80A, Nos.5 and 6, 775-785
+! Wexler, A., Vapor Pressure Formulation for Ice, Journal of Research of the National Bureau of Standards  A. Physics and Chemistry, January  February 1977, Vol. 81A, No. 1, 5-19
+! Goff, J. A., Standardization of Thermodynamic Properties of Moist Air, Heating, Piping, and Air Conditioning, 1949, Vol. 21, 118.
+
+          IF (var_cmip(ivar) == "hurs") THEN
+
+            ! t2=t2_in 
+            ! mr=q2_in 
+            ! psf=psfc_in
+            !        TK                    mr_sat                 e_sfc                  esat                   fact
+            ALLOCATE(tmp_2d(xfocus,yfocus),tmp1_2d(xfocus,yfocus),tmp2_2d(xfocus,yfocus),tmp3_2d(xfocus,yfocus),tmp4_2d(xfocus,yfocus))
+
+            tmp_2d = t2_in-c
+            tmp2_2d = (q2_in / (epsil+q2_in)) * psfc_in
+            tmp3_2d = exp( a1*t2_in**(-2) + a2/t2_in + a3 + a4*t2_in + a5*t2_in**2 + a6*t2_in**3 + a7*t2_in**4 + a8*log(t2_in) )
+
+            WHERE (tmp_2d < 0.)
+               tmp4_2d = exp((fi1+fi2*tmp_2d+fi3*tmp_2d**2+fi4*tmp_2d**3)*(1.-(tmp3_2d/psfc_in))+ &  
+                          exp(fi5+fi6*tmp_2d+fi7*tmp_2d**2+fi8*tmp_2d**3)*((tmp3_2d/psfc_in)-1.d0))
+            ELSEWHERE
+               tmp4_2d = exp((fw1+fw2*tmp_2d+fw3*tmp_2d**2+fw4*tmp_2d**3)*(1.-(tmp3_2d/psfc_in))+ &  
+                          exp(fw5+fw6*tmp_2d+fw7*tmp_2d**2+fw8*tmp_2d**3)*((tmp3_2d/psfc_in)-1.d0))
+            END WHERE
+
+            tmp1_2d = epsil*(tmp3_2d*tmp4_2d) / (psfc_in-(tmp3_2d*tmp4_2d))
+            data_in = max(min(q2_in/tmp1_2d,1.),0.0)*100.
+
+            DEALLOCATE(tmp_2d,tmp1_2d,tmp2_2d,tmp3_2d,tmp4_2d)
+
+            ! too simplified
+            !data_in(:,:) = q2_in(:,:) / ( (379.90516 / psfc_in(:,:)) * exp(17.2693882*(t2_in(:,:)-273.15) / (t2_in(:,:) - 35.86)) )
+            !data_in(:,:) = 0.01 * (psfc_in(:,:)*q2_in(:,:)/(q2_in(:,:)*(1.-0.622) + 0.622)) / (611.2*exp(17.67*(t2_in(:,:)-273.15)/(t2_in(:,:)-29.65)))
+
+          END IF
+
 !-------------------------------------------------------------------------------
 ! write data to netCDF file
 
@@ -4329,7 +4386,15 @@ IMPLICIT NONE
 CHARACTER (len = 200) :: ifl
 INTEGER :: i, IOstatus, nfl, AllocateStatus
 
-OPEN(2,FILE=tmpfileFL,STATUS='old')
+IF (ft == 0) THEN
+  OPEN(2,FILE=tmpfileFL_std,STATUS='old')
+END IF
+IF (ft == 1) THEN
+  OPEN(2,FILE=tmpfileFL_xtrm,STATUS='old')
+END IF
+IF (ft == 2) THEN
+  OPEN(2,FILE=tmpfileFL_3d,STATUS='old')
+END IF
 
 i = 0
 DO

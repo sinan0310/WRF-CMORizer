@@ -60,9 +60,9 @@
 /
 &tool_config
    nvar = __nvar__,
-   aggregation_yearly = .T.,              ! for tier-2 / initial processing, default CMOR, 1hr 3hr data are stored in yearly files, data controls files created
+   aggregation_yearly = .F.,              ! for tier-2 / initial processing, default CMOR, 1hr 3hr data are stored in yearly files, data controls files created
    aggregation_monthly = .F.,             ! data controls monthly files created
-   aggregation_individually = .F.,        ! individual file is created, for the timespan as defined below
+   aggregation_individually = .T.,        ! individual file is created, for the timespan as defined below
    tsact = '__YYYY__-01-01_00:00:00',         ! tsact and teact are only needed if aggregation_individually = .TRUE.,
    teact = '__YYYY__-01-02_23:00:00',         ! otherwise it is ignored
 /
