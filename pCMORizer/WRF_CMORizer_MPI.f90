@@ -1587,12 +1587,15 @@ DO ifrq = 1, 1, 1 ! 1hr
               IF ((var_cmip(ivar) == "mrsol") &
                 .OR. (var_cmip(ivar) == "tsl")) THEN
                 sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, depth_dimid, rec_dimid /), x_varid)  
+                !sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, depth_dimid, rec_dimid /), x_varid, chunksizes = (/10, 10, 1, 8/), shuffle = .TRUE., fletcher32 = .FALSE., endianness = nf90_endian_little, deflate_level = 1)
               ELSE
                 sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, rec_dimid /), x_varid)
+                !sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, rec_dimid /), x_varid, chunksizes = (/10, 10, 8/), shuffle = .TRUE., fletcher32 = .FALSE., endianness = nf90_endian_little, deflate_level = 1)
               END IF
 
               ! TODO -> determine chunksizes vector beforehand otherwise
               ! this can only make it worse
+              ! see https://www.unidata.ucar.edu/blogs/developer/en/entry/chunking_data_why_it_matters
               !sts = nf90_def_var_chunking(ncid, x_varid, NF90_CHUNKED, XXXchunksizesXXX) 
               ! fill up with missing values, despite unlimited dim.
               ! not needed, at this point the unlimited time dim is not filled

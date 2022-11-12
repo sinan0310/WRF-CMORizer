@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=128
-#SBATCH --time=00:15:00
+#SBATCH --time=08:00:00
 #SBATCH --partition=dc-cpu
 #SBATCH --mail-type=all
 #SBATCH --mail-user=k.goergen@fz-juelich.de
@@ -15,8 +15,8 @@
 # USAGE="export Y=1998 && sbatch --export=ALL,Y=$Y --job-name=pCMORizerWRF$Y WRF_CMORizer.sh.lw2"
 
 # as the script uses --export, modules can only be loaded if the "ALL" flag is 
-# used; otherwise the module cmd is not found, alternatively, the script needs
-# to be run without options either one of these solutions works
+# used; otherwise the module cmd is not found; alternatively, the script can be 
+# run without options, then either one of these solutions works
 # option 1
 #module --force purge
 #module use $OTHERSTAGES
@@ -24,13 +24,13 @@
 #module load Intel
 #module load ncview
 #module li
-# option 2
+# option 2 -- always safe to load the environment
 source compile.settings
 
 echo $SLURM_JOB_NAME
 
 let Y=$Y
-let nvar=39
+let nvar=39 #2 #39
 
 dir_work=$(pwd)
 mkdir ${dir_work}/${Y}
@@ -48,16 +48,21 @@ sed -i "s/__nvar__/$nvar/g" runctrl.current.nml_d02
 
 let M=1
 M=$(printf "%02d" $M)
-echo $Y $M
+Yn=$(date -u --date="$Y-01-01 1 year" '+%Y')
+echo $Y $Yn $M
 
-ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfout_d0?_${Y}${M}* .
-#ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfout_d0?_${Y}* .
+ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfout_d0?_${Y}* .
+#ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfout_d0?_${Y}${M}* .
+if [ "$Y" != "2005" ]
+then
+  ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfout_d0?_${Yn}0101* .
+fi
 #ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfxtrm_d0?_${Y}${M}* .
 
 #ln -sf ../runctrl.vars.nml.std_vars_13 runctrl.vars.nml
-ln -sf ../runctrl.vars.nml.std_vars_38 runctrl.vars.nml
+#ln -sf ../runctrl.vars.nml.std_vars_38 runctrl.vars.nml
 #ln -sf ../runctrl.vars.nml.3D_vars_2 runctrl.vars.nml
-#ln -sf ../runctrl.vars.nml.vars_on_plevels_36 runctrl.vars.nml
+ln -sf ../runctrl.vars.nml.vars_on_plevels_36 runctrl.vars.nml
 #ln -sf ../runctrl.vars.nml.heavy_vars_2 runctrl.vars.nml
 #ln -sf ../runctrl.vars.nml.minmax_vars_2 runctrl.vars.nml
 

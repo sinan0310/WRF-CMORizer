@@ -38,8 +38,8 @@
 !  domain = "d02",                        ! for filename generation needed
 /
 &model_config
-   ts = '__YYYY__', !'__YYYY_ts__',                           ! 2009 2012 2014 can be used for pattern matching with filenames, set to '0000' to use all files that are found
-   te = '__YYYY__', !'__YYYY_te__',                           ! 2009 2012 2014 can be used for pattern matching with filenames, set to '0000' to use all files that are found
+   ts = '0000', !'__YYYY__', !'__YYYY_ts__',                           ! 2009 2012 2014 can be used for pattern matching with filenames, set to '0000' to use all files that are found
+   te = '0000', !'__YYYY__', !'__YYYY_te__',                           ! 2009 2012 2014 can be used for pattern matching with filenames, set to '0000' to use all files that are found
    nx = 359,                              ! EUR-15 raw output x-dim, incl. relaxation zone, unstaggered, changed to 359x350 w/ EUR-15
    ny = 350,                              ! EUR-15 raw output x-dim, incl. relaxation zone, umstaggered
 !  nx = 490,                              ! ALP-3 WRF grid spec with A-runs (CM/WL)
@@ -60,9 +60,9 @@
 /
 &tool_config
    nvar = __nvar__,
-   aggregation_yearly = .F.,              ! for tier-2 / initial processing, default CMOR, 1hr 3hr data are stored in yearly files, data controls files created
+   aggregation_yearly = .T.,              ! for tier-2 / initial processing, default CMOR, 1hr 3hr data are stored in yearly files, data controls files created
    aggregation_monthly = .F.,             ! data controls monthly files created
-   aggregation_individually = .T.,        ! individual file is created, for the timespan as defined below
+   aggregation_individually = .F.,        ! individual file is created, for the timespan as defined below
    tsact = '__YYYY__-01-01_00:00:00',         ! tsact and teact are only needed if aggregation_individually = .TRUE.,
    teact = '__YYYY__-01-02_23:00:00',         ! otherwise it is ignored
 /
