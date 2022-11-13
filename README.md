@@ -232,9 +232,11 @@ For details and restrictions, please read the LICENSE.txt file.
 - [CF-conventions](https://cfconventions.org/)
 - [CORDEX-CMIP3 downscaling experiment guideleines documents](https://cordex.org/experiment-guidelines/how-to-submit-data-rcms/)
 - [Specific reuqirements of the CORDEX FPSCONV initiative](https://www.hymex.org/cordexfps-convection/wiki/doku.php?id=protocol)
-- DKRZ QA checker
+- [DKRZ QA checker](https://github.com/IS-ENES-Data/QA-DKRZ)
 - [ESGF infrastructure data node for public dissemination](https://esgf-data.dkrz.de/projects/esgf-dkrz/)
 
 ## Links<a name="ref_links"></a>
 
-Similar tools and resources, such as the URL of github to the CLMcom tool
+Similar tools and resources:
+
+- [https://github.com/C2SM-RCM/CCLM2CMOR](https://github.com/C2SM-RCM/CCLM2CMOR)
