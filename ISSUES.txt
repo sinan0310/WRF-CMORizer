@@ -1,1 +1,0 @@
-- open, BUG, 2021-06-03: Change the use of xoffset and xoffset as input parameters to the nf90_get_var function in combination with the namelist settings for the boundary relaxation zone (see https://www.unidata.ucar.edu/software/netcdf/docs-fortran/f90-variables.html#f90-reading-data-values-nf90_get_var). Also check once more the use of the static files how are they treated?

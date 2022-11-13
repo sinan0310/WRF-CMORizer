@@ -1,7 +1,0 @@
-module --force purge
-module use $OTHERSTAGES
-module load Stages/2022 GCCcore/.11.2.0 zlib/.1.2.11 binutils/.2.37 StdEnv/2022
-module load GCC/11.2.0
-module load OpenMPI/4.1.2
-module load CDO/2.0.2 NCO/5.0.3 netCDF-Fortran/4.5.3 git/2.33.1-nodocs
-module li
