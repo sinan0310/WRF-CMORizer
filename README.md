@@ -168,7 +168,7 @@ rm -rf 1998
 
 ```
 cd $pCMORizer_DIR
-launcher_pCMORizerMultipleYears_sameVars_1yPerCompNode.sh
+./launcher_pCMORizerMultipleYears_sameVars_1yPerCompNode.sh
 ```
 
 ## Performance<a name="ref_perf"></a>
