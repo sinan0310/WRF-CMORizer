@@ -20,7 +20,7 @@ In this context the pCMORizer.f90 was orginally developed as a purely serial too
 - One processing stream currently uses one compute node: e.g., 2x64core CPUs per node -> 2model domains, 39variables to process each -> processing of two domains, and overall 78 variables at a time
 - Individual years (granularity of CORDEX protocol) can be processed one after the other; if your storage permits: submit several processing jobs concurrently, i.e., one year per node, multiple years at the same time
 - Apart from some hardcoding issues, see below, there is no need to modify the CMORizer, it is only controlled via a runctrl script and the CMORizer config namelist file
-- To balance out wall clock times, variables are split into 4 groups, see below; so to process a complete variable list, the tool has to be run 4 times
+- To balance out wall clock times, variables are split into 4 groups, depending on the time to process them, see below; so to process a complete variable list, the tool has to be run 4 times; if one wants to accespt some inefficiency or if some cores are idle anyway, it would also be possible to process all variables in one go (but they all need to have the same temporal resolution, e.g., hourly sums or instantaneous variables cannot be mixed with daily min max variables)
 
 ## Features of the current variant
 
@@ -59,9 +59,9 @@ pCMORizer.f90 was originally developed to cmorize raw [WRF RCM](https://www2.mmm
 
 It seems generic enough in terms of structure and configuration to also be used for other RCMs, LSMs, HMs. 
 
-At this point, the CORDEX-CMIP3 and the FPSCONV experiments archive specifications and VLs, in their (most current) versions as of 2022-09-25, are supported, see the [references](#ref_refs).
+At this point, the CORDEX-CMIP3 and the FPSCONV experiments archive specifications and variable lists (VLs), in their (most current) versions as of 2022-09-25, are supported, see the [references](#ref_refs) and linked documents therein.
 
-Some variables cannot be derived (yet), see [ToDos](#ref_todos).
+Some (for the majority of the users not so relevant) variables cannot be derived (yet), see [ToDos](#ref_todos).
 
 ## Usage<a name="ref_usage"></a>
 
