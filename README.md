@@ -1,6 +1,6 @@
 # pCMORizer.f90
 
-2022-11-13
+2022-11-16
 
 The pCMORizer.f90 is an open-source Fortran-based software tool with some ancilliary bash scripts that also use [cdo](https://code.mpimet.mpg.de/projects/cdo/). pCMORizer.f90 and companion tools are used transfer or postprocess raw (regional climate) model ouputs into netCDF files, which comply to the [CMOR](https://cmor.llnl.gov) standard according to the [CORDEX-CMIP3 archive specification](http://is-enes-data.github.io/cordex_archive_specifications.pdf) as part of the [CORDEX WCRP project](https://cordex.org/experiment-guidelines/how-to-submit-data-rcms/). The goal is to make the model data compliant to be disseminated through [ESGF](https://esgf-data.dkrz.de/projects/esgf-dkrz/), and/or generate a dataset which is more efficient to be used in analysis, and local sharing, etc.
 
@@ -67,7 +67,7 @@ Some variables cannot be derived (yet), see [ToDos](#ref_todos).
 
 ### Computational environment / requirements
 
-Needed for the currently maintained variant of the tool and the scripts provided.
+Needed for the currently maintained variant of the tool and the scripts provided (GCC compile is possible, but not provided at this point).
 
 - Intel Fortran compiler
 - netCDF library
@@ -82,7 +82,7 @@ Needed for the currently maintained variant of the tool and the scripts provided
 
 ### Configuration, compute environment
 
-For bash set the root directory of the tool, this variable is just used in this manual:
+For bash shell, set the pCMORizer root directory of the tool, this variable is just used in this manual to make things clear:
 
 ```
 export pCMORizer_DIR=~/pCMORizer
@@ -97,7 +97,7 @@ source loadenv.JURECA-DC_2020_Intel-PSMPI.ini
 
 ### Manual code adjustments and compilation
 
-More information / fixes to come.
+More information / fixes to come. These things have to be manually adjusted in `pCMORizer.f90`.
 
 - T00 (290K or 300K, check your Registry.COMMON)
 - depths of LSM
@@ -121,21 +121,21 @@ The main `runctrl.current.nml` namelist configures the global attributes and def
 
 Here two `runctrl.current.nml` files are provided one for each model domain; the runctrl files are documented and determine all major metadata and domain settings and also point to static files which need to be provided for the processing (`geo_em` files).
 
-If the experiment does not change, no changes are needed here.
+If the experiment does not change, no changes are needed here. If a new experiment is to be processd, adjust these files accordingly.
 
 ```
 vim -R -o runctrl.current.nml_template_d01_DA runctrl.current.nml_template_d02_DA
 ```
 
-The variable namelists do not need to be changed. There are 4 variable lists, one per variable group. If a variable is not needed, this variable has to be erased form the list; the functionality which could be used before to switch a variable ON and OFF is essentially deprecated with the MPI version of the tool (although the switch as such still works).
+The variable namelists do not need to be changed usually. There are 4 variable lists, one per "variable group". If a variable is not needed, this variable has to be erased form the list; the functionality which could be used before to switch a variable ON and OFF is essentially deprecated with the MPI version of the tool (although the switch as such still works).
 
-If the protocol does not change no changes are needed here.
+If the protocol does not change, if no new variables are required, or some variables are not required anymore, no changes are needed here.
 
 ```
-runctrl.vars.std_sfc.nml
-runctrl.vars.std_minmax.nml
-runctrl.vars.std_presslev.nml
-runctrl.vars.special.nml
+vim runctrl.vars.std_sfc.nml
+vim runctrl.vars.std_minmax.nml
+vim runctrl.vars.std_presslev.nml
+vim runctrl.vars.special.nml
 ```
 
 The run control script (i) handles the data and (ii) starts the CMORizer, making sure via srun options, that there is no overlap as `srun` submitted two times on the same compute node. Here multiple manual adjustments are needed. See comments in the code (sbatch options, wallclock times, see performance section; linking the correct variable and runctrl namelists).
@@ -146,9 +146,17 @@ vim pCMORizer_runctrl.sh
 
 ### Running the CMORizer
 
-There are many ways of running the CMORizer tool, depending on processing setup, urgency, amount of data, available resources. Here only two implemented and maintained modes of operation are featured: 
+There are many ways of running the CMORizer tool, depending on processing setup, urgency, amount of data, available resources. 
 
-1. Run the tool for a single variable set at a time, just run a single year, the compute environment is loaded automatically, within the current working directory a `<year>/` directory is created; all scripts and namelists will be contained in the year-directory. The input data is symbolically linked into this directory; after succesful processing, this directory can be erased. Thepostprocessed / CMORized data are stored as specified. (The input directory could also be anywhere.)
+The currently maintained variant uses two major steps:
+1. CMORize all data at highest temporal resolution, this is what the pCMORizer.f90 does
+2. Temporally aggregate data as required by the protocol using cdo and bash (this was planned to also go into f90) but with the MPI restructuring it seemed quicker to implement it like this
+
+**Step 1: CMORization at highest temporal output interval, all variables**
+
+Two options are curretnly supported.
+
+1. Run the tool for a complete variable set at a time, but just run a single year (or timespan), the compute environment is loaded automatically, within the current working directory a `<year>/` directory is created; all scripts and namelists will be contained in the year-directory. The input data is symbolically linked into this directory; after succesful processing, this directory can be erased, manually. The postprocessed / CMORized data are stored as specified (in their own separate directory). (The input directory could also be anywhere.) All needed input files (runcontrol namelist, variable namlist, executable, input files are in the run-dir, i.e., the year directory.
 
 ```
 cd $pCMORizer_DIR
@@ -164,12 +172,16 @@ cd $pCMORizer_DIR
 rm -rf 1998
 ```
 
-2. Just run the above start sequence x10 to process 10 years on 10 nodes at the same time, for the same variable type. 10 year-directories are created, the tool runs completely independent.
+2. Just run the above start sequence x10 to process 10 years on 10 nodes at the same time, for the same variable type. 10 year-directories are created, the tool runs completely independent within these directories.
 
 ```
 cd $pCMORizer_DIR
 ./launcher_pCMORizerMultipleYears_sameVars_1yPerCompNode.sh
 ```
+
+**Step 2: Temporal aggregation -- under development and implementation, 2022-11-16**
+
+...
 
 ## Performance<a name="ref_perf"></a>
 
