@@ -39,7 +39,7 @@ MODULE NamelistHandling
   IMPLICIT NONE
   SAVE
 
-  INTEGER, PARAMETER :: nvars = 39 ! maximum number of vars per namelist
+  INTEGER, PARAMETER :: nvars = 2 ! maximum number of vars per namelist
 
   CHARACTER (len = 300) :: Conventions, conventionsURL, contact, experiment, &
     driving_experiment, experiment_id, driving_model_id, driving_model_ensemble_member, &
@@ -289,7 +289,7 @@ INTEGER, DIMENSION(:,:,:), ALLOCATABLE :: &
   i_rad_in
 REAL :: bucket_mm, bucket_J
 
-! (het): base state temperature is made flexible in newer versions of WRF. The
+! (HTr): base state temperature is made flexible in newer versions of WRF. The
 ! actual value is stored in variable T00
 ! also the base state pressure (P00) is kept flexible now.
 REAL, DIMENSION(1) :: T00, P00
@@ -500,6 +500,12 @@ sts = NF90_GET_VAR(ncidin, varid, GeoInRLat(:), &
 
 sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "POLE_LAT", GeoNPLat)
 sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "POLE_LON", GeoNPLon)
+
+! (2023-05-15) HTr - in all Euprean CORDEX domains POLE_LON has to set to -162 
+! (which is equivalent to +18, as it is found in WRF)
+IF ( GeoNPLon > 0.0 ) THEN 
+  GeoNPLon = GeoNPlon -180.0
+END IF
 
 ! binary, land=1, water=0, compared to LANDUSEF class 16, water fraction, 
 ! >0.5 water fraction is water, including large lakes
@@ -1379,8 +1385,9 @@ DO ifrq = 1, 1, 1 ! 1hr
               !-----------------------------------------------------------------
 
               ! always included define dimensions
-              sts = NF90_DEF_DIM(ncid, "x", xfocus, x_dimid)
-              sts = NF90_DEF_DIM(ncid, "y", yfocus, y_dimid)
+              !sts = NF90_DEF_DIM(ncid, "x", xfocus, x_dimid)
+              !sts = NF90_DEF_DIM(ncid, "y", yfocus, y_dimid)
+              ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
               sts = NF90_DEF_DIM(ncid, "rlon", xfocus, lon_dimid)
               sts = NF90_DEF_DIM(ncid, "rlat", yfocus, lat_dimid)
               IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
@@ -1412,23 +1419,29 @@ DO ifrq = 1, 1, 1 ! 1hr
               ! nice in plots
 
               ! always included -- longitude field, unrotated
-              sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ x_dimid, y_dimid /), lon_varid)
+!              sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ x_dimid, y_dimid /), lon_varid)
+              sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lon_varid)
               sts = nf90_def_var_deflate(ncid, lon_varid, 1, 1, 1)
               sts = nf90_put_att(ncid, lon_varid, "standard_name", "longitude")
               sts = nf90_put_att(ncid, lon_varid, "long_name", "Longitude")
               sts = nf90_put_att(ncid, lon_varid, "units", "degrees_east")
-              sts = nf90_put_att(ncid, lon_varid, "_CoordinateAxisType", "Lon") ! special addon, not needed, but allowed
+              ! (2023-05-18) - HTr: _CoordinateAxisType provokes an annotation, because it should'nt start with an "_"
+              !sts = nf90_put_att(ncid, lon_varid, "_CoordinateAxisType", "Lon") ! special addon, not needed, but allowed
 
               ! always included -- latitude field, unrotated
-              sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ x_dimid, y_dimid /), lat_varid)
+!              sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ x_dimid, y_dimid /), lat_varid)
+              sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lat_varid)
               sts = nf90_def_var_deflate(ncid, lat_varid, 1, 1, 1)
               sts = nf90_put_att(ncid, lat_varid, "standard_name", "latitude")
               sts = nf90_put_att(ncid, lat_varid, "long_name", "Latitude")
               sts = nf90_put_att(ncid, lat_varid, "units", "degrees_north")
-              sts = nf90_put_att(ncid, lat_varid, "_CoordinateAxisType", "Lat") ! special addon, not needed, but allowed
+              ! (2023-05-18) - HTr: _CoordinateAxisType provokes an annotation, because it should'nt start with an "_"
+              !sts = nf90_put_att(ncid, lat_varid, "_CoordinateAxisType", "Lat") ! special addon, not needed, but allowed
   
               ! always included -- longitude vector, rotated
+              ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
               sts = nf90_def_var(ncid, "rlon", NF90_DOUBLE, (/ lon_dimid /), rlon_varid)
+              !sts = nf90_def_var(ncid, "rlon", NF90_DOUBLE, (/ x_dimid /), rlon_varid)
               sts = nf90_def_var_deflate(ncid, rlon_varid, 1, 1, 1)
               sts = nf90_put_att(ncid, rlon_varid, "standard_name", "grid_longitude")
               sts = nf90_put_att(ncid, rlon_varid, "long_name", "Longitude in rotated pole grid")
@@ -1436,7 +1449,9 @@ DO ifrq = 1, 1, 1 ! 1hr
               sts = nf90_put_att(ncid, rlon_varid, "axis", "X")
   
               ! always included -- latitude vector, rotated
+              ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
               sts = nf90_def_var(ncid, "rlat", NF90_DOUBLE, (/ lat_dimid /), rlat_varid)
+              !sts = nf90_def_var(ncid, "rlat", NF90_DOUBLE, (/ y_dimid /), rlat_varid)
               sts = nf90_def_var_deflate(ncid, rlat_varid, 1, 1, 1)
               sts = nf90_put_att(ncid, rlat_varid, "standard_name", "grid_latitude")
               sts = nf90_put_att(ncid, rlat_varid, "long_name", "Latitude in rotated pole grid")
@@ -1463,7 +1478,9 @@ DO ifrq = 1, 1, 1 ! 1hr
               IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
                 sts = nf90_def_var(ncid, "height", NF90_DOUBLE, (/ height_dimid /), height_varid)
                 sts = nf90_put_att(ncid, height_varid, "standard_name", "height")
-                sts = nf90_put_att(ncid, height_varid, "long_name", "Height")
+                ! (2023-05-18) - HTr: "Height" --> "height"                
+                !sts = nf90_put_att(ncid, height_varid, "long_name", "Height")
+                sts = nf90_put_att(ncid, height_varid, "long_name", "height")
                 sts = nf90_put_att(ncid, height_varid, "units", "m")
                 sts = nf90_put_att(ncid, height_varid, "positive", "up")
                 sts = nf90_put_att(ncid, height_varid, "axis", "Z")
@@ -1474,7 +1491,9 @@ DO ifrq = 1, 1, 1 ! 1hr
               IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
                 sts = nf90_def_var(ncid, "plev", NF90_DOUBLE, (/ plev_dimid /), plev_varid)
                 sts = nf90_put_att(ncid, plev_varid, "standard_name", "air_pressure")
-                sts = nf90_put_att(ncid, plev_varid, "long_name", "Pressure")
+                ! (2023-05-18) - HTr: "Pressure" --> "pressure"                
+                !sts = nf90_put_att(ncid, plev_varid, "long_name", "Pressure")
+                sts = nf90_put_att(ncid, plev_varid, "long_name", "pressure")
                 sts = nf90_put_att(ncid, plev_varid, "units", "Pa")
                 sts = nf90_put_att(ncid, plev_varid, "positive", "down")
                 sts = nf90_put_att(ncid, plev_varid, "axis", "Z")
@@ -1586,10 +1605,14 @@ DO ifrq = 1, 1, 1 ! 1hr
               ! HTr: only 2nd option
               IF ((var_cmip(ivar) == "mrsol") &
                 .OR. (var_cmip(ivar) == "tsl")) THEN
-                sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, depth_dimid, rec_dimid /), x_varid)  
+                ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
+                sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, depth_dimid, rec_dimid /), x_varid)
+                !sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid, depth_dimid, rec_dimid /), x_varid)
                 !sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, depth_dimid, rec_dimid /), x_varid, chunksizes = (/10, 10, 1, 8/), shuffle = .TRUE., fletcher32 = .FALSE., endianness = nf90_endian_little, deflate_level = 1)
               ELSE
+                ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
                 sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, rec_dimid /), x_varid)
+                !sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid, rec_dimid /), x_varid)
                 !sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, rec_dimid /), x_varid, chunksizes = (/10, 10, 8/), shuffle = .TRUE., fletcher32 = .FALSE., endianness = nf90_endian_little, deflate_level = 1)
               END IF
 
@@ -1611,7 +1634,14 @@ DO ifrq = 1, 1, 1 ! 1hr
               IF ( positive(ivar) /= '-999' ) THEN
                 sts = nf90_put_att(ncid, x_varid, "positive", positive(ivar))
               END IF
-              sts = nf90_put_att(ncid, x_varid, "cell_methods", "time: "//TRIM(cell_methods(ivar)))
+              
+              ! (2023-05-15) HTr - add expected cell_method string for certain variables - see CORDEX_variables_requirement_table.csv
+              IF ( ( var_cmip(ivar) == "mrro" ) .OR. ( var_cmip(ivar) == "mrros" ) ) THEN
+                sts = nf90_put_att(ncid, x_varid, "cell_methods", "time: "//TRIM(cell_methods(ivar))//" area: "//TRIM(cell_methods(ivar))//" where land")
+              ELSE
+                sts = nf90_put_att(ncid, x_varid, "cell_methods", "time: "//TRIM(cell_methods(ivar)))
+              END IF
+
               IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat height")
               ELSE IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
@@ -1624,6 +1654,7 @@ DO ifrq = 1, 1, 1 ! 1hr
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat")
               END IF
               sts = nf90_put_att(ncid, x_varid, "grid_mapping", "rotated_pole")
+              ! (2023-05-15) HTr - "missing_value" is depreciated in CF-1.4
               sts = nf90_put_att(ncid, x_varid, "missing_value", mv)
               sts = nf90_put_att(ncid, x_varid, "_FillValue", mv)
 

@@ -8,6 +8,7 @@ tmp*
 tmpfileFL
 log*
 *.bak*
+*_bak*
 *.swp
 WRF_CMORizer
 ___*
@@ -28,4 +29,4 @@ nohup*
 >>>>>>> f80293bad1e5d493174864e4c1dca8d026ac7513
 *err
 *out
-*_bak*
+2023*
