@@ -1,5 +1,5 @@
 &globalvars
-   Conventions = "CF-1.10",
+   Conventions = "CF-1.4",
    conventionsURL = "http://www.cfconventions.org",
    contact = "cordex@fz-juelich.de",
    experiment = "Historical run with forcing from SMHI-EC-EARTH, r12i1p1, 1st-nest run", 
@@ -11,7 +11,7 @@
    driving_experiment_name = "historical",
    institution = "Institute of Bio- and Geosciences (IBG-3, Agrosphere), Research Centre Juelich / Forschungszentrum Juelich (FZJ), GERMANY; Instituto Dom Luiz (IDL), Universidade de Lisboa, PORTUGAL",
    institute_id = "FZJ-IDL",
-   model_id = "FZJ-WRF381DA",
+   model_id = "FZJ-IDL-WRF381DA",
    rcm_version_id = "fpsconv-x0n1-v1",
 !  rcm_version_id = "fpsconv-x1n2-v1",
    project_id = "CORDEX-FPSCONV",
@@ -31,9 +31,9 @@
    comment_2nest = "Actual convection-permitting FPSCONV simulation for the mandatory km-scale ALP-3 domain using WRF v3.8.1; the LBCs are from the the 1st-Nest simulation results; one-way double nest",
 /
 &filesystem
-!  DirInputSimResRoot =   "/p/scratch/cjjsc39/jjsc3900/sim/tmp/simres",
+!  DirInputSimResRoot =   "/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/simres",
    DirInputSimResRoot =   ".",
-   DirOutputPostProRoot = "/p/scratch/cjjsc39/jjsc3900/sim/tmp/postpro/WEGC/CMORized",
+   DirOutputPostProRoot = "/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized",
    domain = "d01",                        ! for filename generation needed
 !  domain = "d02",                        ! for filename generation needed
 /
@@ -55,8 +55,8 @@
    tetot = '2101-01-01_00:00:00',         ! end of the main time vector, do not change
 /
 &static_fields
-   PnFnGeo = '/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BA_v00aJurecaCpuPrepTt19982014/geo_CORINE_HWSD_from_JMi_cb01refined_use_this/geo_em.d01.nc'
-!  PnFnGeo = '/p/scratch/cjjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BA_v00aJurecaCpuPrepTt19982014/geo_CORINE_HWSD_from_JMi_cb01refined_use_this/geo_em.d02.nc'
+   PnFnGeo = '/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BA_v00aJurecaCpuPrepTt19982014/geo_CORINE_HWSD_from_JMi_cb01refined_use_this/geo_em.d01.nc'
+!  PnFnGeo = '/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BA_v00aJurecaCpuPrepTt19982014/geo_CORINE_HWSD_from_JMi_cb01refined_use_this/geo_em.d02.nc'
 /
 &tool_config
    nvar = __nvar__,

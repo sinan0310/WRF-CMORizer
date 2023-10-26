@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=128
+#SBATCH --threads-per-core=1
 #SBATCH --time=06:30:00
 #SBATCH --partition=dc-cpu
 #SBATCH --mail-type=all
@@ -9,6 +10,7 @@
 #SBATCH --disable-turbomode
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
+####SBATCH --constraint=largedata
 
 # USAGE="export Y=1998 && sbatch --export=ALL,Y=$Y --job-name=pCMORizer$Y pCMORizer_runctrl.sh"
 
@@ -16,8 +18,9 @@ source loadenv.JURECA-DC_2020_Intel-PSMPI.ini
 
 echo $SLURM_JOB_NAME
 
+# ADJUST to the number of variables in the namelist, #36 press lev #2 min/max & special #39 std sfc 
 let Y=$Y
-let nvar=39 #36 press lev #2 min/max & special #39 std sfc # ADJUST to the number of variables in the namelist
+let nvar=39 
 
 dir_work=$(pwd)
 mkdir ${dir_work}/${Y}
@@ -39,7 +42,9 @@ Yn=$(date -u --date="$Y-01-01 1 year" '+%Y')
 echo "current year, next year, (current month)" $Y $Yn $M
 
 # ADJUST determine here which files with which pattern you want to link from where; alternative: use the input pathname and the ts te string filename patterns in runctrl.nml; the version here is more straightforward
-ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfout_d0?_${Y}* .
+#ln -sf ${DATA_jjsc39}/jjsc3900/sim/CORDEX-FPSCONV_EUR-15-ALP-3_SMHI-EC-EARTH_historical_r12_FZJ-IDL-WRF381DA_v00aJurecaDcCpuProdPrjTt19952005/simres/d0{1,2}/*/wrfout_d0?_${Y}* .
+ln -sf /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/simres/d0{1,2}_local/*/wrfout_d0?_${Y}* .
+#ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfout_d0?_${Y}* .
 #ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfout_d0?_${Y}${M}* .
 #ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfxtrm_d0?_${Y}* .
 #ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfxtrm_d0?_${Y}${M}* .
@@ -48,7 +53,8 @@ ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfout_d0?_${Y}* .
 # ADJUST do not use this when just testing for a single month, the tool finds the additional file and does a processing, i.e. creates a new netCDF file and adds the data from the linked file below
 if [ "$Y" != "2005" ]
 then
-  ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfout_d0?_${Yn}0101* .
+  #ln -sf /p/scratch/cjjsc39/jjsc3900/sim/tmp/simres/d0{1,2}/*/wrfout_d0?_${Yn}0101* .
+   ln -sf /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/simres/d0{1,2}_local/*/wrfout_d0?_${Yn}0101* .
 fi
 
 # ADJUST depending on the variables, set the nvar and link filenames and adjust the wall clock time

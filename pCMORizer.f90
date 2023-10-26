@@ -541,7 +541,7 @@ frequency(5) = "mon"
 frequency(6) = "sem"
 frequency(7) = "fx"
 
-ALLOCATE ( fnNMLvar(17) )
+ALLOCATE ( fnNMLvar(21) )
 fnNMLvar(1) = "runctrl.vars.nml_pr_tas_1hr_test" ! OK
 fnNMLvar(2) = "runctrl.vars.nml_vars_on_plevels" ! OK
 fnNMLvar(3) = "runctrl.vars.nml" ! OK
@@ -559,6 +559,10 @@ fnNMLvar(14) = "runctrl.vars.nml_alb"         ! new from HTr, not implemented
 fnNMLvar(15) = "runctrl.vars.nml_KlausStefan"         ! new from HTr, not implemented
 fnNMLvar(16) = "runctrl.vars.nml_Alvaro_200"         ! new from HTr, not implemented
 fnNMLvar(17) = "runctrl.vars.nml_Sophie"         ! new from HTr, not implemented
+fnNMLvar(18) = "runctrl.vars.std_sfc.nml"
+fnNMLvar(19) = "runctrl.vars.std_presslev.nml"
+fnNMLvar(20) = "runctrl.vars.std_minmax.nml"
+fnNMLvar(21) = "runctrl.vars.special.nml"
 
 
 !-------------------------------------------------------------------------------
@@ -675,13 +679,17 @@ DO ifrq = 1, 1, 1 ! 1hr
 !  DO ivarnml = 1, 9, 1 ! loop over all regular namelists
 !  DO ivarnml = 2, 2, 1 ! recommended to all for first steps and testing: nml #1
 !  DO ivarnml = 17, 17, 1 ! tas and precip, only. For Sophie
-   DO ivarnml = 3, 3, 1 ! tas and precip, only
+!  DO ivarnml = 3, 3, 1 ! tas and precip, only
 !  DO ivarnml = 13, 13, 1 ! Alvaro paper
 !  DO ivarnml = 15, 15, 1 ! Klaus Stefan
 !  DO ivarnml = 16, 16, 1 ! Alvaro 200 hPa
 !  DO ivarnml = 14, 14, 1 ! albedo investigations
 !  DO ivarnml = 1, 2, 1 ! ICTP paper data contrib
 !  DO ivarnml = 5, 5, 1 ! test min/max
+!  DO ivarnml = 18, 18, 1 ! std sfc
+!  DO ivarnml = 19, 19, 1 ! std presslev
+!  DO ivarnml = 20, 20, 1 ! std minmax
+   DO ivarnml = 21, 21, 1 ! special
   
     PRINT *, "============================================================"
     PRINT *, "var. namelist nr. and name: ", ivarnml, TRIM(fnNMLvar(ivarnml))
@@ -761,8 +769,16 @@ DO ifrq = 1, 1, 1 ! 1hr
       nvar_nml = 6
     CASE ("runctrl.vars.nml_Sophie") 
       nvar_nml = 2
+    CASE ("runctrl.vars.std_sfc.nml") 
+      nvar_nml = 39
+    CASE ("runctrl.vars.std_presslev.nml") 
+      nvar_nml = 36
+    CASE ("runctrl.vars.std_minmax.nml") 
+      nvar_nml = 2
+    CASE ("runctrl.vars.special.nml") 
+      nvar_nml = 2
     END SELECT
-  
+ 
     PRINT *, "number of vars inside current namelist: nvar_nml = ", nvar_nml
   
 !-------------------------------------------------------------------------------
@@ -1355,14 +1371,14 @@ DO ifrq = 1, 1, 1 ! 1hr
 
               WRITE(FileNrStr,'(i3)') rank
 
-              CALL SYSTEM("uuidgen -t > tmpfileUUID"//TRIM(domain)//TRIM(ADJUSTL(FileNrStr)))
-              OPEN(1,FILE="tmpfileUUID"//TRIM(domain)//TRIM(ADJUSTL(FileNrStr)),STATUS='old')
+              CALL SYSTEM("uuidgen -t > tmpfileUUID"//TRIM(domain)//TRIM(fnNMLvar(ivarnml))//TRIM(ADJUSTL(FileNrStr)))
+              OPEN(1,FILE="tmpfileUUID"//TRIM(domain)//TRIM(fnNMLvar(ivarnml))//TRIM(ADJUSTL(FileNrStr)),STATUS='old')
               READ(1,*) trackingID
               CLOSE(1)
               PRINT *, "uuidgen externally generated trackingID = ", trackingID
 
-              CALL SYSTEM("date -u +%Y-%m-%d-T%H:%M:%SZ > tmpfileDate"//TRIM(domain)//TRIM(ADJUSTL(FileNrStr)))
-              OPEN(1,FILE="tmpfileDate"//TRIM(domain)//TRIM(ADJUSTL(FileNrStr)),STATUS='old')
+              CALL SYSTEM("date -u +%Y-%m-%d-T%H:%M:%SZ > tmpfileDate"//TRIM(domain)//TRIM(fnNMLvar(ivarnml))//TRIM(ADJUSTL(FileNrStr)))
+              OPEN(1,FILE="tmpfileDate"//TRIM(domain)//TRIM(fnNMLvar(ivarnml))//TRIM(ADJUSTL(FileNrStr)),STATUS='old')
               READ(1,*) creationDate
               CLOSE(1)
               PRINT *, "date externally generated creation date = ", creationDate
