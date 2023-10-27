@@ -46,8 +46,8 @@ ln -sf /p/largedata/jjsc39/jjsc3900/sim/CORDEX-FPSCONV_EUR-15-ALP-3_SMHI-EC-EART
 # ADJUST do not use this when just testing for a single month, the tool finds the additional file and does a processing, i.e. creates a new netCDF file and adds the data from the linked file below
 if [ "$Y" != "2005" ]
 then
-  ln -sf /p/largedata/jjsc39/jjsc3900/sim/CORDEX-FPSCONV_EUR-15-ALP-3_SMHI-EC-EARTH_historical_r12_FZJ-IDL-WRF381DA_v00aJurecaDcCpuProdPrjTt19952005/simres/${DOM}/*/wrfout_${DOM}_${Y}0101* .
-  #ln -sf /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/simres/${DOM}_local/*/wrfout_d0?_${Yn}0101* .
+  ln -sf /p/largedata/jjsc39/jjsc3900/sim/CORDEX-FPSCONV_EUR-15-ALP-3_SMHI-EC-EARTH_historical_r12_FZJ-IDL-WRF381DA_v00aJurecaDcCpuProdPrjTt19952005/simres/${DOM}/*/wrfout_${DOM}_${Yn}0101* .
+  #ln -sf /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/simres/${DOM}_local/*/wrfout_${DOM}_${Yn}0101* .
 fi
 
 # ADJUST depending on the variables, set the nvar and link filenames and adjust the wall clock time
