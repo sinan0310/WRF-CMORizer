@@ -39,7 +39,7 @@ MODULE NamelistHandling
   IMPLICIT NONE
   SAVE
 
-  INTEGER, PARAMETER :: nvars = 2 ! maximum number of vars per namelist
+  INTEGER, PARAMETER :: nvars = 39 ! maximum number of vars per namelist, keep const at max number
 
   CHARACTER (len = 300) :: Conventions, conventionsURL, contact, experiment, &
     driving_experiment, experiment_id, driving_model_id, driving_model_ensemble_member, &
@@ -686,10 +686,10 @@ DO ifrq = 1, 1, 1 ! 1hr
 !  DO ivarnml = 14, 14, 1 ! albedo investigations
 !  DO ivarnml = 1, 2, 1 ! ICTP paper data contrib
 !  DO ivarnml = 5, 5, 1 ! test min/max
-!  DO ivarnml = 18, 18, 1 ! std sfc
+   DO ivarnml = 18, 18, 1 ! std sfc
 !  DO ivarnml = 19, 19, 1 ! std presslev
 !  DO ivarnml = 20, 20, 1 ! std minmax
-   DO ivarnml = 21, 21, 1 ! special
+!  DO ivarnml = 21, 21, 1 ! special
   
     PRINT *, "============================================================"
     PRINT *, "var. namelist nr. and name: ", ivarnml, TRIM(fnNMLvar(ivarnml))
@@ -1401,8 +1401,8 @@ DO ifrq = 1, 1, 1 ! 1hr
               !-----------------------------------------------------------------
 
               ! always included define dimensions
-              !sts = NF90_DEF_DIM(ncid, "x", xfocus, x_dimid)
-              !sts = NF90_DEF_DIM(ncid, "y", yfocus, y_dimid)
+              sts = NF90_DEF_DIM(ncid, "x", xfocus, x_dimid)
+              sts = NF90_DEF_DIM(ncid, "y", yfocus, y_dimid)
               ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
               sts = NF90_DEF_DIM(ncid, "rlon", xfocus, lon_dimid)
               sts = NF90_DEF_DIM(ncid, "rlat", yfocus, lat_dimid)
@@ -1435,8 +1435,8 @@ DO ifrq = 1, 1, 1 ! 1hr
               ! nice in plots
 
               ! always included -- longitude field, unrotated
-!              sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ x_dimid, y_dimid /), lon_varid)
-              sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lon_varid)
+              sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ x_dimid, y_dimid /), lon_varid)
+              !sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lon_varid)
               sts = nf90_def_var_deflate(ncid, lon_varid, 1, 1, 1)
               sts = nf90_put_att(ncid, lon_varid, "standard_name", "longitude")
               sts = nf90_put_att(ncid, lon_varid, "long_name", "Longitude")
@@ -1445,8 +1445,8 @@ DO ifrq = 1, 1, 1 ! 1hr
               !sts = nf90_put_att(ncid, lon_varid, "_CoordinateAxisType", "Lon") ! special addon, not needed, but allowed
 
               ! always included -- latitude field, unrotated
-!              sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ x_dimid, y_dimid /), lat_varid)
-              sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lat_varid)
+              sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ x_dimid, y_dimid /), lat_varid)
+              !sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lat_varid)
               sts = nf90_def_var_deflate(ncid, lat_varid, 1, 1, 1)
               sts = nf90_put_att(ncid, lat_varid, "standard_name", "latitude")
               sts = nf90_put_att(ncid, lat_varid, "long_name", "Latitude")
@@ -1659,15 +1659,15 @@ DO ifrq = 1, 1, 1 ! 1hr
               END IF
 
               IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
-                sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat height")
+                sts = nf90_put_att(ncid, x_varid, "coordinates", "height lat lon")
               ELSE IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
-                sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat plev") 
+                sts = nf90_put_att(ncid, x_varid, "coordinates", "plev lat lon") 
               ELSE IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. &
                 (TRIM(var_cmip(ivar)) == 'tsl')) THEN
                 !sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat soil_layer") 
-                sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat") 
+                sts = nf90_put_att(ncid, x_varid, "coordinates", "lat lon") 
               ELSE
-                sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat")
+                sts = nf90_put_att(ncid, x_varid, "coordinates", "lat lon")
               END IF
               sts = nf90_put_att(ncid, x_varid, "grid_mapping", "rotated_pole")
               ! (2023-05-15) HTr - "missing_value" is depreciated in CF-1.4
