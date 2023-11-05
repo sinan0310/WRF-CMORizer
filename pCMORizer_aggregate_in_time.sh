@@ -205,23 +205,23 @@ for f in `find ${dir_src} -type f -wholename "*1hr/*/mrso*.nc" | sort`; do
   echo $f
 
   # surface fields
-  if [[ "${ff%%_*}" == *"tas"* ]]; then
-    let ii+=1
-    process_file $f day maximum &
-    pid[${ii}]=$!
-    # unclear start
-    if [ ${ii} -eq ${nproc_max} ]; then
-      for (( jj=1; jj<=${ii}; jj++ )); do
-        wait ${pid[${jj}]}
-        [ $? -ne 0 ] &&  echo "ERROR" && exit -1
-      done
-      let ii=0
-    fi
-    # unclear end
-    let ii+=1
-    process_file $f day minimum &
-    pid[${ii}]=$!
-  fi
+  #if [[ "${ff%%_*}" == *"tas"* ]]; then
+  #  let ii+=1
+  #  process_file $f day maximum &
+  #  pid[${ii}]=$!
+  #  # unclear start
+  #  if [ ${ii} -eq ${nproc_max} ]; then
+  #    for (( jj=1; jj<=${ii}; jj++ )); do
+  #      wait ${pid[${jj}]}
+  #      [ $? -ne 0 ] &&  echo "ERROR" && exit -1
+  #    done
+  #    let ii=0
+  #  fi
+  #  # unclear end
+  #  let ii+=1
+  #  process_file $f day minimum &
+  #  pid[${ii}]=$!
+  #fi
   if [[ "${ff%%_*}" == *"sfcWind"* ]]; then
     let ii+=1
     process_file $f day maximum &

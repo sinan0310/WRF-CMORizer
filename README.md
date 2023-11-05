@@ -63,6 +63,8 @@ It seems generic enough in terms of structure and configuration to also be used 
 
 At this point, the CORDEX-CMIP3 and the FPSCONV experiments archive specifications and variable lists (VLs), in their (most current) versions as of 2022-09-25, are supported, see the [references](#ref_refs) and linked documents therein.
 
+**addon: tool also covers CORDEX-CMIP6 variable standards** 
+
 Some (for the majority of the users not so relevant) variables cannot be derived (yet), see [ToDos](#ref_todos).
 
 The [fps_convection_variables_vfinal_2021update_with_addons.xlsx](fps_convection_variables_vfinal_2021update_with_addons.xlsx) table is the final VL for FPSCONV with addons from the CORDEX-CMIP5 and CORDEX-CMIP6 VLs and gives and overview which variables are covered by the pCMORizer.f90 and other tools. If you add new variables, please to not only edit the variable namelists but also update this table.
