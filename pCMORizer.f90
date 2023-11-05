@@ -686,10 +686,10 @@ DO ifrq = 1, 1, 1 ! 1hr
 !  DO ivarnml = 14, 14, 1 ! albedo investigations
 !  DO ivarnml = 1, 2, 1 ! ICTP paper data contrib
 !  DO ivarnml = 5, 5, 1 ! test min/max
-   DO ivarnml = 18, 18, 1 ! std sfc
+!  DO ivarnml = 18, 18, 1 ! std sfc
 !  DO ivarnml = 19, 19, 1 ! std presslev
 !  DO ivarnml = 20, 20, 1 ! std minmax
-!  DO ivarnml = 21, 21, 1 ! special
+   DO ivarnml = 21, 21, 1 ! special
   
     PRINT *, "============================================================"
     PRINT *, "var. namelist nr. and name: ", ivarnml, TRIM(fnNMLvar(ivarnml))
@@ -1401,8 +1401,8 @@ DO ifrq = 1, 1, 1 ! 1hr
               !-----------------------------------------------------------------
 
               ! always included define dimensions
-              sts = NF90_DEF_DIM(ncid, "x", xfocus, x_dimid)
-              sts = NF90_DEF_DIM(ncid, "y", yfocus, y_dimid)
+              !sts = NF90_DEF_DIM(ncid, "x", xfocus, x_dimid)
+              !sts = NF90_DEF_DIM(ncid, "y", yfocus, y_dimid)
               ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
               sts = NF90_DEF_DIM(ncid, "rlon", xfocus, lon_dimid)
               sts = NF90_DEF_DIM(ncid, "rlat", yfocus, lat_dimid)
@@ -1435,8 +1435,8 @@ DO ifrq = 1, 1, 1 ! 1hr
               ! nice in plots
 
               ! always included -- longitude field, unrotated
-              sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ x_dimid, y_dimid /), lon_varid)
-              !sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lon_varid)
+              !sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ x_dimid, y_dimid /), lon_varid)
+              sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lon_varid)
               sts = nf90_def_var_deflate(ncid, lon_varid, 1, 1, 1)
               sts = nf90_put_att(ncid, lon_varid, "standard_name", "longitude")
               sts = nf90_put_att(ncid, lon_varid, "long_name", "Longitude")
@@ -1445,8 +1445,8 @@ DO ifrq = 1, 1, 1 ! 1hr
               !sts = nf90_put_att(ncid, lon_varid, "_CoordinateAxisType", "Lon") ! special addon, not needed, but allowed
 
               ! always included -- latitude field, unrotated
-              sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ x_dimid, y_dimid /), lat_varid)
-              !sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lat_varid)
+              !sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ x_dimid, y_dimid /), lat_varid)
+              sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lat_varid)
               sts = nf90_def_var_deflate(ncid, lat_varid, 1, 1, 1)
               sts = nf90_put_att(ncid, lat_varid, "standard_name", "latitude")
               sts = nf90_put_att(ncid, lat_varid, "long_name", "Latitude")

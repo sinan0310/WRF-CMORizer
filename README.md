@@ -2,6 +2,8 @@
 
 2022-11-16
 
+**not up-to-date anymore, autumn 2023 development descriptions and new functionalities need to be added**
+
 The pCMORizer.f90 is an open-source Fortran-based software tool with some ancilliary bash scripts that also use [cdo](https://code.mpimet.mpg.de/projects/cdo/). pCMORizer.f90 and companion tools are used transfer or postprocess raw (regional climate) model ouputs into netCDF files, which comply to the [CMOR](https://cmor.llnl.gov) standard according to the [CORDEX-CMIP3 archive specification](http://is-enes-data.github.io/cordex_archive_specifications.pdf) as part of the [CORDEX WCRP project](https://cordex.org/experiment-guidelines/how-to-submit-data-rcms/). The goal is to make the model data compliant to be disseminated through [ESGF](https://esgf-data.dkrz.de/projects/esgf-dkrz/), and/or generate a dataset which is more efficient to be used in analysis, and local sharing, etc.
 
 ## Motivation, features, design principles

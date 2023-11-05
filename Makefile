@@ -1,5 +1,5 @@
 FC = mpifort
-FCFLAGS = -O3 -assume realloc_lhs
+FCFLAGS = -O2 -assume realloc_lhs
 FCFLAGS += -fp-model precise -prec-div -prec-sqrt
 FCFLAGS += -I$(EBROOTNETCDFMINFORTRAN)/include
 LDFLAGS = -L$(EBROOTNETCDFMINFORTRAN)/lib -lnetcdff -lnetcdf

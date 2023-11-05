@@ -12,9 +12,12 @@
 #SBATCH --error=%x-%j.err
 ###SBATCH --constraint=largedata
 
+# AUTHOR(S): Heimo TRUHETZ (HTr), Uni-Graz/WEGC, heimo.truhetz@uni-graz.at, Klaus GOERGEN (KGo), FZJ/IBG-3, k.goergen@fz-juelich.de
+# VERSION: 2023-11-04
 # USAGE="export Y=1998 && export DOM=d01 && sbatch --export=ALL,Y=$Y,DOM=$DOM --job-name=pCMORizer$Y$DOM pCMORizer_runctrl_allvars_single_domain.sh"
+# PURPOSE: Run-control script for pCMORizer.f90, work on single domain and year, all types of variables at the same time, the harddisk may be free of data once more
 
-source loadenv.JURECA-DC_2020_Intel-PSMPI.ini
+source loadenv.JURECA-DC_2023_Intel-PSMPI.ini
 
 set -ex
 
@@ -54,7 +57,7 @@ cp -f ../../runctrl.vars.*.nml .
 cp -f ../../pCMORizer*.exe .
 chmod a+x pCMORizer*.exe
 
-# switch logfile OFF by redirecting to /dev/zero gains a little executtion speed
+# switch logging effectively OFF by redirecting to /dev/zero gains a little executtion speed
 log="/dev/zero"
 
 # std sfc
