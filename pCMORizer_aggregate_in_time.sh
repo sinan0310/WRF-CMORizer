@@ -3,8 +3,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=128
 #SBATCH --threads-per-core=1
-#SBATCH --time=00:30:00
-#SBATCH --partition=dc-cpu
+#SBATCH --time=01:00:00
+#SBATCH --partition=dc-cpu-devel
 #SBATCH --mail-type=all
 #SBATCH --mail-user=k.goergen@fz-juelich.de
 #SBATCH --account=jjsc39
@@ -15,18 +15,20 @@
 
 # AUTHOR(S): Heimo TRUHETZ (HTr), Uni-Graz/WEGC, heimo.truhetz@uni-graz.at
 # CONTRIBUTER(S): edits/addons/fixes by Klaus GOERGEN (KGo), FZJ/IBG-3, k.goergen@fz-juelich.de
-# VERSION: 2023-11-04
+# VERSION: 2023-11-06
 # USAGE="sbatch ./$0"
-# PURPOSE: after CMORization of 1hr data, aggregate data in time, tailored to CORDEX-FPSCONV vars, can be expanded
+# PURPOSE: after CMORization of 1hr data, aggregate data in time, tailored to CORDEX-FPSCONV vars, can be easily expanded
 
 source loadenv.JURECA-DC_2023_Intel-PSMPI.ini
 CDOBIN=${EBROOTCDO}/bin
 NCOBIN=${EBROOTNCO}/bin
+echo $CDOBIN
+echo $NCOBIN
 
-set -x
+#set -ex
 
-dir_src=/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized_1/CORDEX-FPSCONV/ # ADJUST!
-let nproc_max=128 # maximum number of files to be processed in parallel, defaut is 128 on JURECA-DC, set to 1 to run the tool serially -> good to analyse the logs, otherwise all is cluttered due to the parellelism
+dir_src=/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized/CORDEX-FPSCONV/ # ADJUST!, input and output dir
+let nproc_max=128 # ADJUST! maximum number of files to be processed in parallel, defaut is 128 on JURECA-DC, set to 1 to run the tool serially -> good to analyse the logs, otherwise all is cluttered due to the parellelism
 
 function process_file () {
 
@@ -64,6 +66,7 @@ function process_file () {
   #this is not needed, although the VL has capital letters, groups and ESGF feature lower case -> more consistent
   #[[ "$var_name" == "cape" ]] && var_name_target="CAPE"
   #[[ "$var_name" == "cin" ]] && var_name_target="CIN"
+  [[ "$var_name" == "sfcWind" ]] && var_name_target="sfcWindmax"
 
   # new directory and new file name
   dir_target=`echo $dir_name | sed "s#1hr#$agg_time#g" | sed "s#$var_name#$var_name_target#g"`
@@ -116,6 +119,7 @@ function process_file () {
   # general attribute adjustments
   ${NCOBIN}/ncatted -h -O -a cell_methods,${var_name},o,c,'time: '${op_str} ${dir_target}/${f_target}
   [[ $? -ne 0 ]] && return 1
+
   if [[ "${var_name}" != ${var_name_target} ]]; then
     ${NCOBIN}/ncrename -h -O -v ${var_name},${var_name_target} ${dir_target}/${f_target}
     [[ $? -ne 0 ]] && return 1
@@ -188,21 +192,25 @@ function process_file () {
 
 let ii=0
 
-#for f in `find ${dir_src} -type f -wholename "*1hr/*/*.nc" | sort`; do # default -> work on all vars
+
+# addon: expand the filelist generation through with grep to loop only over those files which are actually to be processed
+# nproc_max check can be avoided / adjusted when using filtered filelist -> know in advance how many files are to be procesed
+varlist="sfcWind_|snc_|snd_|mrso_|mrsol_|ps_|psl_|va[0-9]*_|ua[0-9]*_|wa[0-9]*_|hus[0-9]*_|ta[0-9]*_|zg[0-9]*_"
+#varlist="va[0-9]*_|ua[0-9]*_"
+
+for f in $(find ${dir_src} -type f -wholename "*1hr/*/*.nc" | sort | grep -E "${varlist}") ; do # default -> work on all vars
 #for f in `find ${dir_src} -type f -wholename "*1hr/hus700/hus700*.nc" | sort`; do
 #for f in `find ${dir_src} -type f -wholename "*1hr/va1000/va1000*.nc" | sort`; do
 #for f in `find ${dir_src} -type f -wholename "*1hr/va850/va850*.nc" | sort`; do
 #for f in `find ${dir_src} -type f -wholename "*1hr/ta500/ta500*.nc" | sort`; do
-for f in `find ${dir_src} -type f -wholename "*1hr/*/mrso*.nc" | sort`; do
+#for f in `find ${dir_src} -type f -wholename "*1hr/*/mrso*.nc" | sort`; do
 
   #let ii+=1
   #process_file $f 6hr point &
   #process_file $f day mean &
   #process_file $f day maximum &
 
-  ff=`basename $f`
-
-  echo $f
+  ff=$(basename $f)
 
   # surface fields
   #if [[ "${ff%%_*}" == *"tas"* ]]; then
@@ -239,9 +247,9 @@ for f in `find ${dir_src} -type f -wholename "*1hr/*/mrso*.nc" | sort`; do
   fi
 
   # ignore evspsbl* fields, because they are empty at the moment, not considered by the var nml of the CMORizer usually, but just in case something slips through, ignore here
-  if [[ "${ff%%_*}" == *"evspsbl"* ]]; then
-    echo "evspsbl is being ignored..."
-  fi
+  #if [[ "${ff%%_*}" == *"evspsbl"* ]]; then
+  #  echo "evspsbl is being ignored..."
+  #fi
 
   # 3D fields
   if [[ "${ff%%_*}" == *[s,a]"1000"* ]] || [[ "${ff%%_*}" == *[s,a]"925"* ]] || [[ "${ff%%_*}" == *[s,a]"850"* ]] || [[ "${ff%%_*}" == *[s,a]"700"* ]] || [[ "${ff%%_*}" == *[s,a]"500"* ]] || [[ "${ff%%_*}" == *[s,a]"200"* ]] ; then
@@ -265,25 +273,35 @@ for f in `find ${dir_src} -type f -wholename "*1hr/*/mrso*.nc" | sort`; do
   # if nproc_max is reached, wait until the process has finished
   # once process has finished successfully go to the next file
   # if any of the processes $! issues an exit code !=0, stop the script
+  # this is needed just here as the loop just works on file by file, 
+  # each file (=specific year and variable) is handled seperately
+  # inefficient: if 128 are dealt with, then wait until all 128 are done
+  # only then proceeed with the next batch
+  echo ${ii} ${pid[${ii}]} ${f}
   if [ ${ii} -eq ${nproc_max} ]; then
+    echo "wait, all processes occupied"
+    date
     for (( jj=1; jj<=${ii}; jj++ )); do
       wait ${pid[${jj}]}
       if [[ $? -ne 0 ]]; then
-         echo "ERROR"
+        echo "ERROR"
         exit 1
       fi
     done
+    echo "release, continue with processing"
+    date
     let ii=0
   fi
 
 done # filelist loop
 
 # wait until all have finished running
+# the wait is essential for the slurm "job step" functionality
 if [[ ${ii} -ne 0 ]]; then
   for (( jj=1; jj<=${ii}; jj++ )); do
     wait ${pid[${jj}]}
     if [[ $? -ne 0 ]]; then
-      echo "ERROR"
+      echo "ERROR ${pid[${jj}]}"
       exit 1
     fi
   done

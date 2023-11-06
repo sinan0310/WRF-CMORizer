@@ -1,4 +1,5 @@
 #!/bin/bash
+#SBATCH --job-name=pCMORizer_runctrl_allvars_single_domain
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=128
 #SBATCH --threads-per-core=1
@@ -10,6 +11,7 @@
 #SBATCH --disable-turbomode
 #SBATCH --output=%x-%j.out
 #SBATCH --error=%x-%j.err
+#SBATCH --export=ALL
 ###SBATCH --constraint=largedata
 
 # AUTHOR(S): Heimo TRUHETZ (HTr), Uni-Graz/WEGC, heimo.truhetz@uni-graz.at, Klaus GOERGEN (KGo), FZJ/IBG-3, k.goergen@fz-juelich.de

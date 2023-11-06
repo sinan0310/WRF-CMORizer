@@ -686,10 +686,10 @@ DO ifrq = 1, 1, 1 ! 1hr
 !  DO ivarnml = 14, 14, 1 ! albedo investigations
 !  DO ivarnml = 1, 2, 1 ! ICTP paper data contrib
 !  DO ivarnml = 5, 5, 1 ! test min/max
-!  DO ivarnml = 18, 18, 1 ! std sfc
+   DO ivarnml = 18, 18, 1 ! std sfc
 !  DO ivarnml = 19, 19, 1 ! std presslev
 !  DO ivarnml = 20, 20, 1 ! std minmax
-   DO ivarnml = 21, 21, 1 ! special
+!  DO ivarnml = 21, 21, 1 ! special
   
     PRINT *, "============================================================"
     PRINT *, "var. namelist nr. and name: ", ivarnml, TRIM(fnNMLvar(ivarnml))
