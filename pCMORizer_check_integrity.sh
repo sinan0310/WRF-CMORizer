@@ -9,7 +9,7 @@
 #SBATCH --disable-turbomode
 #SBATCH --output=tmp.pCMORizer_check_integrity.out.%j
 #SBATCH --error=tmp.pCMORizer_check_integrity.err.%j
-#SBATCH --partition=dc-cpu-devel
+#SBATCH --partition=dc-cpu
 #SBATCH --account=jjsc39
 
 # AUTHOR(S): Klaus GOERGEN (KGo), FZJ/IBG-3, k.goergen@fz-juelich.de
@@ -17,7 +17,7 @@
 # INVOCATION EXAMPLE: "sbatch ./$0 /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized/CORDEX-FPSCONV /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized_2_was_thought_to_be_OK/CORDEX-FPSCONV"
 # INVOCATION FOR TESTING (see manual adjustments in the code): ./$0 <root_dir_of_CMORized_output>
 # PURPOSE: after CMORization check integrity of 1hr output (CMORizer OK?, I/O OK?, filesystem OK?), using ntasks in parallel, load all threads and then wait until current batch hs finished; by reading and checking statistics, check also the internal file structure; do not abort but warn if bad file is encountered
-# USAGE: CMORized data root dir as parameter; multiple root dirs are possible; adjust the RegEx in the for loop according to your needs; check the standard out or scheduler output for results; optionally check statistics; manually erase the tmp-dir afterwards
+# USAGE: CMORized data root dir as parameter; multiple root dirs are possible (but leads to overwrite in the dirLog if it is the same experiment); adjust the RegEx in the for loop according to your needs; check the standard out or scheduler output for results; optionally check statistics; manually erase the tmp-dir afterwards
 # REQUIREMENTS: sh, CDO, adjust sbatch settings to your environment
 
 source loadenv.JURECA-DC_2023_Intel-PSMPI.ini
@@ -65,7 +65,7 @@ echo "total number of nc files checked = ${tmp_file_counter}"
 echo "========================================"
 echo "files which have NaN and for how many fields (timesteps):"
 for inFile in $dirLog/* ; do 
-  n_nan=$(grep -i -c "nan" $inFile)
+  n_nan=$(grep -i -c "197400  197400 :                     nan" $inFile)
   if [[ $n_nan -ge 1 ]] ; then
     echo "${inFile}: ${n_nan}"
   fi
@@ -75,7 +75,7 @@ echo "per file indicate where (which timstep) exactly the NaNs occur"
 for inFile in $dirLog/* ; do 
   echo "--------------------"
   echo $inFile
-  grep -i "nan" $inFile
+  grep -i "197400  197400 :                     nan" $inFile
 done
 
 exit 0
