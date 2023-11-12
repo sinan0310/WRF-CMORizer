@@ -39,7 +39,7 @@ MODULE NamelistHandling
   IMPLICIT NONE
   SAVE
 
-  INTEGER, PARAMETER :: nvars = 2 ! 39 maximum number of vars per namelist, keep const at max number
+  INTEGER, PARAMETER :: nvars = 39 ! 39 maximum number of vars per namelist, keep const at max number
 
   CHARACTER (len = 300) :: Conventions, conventionsURL, contact, experiment, &
     driving_experiment, experiment_id, driving_model_id, driving_model_ensemble_member, &
@@ -688,10 +688,10 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 !  DO ivarnml = 14, 14, 1 ! albedo investigations
 !  DO ivarnml = 1, 2, 1 ! ICTP paper data contrib
 !  DO ivarnml = 5, 5, 1 ! test min/max
-!  DO ivarnml = 18, 18, 1 ! std sfc
+   DO ivarnml = 18, 18, 1 ! std sfc
 !  DO ivarnml = 19, 19, 1 ! std presslev
 !  DO ivarnml = 20, 20, 1 ! std minmax
-   DO ivarnml = 21, 21, 1 ! special
+!  DO ivarnml = 21, 21, 1 ! special
 !  DO ivarnml = 22, 22, 1 ! std sfc test for development
   
     PRINT *, "============================================================"
