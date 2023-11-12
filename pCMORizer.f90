@@ -39,7 +39,7 @@ MODULE NamelistHandling
   IMPLICIT NONE
   SAVE
 
-  INTEGER, PARAMETER :: nvars = 39 ! maximum number of vars per namelist, keep const at max number
+  INTEGER, PARAMETER :: nvars = 2 ! 39 maximum number of vars per namelist, keep const at max number
 
   CHARACTER (len = 300) :: Conventions, conventionsURL, contact, experiment, &
     driving_experiment, experiment_id, driving_model_id, driving_model_ensemble_member, &
@@ -349,11 +349,12 @@ LOGICAL :: fractSeaIce = .FALSE.
 !-------------------------------------------------------------------------------
 ! statistics
 
-REAL :: stat_mean, slope
+REAL :: stat_mean, slope, stat_min, stat_max
 
 !-------------------------------------------------------------------------------
 ! general
 ! some special switch for input handling
+! problem?
 
 INTEGER :: i, j, k, sts, ivar, ifrq, ifl, it, counter, np, nl, ii, ivarnml, &
   prevpass = 0, AllocateStatus, DeAllocateStatus
@@ -541,7 +542,7 @@ frequency(5) = "mon"
 frequency(6) = "sem"
 frequency(7) = "fx"
 
-ALLOCATE ( fnNMLvar(21) )
+ALLOCATE ( fnNMLvar(22) )
 fnNMLvar(1) = "runctrl.vars.nml_pr_tas_1hr_test" ! OK
 fnNMLvar(2) = "runctrl.vars.nml_vars_on_plevels" ! OK
 fnNMLvar(3) = "runctrl.vars.nml" ! OK
@@ -563,6 +564,7 @@ fnNMLvar(18) = "runctrl.vars.std_sfc.nml"
 fnNMLvar(19) = "runctrl.vars.std_presslev.nml"
 fnNMLvar(20) = "runctrl.vars.std_minmax.nml"
 fnNMLvar(21) = "runctrl.vars.special.nml"
+fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 
 
 !-------------------------------------------------------------------------------
@@ -577,7 +579,7 @@ fnNMLvar(21) = "runctrl.vars.special.nml"
 !            -> just run the outer loop over 1 frequency only
 
 !DO ifrq = 1, SIZE(frequency), 1 
-DO ifrq = 1, 1, 1 ! 1hr
+ DO ifrq = 1, 1, 1 ! 1hr
 !DO ifrq = 4, 4, 1 ! check min/max day
 
   PRINT *, "============================================================"
@@ -686,10 +688,11 @@ DO ifrq = 1, 1, 1 ! 1hr
 !  DO ivarnml = 14, 14, 1 ! albedo investigations
 !  DO ivarnml = 1, 2, 1 ! ICTP paper data contrib
 !  DO ivarnml = 5, 5, 1 ! test min/max
-   DO ivarnml = 18, 18, 1 ! std sfc
+!  DO ivarnml = 18, 18, 1 ! std sfc
 !  DO ivarnml = 19, 19, 1 ! std presslev
 !  DO ivarnml = 20, 20, 1 ! std minmax
-!  DO ivarnml = 21, 21, 1 ! special
+   DO ivarnml = 21, 21, 1 ! special
+!  DO ivarnml = 22, 22, 1 ! std sfc test for development
   
     PRINT *, "============================================================"
     PRINT *, "var. namelist nr. and name: ", ivarnml, TRIM(fnNMLvar(ivarnml))
@@ -777,6 +780,8 @@ DO ifrq = 1, 1, 1 ! 1hr
       nvar_nml = 2
     CASE ("runctrl.vars.special.nml") 
       nvar_nml = 2
+    CASE ("runctrl.vars.std_sfc_test.nml") 
+      nvar_nml = 3
     END SELECT
  
     PRINT *, "number of vars inside current namelist: nvar_nml = ", nvar_nml
@@ -792,7 +797,6 @@ DO ifrq = 1, 1, 1 ! 1hr
   DO ivar = 1, nvar_nml, 1
     ivar_list(ivar) = ivar
   END DO
-
 
   CALL MPI_SCATTER( ivar_list, 1, MPI_INT, ivar, 1, MPI_INT, 0, MPI_COMM_WORLD, ierr)
   IF ( ierr /= MPI_SUCCESS ) STOP "MPI_SCATTER"
@@ -1793,7 +1797,7 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! receive data
 ! counter = offset in the netCDF file
 ! this is done once for the 1h/3h/6h input (point/mean) AND daily data (min/max)
-! this match 'translates' the way WRF stores variables tempotally to ESGF
+! this match 'translates' the way WRF stores variables temporally to ESGF
 ! e.g. in the wrfxtrm files the min/max are for day1 are stored in 00UTC field
 ! of day2
   
@@ -2994,7 +2998,7 @@ DO ifrq = 1, 1, 1 ! 1hr
           PRINT *, "*** PROCESSING OF VARIABLES ***"
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! CORDEX [X], FPS CEM [X]
+! CORDEX [X], FPSCONV [X]
 ! vars on pressure levels > for simplicity and as we like to use these data
 ! instead of the original model outputs: extract and convert more than specified
 ! at full temporal resolution, selective aggregation later
@@ -3007,8 +3011,8 @@ DO ifrq = 1, 1, 1 ! 1hr
 ! also needed:
 ! wa
 ! zg
-! levels needed CORDEX:            850       500  200
-! levels needed FPS   : 1000  925   "   700   "    "
+! levels needed CORDEX:             850       500  200
+! levels needed FPSCONV: 1000  925   "   700   "    "
 
           IF ( (var_cmip(ivar) == "psl") .OR. &
                (height(ivar) == 1000) .OR. &
@@ -4085,56 +4089,96 @@ DO ifrq = 1, 1, 1 ! 1hr
 
 !-------------------------------------------------------------------------------
 ! write data to netCDF file
-
+            
           PRINT *, "*** WRITE DATA TO netCDF ***"
           PRINT *, TRIM(pn_out) // "/" // TRIM(fn_out)
           PRINT *, TRIM(var_cmip(ivar)), xfocus, yfocus, counter, ncid, x_varid
   
+          ! check whether the field is not already occupied by some data
+          ! addon, 2023-11-12, KGo
+          ! in most cases data shall be written, but if a file exists and 
+          ! data already exist in this file (egde case: end of year 1, year 2 
+          ! is needed) for cell_method mean and sum cases, the data already 
+          ! inside the file of year 2 at the beginning shall not be 
+          ! overwritten; this is a case which happens when several years are
+          ! processed at the same time with on seperate compute nodes, albeit
+          ! writing their output to the very same netCDF file, one might 
+          ! avoid this by some time vec operations, but this seems more easy
+          ! to implement: check for the existence of a field by doing a quick
+          ! statistics calculation
+          ALLOCATE(tmp_2d(xfocus,yfocus))
           sts = NF90_OPEN( TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) &
-            // "/" // TRIM(fn_out), NF90_WRITE, ncid )
-          PRINT *, "NF90_OPEN",  sts
-
-          ! file must exist, just from the logic of the code, nevertheless: test
-          IF (sts/=0) THEN
-            PRINT *, "NF90_OPEN",  sts
-            PRINT *, TRIM(pn_out) // "/" // TRIM(fn_out) // "  FAILED - EXIT"
-            EXIT
-          END IF
-          
-          sts = NF90_INQ_VARID(ncid, TRIM(var_cmip(ivar)), x_varid)
-          PRINT *, "NF90_OPEN",  sts
-  
-            PRINT *, 'NF90_INQ_VARID', ncid
-            PRINT *, 'var_cmip(ivar)', var_cmip(ivar)
-            PRINT *, 'x_varid', x_varid
-            PRINT *, 'counter/offset', counter
-            PRINT *, 'xfocus', xfocus
-            PRINT *, 'yfocus', yfocus
-    
-            ! most CMOR vars are not 3D, pressure level data is one field and
-            ! level per file; but there are exceptions, where data is stored 3D
-            ! including the repective z-coordinates, all according to CF
-            ! convention
+            // "/" // TRIM(fn_out), NF90_NOWRITE, ncid )
+            sts = NF90_INQ_VARID(ncid, TRIM(var_cmip(ivar)), x_varid)
             IF ((var_cmip(ivar) == "mrsol") &
               .OR. (var_cmip(ivar) == "tsl")) THEN
-              sts = NF90_PUT_VAR( ncid, x_varid, data_in_3D(:,:,:), &
-                START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 4, 1 /) )
-            !IF ( height(ivar) /= -999 ) THEN
-            !  sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
-            !    START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1, 1 /) )
+              sts = NF90_GET_VAR( ncid, x_varid, tmp_2d(:,:), &
+                START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1, 1 /) )
             ELSE
-              sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
+              sts = NF90_GET_VAR( ncid, x_varid, tmp_2d(:,:), &
                 START=(/ 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1 /) )
             END IF
-    
-            PRINT *, 'NF90_PUT_VAR', sts
-            PRINT *, 'ncid', ncid
-            PRINT *, 'x_varid', x_varid
-            PRINT *, 'some sample output 3x3 in the middle of the domain', &
-              data_in(xfocus/2:(xfocus/2+2),yfocus/2:(yfocus/2+2))
-
           sts = NF90_CLOSE(ncid)
-          PRINT *, "NF90_CLOSE",  sts
+          stat_min = MINVAL(tmp_2d(:,:))
+          stat_max = MAXVAL(tmp_2d(:,:))
+          DEALLOCATE(tmp_2d)
+
+          ! array is initialized with mv=1e20
+          ! if it is still empty and OK to fill, then min=max=mv
+          IF ( (stat_min .EQ. mv) .AND. (stat_max .EQ. mv) ) THEN
+         
+            ! if the timestep in the output file is empty still, put data in
+            sts = NF90_OPEN( TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) &
+              // "/" // TRIM(fn_out), NF90_WRITE, ncid )
+            PRINT *, "NF90_OPEN",  sts
+
+            ! file must exist, just from the logic of the code, nevertheless: test
+            IF (sts/=0) THEN
+              PRINT *, "NF90_OPEN",  sts
+              PRINT *, TRIM(pn_out) // "/" // TRIM(fn_out) // "  FAILED - EXIT"
+              EXIT
+            END IF
+          
+            sts = NF90_INQ_VARID(ncid, TRIM(var_cmip(ivar)), x_varid)
+            PRINT *, "NF90_OPEN",  sts
+  
+              PRINT *, 'NF90_INQ_VARID', ncid
+              PRINT *, 'var_cmip(ivar)', var_cmip(ivar)
+              PRINT *, 'x_varid', x_varid
+              PRINT *, 'counter/offset', counter
+              PRINT *, 'xfocus', xfocus
+              PRINT *, 'yfocus', yfocus
+   
+              ! most CMOR vars are not 3D, pressure level data is one field and
+              ! level per file; but there are exceptions, where data is stored 3D
+              ! including the repective z-coordinates, all according to CF
+              ! convention
+              IF ((var_cmip(ivar) == "mrsol") &
+                .OR. (var_cmip(ivar) == "tsl")) THEN
+                sts = NF90_PUT_VAR( ncid, x_varid, data_in_3D(:,:,:), &
+                  START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 4, 1 /) )
+              !IF ( height(ivar) /= -999 ) THEN
+              !  sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
+              !    START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1, 1 /) )
+              ELSE
+                sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
+                  START=(/ 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1 /) )
+              END IF
+    
+              PRINT *, 'NF90_PUT_VAR', sts
+              PRINT *, 'ncid', ncid
+              PRINT *, 'x_varid', x_varid
+              PRINT *, 'some sample output 3x3 in the middle of the domain', &
+                data_in(xfocus/2:(xfocus/2+2),yfocus/2:(yfocus/2+2))
+
+            sts = NF90_CLOSE(ncid)
+            PRINT *, "NF90_CLOSE", sts
+
+          ELSE
+            
+            PRINT *, "not empty any more: ", TRIM(fn_out), " at timestep ", counter
+
+          END IF
 
 !-------------------------------------------------------------------------------
 
