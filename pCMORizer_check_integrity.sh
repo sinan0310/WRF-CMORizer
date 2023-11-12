@@ -7,33 +7,116 @@
 #SBATCH --threads-per-core=1
 #SBATCH --time=01:00:00
 #SBATCH --disable-turbomode
-#SBATCH --output=tmp.pCMORizer_check_integrity.out.%j
-#SBATCH --error=tmp.pCMORizer_check_integrity.err.%j
+#SBATCH --output=tmp.%x.out.%j
+#SBATCH --error=tmp.%x.err.%j
 #SBATCH --partition=dc-cpu
 #SBATCH --account=jjsc39
 
-# AUTHOR(S): Klaus GOERGEN (KGo), FZJ/IBG-3, k.goergen@fz-juelich.de
-# VERSION: 2023-11-11
-# INVOCATION EXAMPLE: "sbatch ./$0 /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized/CORDEX-FPSCONV /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized_2_was_thought_to_be_OK/CORDEX-FPSCONV"
-# INVOCATION FOR TESTING (see manual adjustments in the code): ./$0 <root_dir_of_CMORized_output>
-# PURPOSE: after CMORization check integrity of 1hr output (CMORizer OK?, I/O OK?, filesystem OK?), using ntasks in parallel, load all threads and then wait until current batch hs finished; by reading and checking statistics, check also the internal file structure; do not abort but warn if bad file is encountered
-# USAGE: CMORized data root dir as parameter; multiple root dirs are possible (but leads to overwrite in the dirLog if it is the same experiment); adjust the RegEx in the for loop according to your needs; check the standard out or scheduler output for results; optionally check statistics; manually erase the tmp-dir afterwards
-# REQUIREMENTS: sh, CDO, adjust sbatch settings to your environment
+#-------------------------------------------------------------------------------
+# 
+# CURRENT CODE OWNER(S): 
+#   Klaus GOERGEN (KGo), FZJ/IBG-3, k.goergen@fz-juelich.de
+#
+# VERSION (version control via git): 
+#   2023-11-11 -- revision details are in the git log
+#
+# STATUS:
+#   Release
+#
+# PURPOSE: 
+#   - After CMORization checks integrity of highest temporal resolution (e.g., 
+#     1hr) )output ito clarify whether (i) the CMORizer ran OK, (ii) there are 
+#     no I/O issues, (iii) the filesystem has not caused any issues with the 
+#     data.
+#   - This shall help to avoid errors downstream during aggregation, QA 
+#     checking, and usage of the data.
+#
+# USAGE: 
+#   - sbatch ./$0 <root_dir(s)_of_CMORized_output>
+#   - Adjust sbatch settings to your local HPC environment.
+#
+# EXAMPLE: 
+#   - sbatch ./pCMORizer_check_integrity.sh /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized/CORDEX-FPSCONV /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized_2_was_thought_to_be_OK/CORDEX-FPSCONV
+#
+# EXAMPLE FOR TESTING: 
+#   - ./$0 <root_dir(s)_of_CMORized_output>
+#   - nohup ./$0 <root_dir(s)_of_CMORized_output> > output.txt &
+#   - See manual adjustments in the code to run on front node for single 
+#     variable (and year) tests.
+#
+# PROCEDURE: 
+#   - Designed to  run on HPC compute node to allow for fast processing. Uses
+#     ntasks in parallelr; loads all threads ("&") and then wait ("wait) until 
+#     current batch (e.g., 128 processes) has finished. Total runtime is below
+#     30 min to check 10 years of 1hr CMORized CORDEX-FPSCONV output with 128
+#     core on JSC JURECA-DC HPC.
+#   - By reading ifiles and calculating statistics (cdo info) the tool detects
+#     (i) unreasonable data), (ii) fields with NaN values (missing values in the
+#     data due to pressure level intersections with topography are not detected
+#     as this is a feature, (iii) isses with the internal file structure (if a 
+#     HDF5 based netCDF4-classic file has is internally flawed for whatever 
+#     reason the tool issues a warning in the log. 
+#   - Adjust the RegEx in the for loop according to your needs. Otherwise all 
+#     netCDF files are checked.
+#   - Manually check the standard output on the command line (test example) or
+#     check the file with the scheduler output for results. Optionally check 
+#     statistics for each timestep for each input file analysed.
+#
+# INPUTS / ADJUSTMENTS:
+#   - Parm1: CMORized data path, top level directory. Multiple paths may be 
+#            specified after each other. They must not lead to CMORized data
+#            of the same experiment. Otherwise the same statistics files of
+#            the two experiments overwrite each other in the dirLog/ output.
+#            directory.
+#   - sbatch settings: Adjust to your needs. The job-name is used to to name
+#            the output log file and the directory with the individual 
+#            statistics files.
+#   - Adjust the compute environment settings to your needs.
+#
+# OUTPUTS:
+#   - Output1: When started with sbatch (normal operation) main output is in
+#              scheduler log file, naming is according to script name and slurm
+#              job ID ID. Output contains of (i) all files worked on, including 
+#              error messages if a bad file has been encountered, (ii) a listing 
+#              which file has how many NaN fields, (iii) a detailed listing per 
+#              file where NaNs occur (which timestep).
+#   - Outout2: A newly created directory in tune run-directory with a naming 
+#              according to script name and slurm job-ID (or date alternatively)
+#              which contains per checked input file a ASCII statistics file
+#              of the cdo info output.
+#
+# REQUIREMENTS: 
+#   - bash shell
+#   - CDO -- tested with CDO v2.1.1
+# 
+# RESTRICTION:
+#   - Assumes slurm is used as scheduler if used on HPC.
+# 
+#-------------------------------------------------------------------------------
 
+# load environment; needs adjustment for different HPC environments
 source loadenv.JURECA-DC_2023_Intel-PSMPI.ini
 
+# multiple input paths are possible
+# set MAX_PARALLEL to the number of parallel threads, 1-n
+# if less files to check than MAX_PARALLEL, the number of files determines  the
+# number of threads
 inFiles=$@
 echo "${inFiles[@]}"
-#declare -i MAX_PARALLEL=128
+#declare -i MAX_PARALLEL=128  # for front node testing
 declare -i MAX_PARALLEL=${SLURM_NTASKS}
 echo "MAX_PARALLEL: $MAX_PARALLEL"
 declare -i tmp_parallel_counter=0
 declare -i tmp_file_counter=0
 
-#dirLog=$(pwd)/tmp.pCMORizer_check_integrity.logs.$(date +%Y%m%d%H%M%S)
+# a tmp direcory contains statistics outpouts from cdo info for each input file
+#dirLog=$(pwd)/tmp.pCMORizer_check_integrity.logs.$(date +%Y%m%d%H%M%S)  # for front node testing
 dirLog=$(pwd)/tmp.${SLURM_JOB_NAME}.logs.${SLURM_JOB_ID}
 mkdir -p $dirLog
 
+# cdo info is the main functionality
+# if it fails, the script continues, a warning is issued withan indication of
+# the file that causes an issue
 function calcStats(){
   cdo info $1 > "${dirLog}/$(basename $1).cdo_info_ouput.txt"
   if [[ $? -ne 0 ]] ; then
@@ -42,8 +125,14 @@ function calcStats(){
   fi
 }
 
+# loop over all files and initiate the checking
+# start as many cdo info jobs per single CPU core until all cores are filed
+# or the file list reaches its end, whatever occurs first
+# wait until all checks have finishedm, then continue to the next set of files
+# to check
 date
 for inFile in $(find ${inFiles[@]} -type f -wholename "*1hr/*/*.nc" | sort)
+# for testing only with a subset of the data
 #for inFile in $(find ${inFiles[@]} -type f -wholename "*1hr/*/*.nc" | sort | grep -E "rsds_")
 #for inFile in $(find ${inFiles[@]} -type f -wholename "*1hr/*/*.nc" | sort | grep -E "2002" | grep -E "rsds_")
 do
@@ -60,6 +149,11 @@ done
 
 wait
 
+# after all statistics have been calulated, grep finds the missing values from
+# the statistics files and writes to standard out, which is the slurm job log
+# files
+# grep does not pick up missing values in fields where pressure level is below 
+# the land surface
 echo "========================================"
 echo "total number of nc files checked = ${tmp_file_counter}"
 echo "========================================"
