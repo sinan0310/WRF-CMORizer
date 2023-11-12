@@ -80,7 +80,9 @@
 #              error messages if a bad file has been encountered, (ii) a listing 
 #              which file has how many NaN fields, (iii) a detailed listing per 
 #              file where NaNs occur (which timestep).
-#   - Outout2: A newly created directory in tune run-directory with a naming 
+#   - Output2: If there are file strzctural errors (due to filesystem?) then 
+#              also the *err slurm output contains messages.
+#   - Outout3: A newly created directory in tune run-directory with a naming 
 #              according to script name and slurm job-ID (or date alternatively)
 #              which contains per checked input file a ASCII statistics file
 #              of the cdo info output.
