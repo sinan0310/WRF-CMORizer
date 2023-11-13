@@ -35,7 +35,8 @@
 #   - sbatch ./$0 <root_dir(s)_of_CMORized_output>
 #   - Adjust sbatch settings to your local HPC environment.
 #
-# EXAMPLE: 
+# EXAMPLES: 
+#   - sbatch ./pCMORizer_check_integrity.sh /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized/CORDEX-FPSCONV
 #   - sbatch ./pCMORizer_check_integrity.sh /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized/CORDEX-FPSCONV /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized_2_was_thought_to_be_OK/CORDEX-FPSCONV
 #
 # EXAMPLE FOR TESTING: 
@@ -82,7 +83,7 @@
 #              file where NaNs occur (which timestep).
 #   - Output2: If there are file strzctural errors (due to filesystem?) then 
 #              also the *err slurm output contains messages.
-#   - Outout3: A newly created directory in tune run-directory with a naming 
+#   - Output3: A newly created directory in tune run-directory with a naming 
 #              according to script name and slurm job-ID (or date alternatively)
 #              which contains per checked input file a ASCII statistics file
 #              of the cdo info output.
@@ -92,6 +93,7 @@
 #   - CDO -- tested with CDO v2.1.1
 # 
 # RESTRICTION:
+#   - Adjust the NaN search pattern to your needs manually in the code.
 #   - Assumes slurm is used as scheduler if used on HPC.
 # 
 #-------------------------------------------------------------------------------
