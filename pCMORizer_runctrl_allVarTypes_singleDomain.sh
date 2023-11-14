@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=pCMORizer_runctrl_allvars_single_domain
+#SBATCH --job-name=pCMORizer_runctrl_allVarTypes_singleDomain
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=128
 #SBATCH --threads-per-core=1

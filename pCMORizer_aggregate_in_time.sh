@@ -23,28 +23,13 @@
 
 # in line with CMORizer
 source loadenv.JURECA-DC_2023_Intel-PSMPI.ini
-#source loadenv.JURECA-DC_2023_Intel-PSMPI_forAggregate.ini
-#source testenv.ini
 CDOBIN=${EBROOTCDO}/bin
 NCOBIN=${EBROOTNCO}/bin
-
-# used by HTr, specifically for this tool
-#module --force purge
-#module use $OTHERSTAGES
-#module load Stages/2023
-#module load GCC/11.3.0  OpenMPI/4.1.4
-#module load CDO/2.1.1
-#CDOBIN=${EBROOTCDO}/bin
-#NCOBIN=/p/software/jurecadc/stages/2023/software/NCO/5.1.4-npsmpic-2022a/bin
 
 echo $CDOBIN
 echo $NCOBIN
 
-#set -ex
-
 dir_src=/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized/CORDEX-FPSCONV/ # ADJUST!, input and output dir
-#dir_src=/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized_2_was_thought_to_be_OK/CORDEX-FPSCONV/
-#dir_src=/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/WEGC_all_new_final0/CMORized/CORDEX-FPSCONV/
 let nproc_max=128 # ADJUST! maximum number of files to be processed in parallel, defaut is 128 on JURECA-DC, set to 1 to run the tool serially -> good to analyse the logs, otherwise all is cluttered due to the parellelism
 
 function process_file () {
@@ -124,11 +109,7 @@ function process_file () {
   # processing starts here
 
   # aggregation
-  cdo --no_history -O -L -w -f nc4c -z zip_1 ${cdo_op} ${dir_name}/${f_name} ${dir_target}/${f_target} # orig
-  #cdo --no_history -O -L -v -d -f nc4c -z zip_1 ${cdo_op} ${dir_name}/${f_name} ${dir_target}/${f_target} # full verbosity
-  #cdo               -O       -f nc4c ${cdo_op} ${dir_name}/${f_name} ${dir_target}/${f_target}
-  #cdo --no_history -O -L -w -f nc4 -z zip_1 ${cdo_op} ${dir_name}/${f_name} ${dir_target}/${f_target}
-  #cdo --no_history -O -L -v -d -f nc4c  ${cdo_op} ${dir_name}/${f_name} ${dir_target}/${f_target}
+  cdo --no_history -O -L -w -f nc4c -z zip_1 ${cdo_op} ${dir_name}/${f_name} ${dir_target}/${f_target}
   if [[ $? -ne 0 ]] ; then
     echo "ISSUE: ${f_target}, step: cdo aggregation"
     return 1
@@ -263,7 +244,9 @@ let ii=0
 
 # addon: expand the filelist generation through with grep to loop only over those files which are actually to be processed
 # nproc_max check can be avoided / adjusted when using filtered filelist -> know in advance how many files are to be procesed
-varlist="sfcWind_|snc_|snd_|mrso_|mrsol_|ps_|psl_|va[0-9]*_|ua[0-9]*_|wa[0-9]*_|hus[0-9]*_|ta[0-9]*_|zg[0-9]*_"
+varlist="sfcWind_|snc_|snd_|mrso_|mrsol_|ps_|psl_|va[0-9]*_|ua[0-9]*_|wa[0-9]*_|hus[0-9]*_|ta[0-9]*_|zg[0-9]*_|cape_|cin_"
+# just process single variable, if needed:
+#varlist="cape_|cin_"
 #varlist="sfcWind_|zg[0-9]*_|snc_"
 #varlist="sfcWind_"
 
@@ -376,11 +359,6 @@ if [[ ${ii} -ne 0 ]]; then
     fi
   done
 fi
-
-# just for testing
-#rm -rf /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized/CORDEX-FPSCONV/output/ALP-3/FZJ-IDL/SMHI-EC-EARTH/historical/r12i1p1/FZJ-IDL-WRF381DA/fpsconv-x1n2-v1/day
-#rm -rf /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized/CORDEX-FPSCONV/output/ALP-3/FZJ-IDL/SMHI-EC-EARTH/historical/r12i1p1/FZJ-IDL-WRF381DA/fpsconv-x1n2-v1/6hr
-#rm -rf /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized/CORDEX-FPSCONV/output/ALP-3/FZJ-IDL/SMHI-EC-EARTH/historical/r12i1p1/FZJ-IDL-WRF381DA/fpsconv-x1n2-v1/3hr
 
 [[ $? -ne 0 ]] && exit 1
 exit 0
