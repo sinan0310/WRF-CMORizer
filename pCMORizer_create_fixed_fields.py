@@ -19,6 +19,7 @@ __status__ = "Release"
 
 ################################################################################
 # read CMORizer namelist and static field raw data
+# tool is entirely controlled via CMORizer runctrl namelist
 ################################################################################
 
 nml = f90nml.read('runctrl.current.nml_template_d02_DA')
@@ -47,7 +48,7 @@ dir_name = nml['globalvars']['project_id'] + '/' + nml['globalvars']['product'] 
 
 print(dir_name)
 
-orog = DS[['HGT_M','XLAT_M','XLONG_M','CLAT','CLONG','MAPFAC_M']].isel(west_east=slice(xoffset,xoffset+xfocus),
+orog = DS[['HGT_M','XLAT_M','XLONG_M','CLAT','CLONG','MAPFAC_M','LANDUSEF']].isel(west_east=slice(xoffset,xoffset+xfocus),
         south_north=slice(yoffset,yoffset+yfocus)).rename({'HGT_M':'orog', 'XLAT_M':'lat', 'XLONG_M':'lon', 
             'CLAT':'rlat', 'CLONG':'rlon'}).squeeze()
 
@@ -186,6 +187,82 @@ ds.close()
 # sftlf, Land Area Fraction, [%]
 ################################################################################
 
-#sftgif, Fraction of Grid Cell Covered with Glacier, [%]
-#mrsofc, Capacity of Soil to Store Water, [kg m-2]
-#rootd, Maximum Root Depth, [m]
+ds = ds.rename({'areacella':'sftlf'})
+
+landseamask = np.absolute(np.float32(orog.LANDUSEF.values[16,:,:])-1.)
+riverslakesmask = np.absolute(np.float32(orog.LANDUSEF.values[20,:,:])-1.)
+ds.sftlf.values = np.float32((landseamask * riverslakesmask) * 100.)
+
+ds.sftlf.attrs = {
+    "standard_name": "land_area_fraction",
+    "long_name": "Land Area Fraction",
+    "units": "%",
+    "coordinates": "lon lat",
+    "grid_mapping": "rotated_pole",
+    "missing_value": np.float32(1.e+20),
+    "_FillValue": 1.e+20
+    }
+
+f_name = 'sftlf_' + nml['globalvars']['cordex_domain'] + '_' + nml['globalvars']['driving_model_id'] + '_' + \
+    nml['globalvars']['experiment_id'] + '_' + nml['globalvars']['driving_model_ensemble_member'] + '_' + nml['globalvars']['model_id'] + '_' + \
+    nml['globalvars']['rcm_version_id'] + '_' + 'fx' + '.nc'
+
+print(f_name)
+
+os.system("mkdir -p " + dir_name + 'sftlf/')
+
+ds.to_netcdf(dir_name + 'sftlf/' + f_name, mode = 'w', format = 'NETCDF4_CLASSIC', encoding = {
+    'sftlf': {'zlib':True, 'complevel':1},
+    'rlon': {'_FillValue': None},
+    'rlat': {'_FillValue': None},
+    'lon' : {'_FillValue': None},
+    'lat' : {'_FillValue': None}
+#    'rotated_pole': {'dtype':'str'} 
+    })
+
+ds.close()
+
+################################################################################
+# sftgif, Fraction of Grid Cell Covered with Glacier, [%]
+################################################################################
+
+ds = ds.rename({'sftlf':'sftgif'})
+
+ds.sftgif.values = np.float32(orog.LANDUSEF.values[14,:,:])*100.
+
+ds.sftgif.attrs = {
+    "standard_name": "land_ice_area_fraction",
+    "long_name": "Fraction of Grid Cell Covered with Glacier",
+    "units": "%",
+    "coordinates": "lon lat",
+    "grid_mapping": "rotated_pole",
+    "missing_value": np.float32(1.e+20),
+    "_FillValue": 1.e+20
+    }
+
+f_name = 'sftgif_' + nml['globalvars']['cordex_domain'] + '_' + nml['globalvars']['driving_model_id'] + '_' + \
+    nml['globalvars']['experiment_id'] + '_' + nml['globalvars']['driving_model_ensemble_member'] + '_' + nml['globalvars']['model_id'] + '_' + \
+    nml['globalvars']['rcm_version_id'] + '_' + 'fx' + '.nc'
+
+print(f_name)
+
+os.system("mkdir -p " + dir_name + 'sftgif/')
+
+ds.to_netcdf(dir_name + 'sftgif/' + f_name, mode = 'w', format = 'NETCDF4_CLASSIC', encoding = {
+    'sftgif': {'zlib':True, 'complevel':1},
+    'rlon': {'_FillValue': None},
+    'rlat': {'_FillValue': None},
+    'lon' : {'_FillValue': None},
+    'lat' : {'_FillValue': None}
+#    'rotated_pole': {'dtype':'str'} 
+    })
+
+ds.close()
+
+################################################################################
+# mrsofc, Capacity of Soil to Store Water, [kg m-2]
+################################################################################
+
+################################################################################
+# rootd, Maximum Root Depth, [m]
+################################################################################
