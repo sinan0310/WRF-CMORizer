@@ -115,6 +115,7 @@ ds = xr.Dataset(
             "tracking_id": os.popen("uuidgen").read()[0:36],
             "title": nml['globalvars_additional']['title'],
             "comment": nml['globalvars_additional']['comment'],
+            "institute_run_id": nml['globalvars_additional']['institute_run_id'],
             "nesting_levels": nml['globalvars_additional']['nesting_levels'],
             "comment_nesting": nml['globalvars_additional']['comment_nesting'],
             "comment_1nest": nml['globalvars_additional']['comment_1nest'],
