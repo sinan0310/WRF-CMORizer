@@ -56,7 +56,9 @@
 /
 &static_fields
 !  PnFnGeo = '/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BA_v00aJurecaCpuPrepTt19982014/geo_CORINE_HWSD_from_JMi_cb01refined_use_this/geo_em.d01.nc'
-   PnFnGeo = '/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BA_v00aJurecaCpuPrepTt19982014/geo_CORINE_HWSD_from_JMi_cb01refined_use_this/geo_em.d02.nc'
+!  PnFnGeo = '/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BA_v00aJurecaCpuPrepTt19982014/geo_CORINE_HWSD_from_JMi_cb01refined_use_this/geo_em.d02.nc'
+!  PnFnGeo = './geo_em.d01.nc'
+   PnFnGeo = './geo_em.d02.nc'
 /
 &tool_config
    nvar = __nvar__,
