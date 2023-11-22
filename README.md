@@ -346,25 +346,25 @@ Ongoing modfications:
 Missing variables in v1.0.0 according to CORDEX-FPSCONV VL, additional processing procedures need to be implemented in `pCMORizer.f90`; other variables need different model configuration:
 
 Fluxes:
-- [-] `evspsblpot`
+[-] `evspsblpot`
 Wind speed:
-- [ ] `ua100m`
-- [ ] `va100m`
-- [ ] `wsgsmax100m` 
+[ ] `ua100m`
+[ ] `va100m`
+[ ] `wsgsmax100m` 
 fx-fields:
-- [-] `mrsofc` 
-- [-] `rootd`
+[-] `mrsofc` 
+[-] `rootd`
 Lightning parametrisation
-- [-] `ic_lightning` 
-- [-] `cg_lighning`
-- [-] `total_lightning` 
+[-] `ic_lightning` 
+[-] `cg_lighning`
+[-] `total_lightning` 
 Microphys:
-- [-] `clgvi`
-- [-] `clhvi`
+[-] `clgvi`
+[-] `clhvi`
 Additional CMIP6 VL, excerpt:
-- [ ] `clh`
-- [ ] `clm`
-- [ ] `cll`
+[ ] `clh`
+[ ] `clm`
+[ ] `cll`
 
 Nice to have:
 
