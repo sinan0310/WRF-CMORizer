@@ -25,7 +25,7 @@
 #
 # PURPOSE: 
 #   - After CMORization checks integrity of highest temporal resolution (e.g., 
-#     1hr) )output ito clarify whether (i) the CMORizer ran OK, (ii) there are 
+#     1hr) output to clarify whether (i) the CMORizer ran OK, (ii) there are 
 #     no I/O issues, (iii) the filesystem has not caused any issues with the 
 #     data.
 #   - This shall help to avoid errors downstream during aggregation, QA 
