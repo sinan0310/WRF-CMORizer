@@ -172,7 +172,7 @@ vim runctrl.vars.std_presslev.nml # 36 vars
 vim runctrl.vars.special.nml # 2 vars
 ```
 
-The content of the variable lists depends on the simulation experiment configuration, the model's capabilities and the archive protocol, or rathe tth variable list as requested by the CORDEX experiment.
+The content of the variable lists depends on the simulation experiment configuration, the model's capabilities and the archive protocol, or the variable list (VL) as requested by the CORDEX experiment.
 
 #### Running the pCMORizer
 
@@ -182,7 +182,7 @@ The run control scripts (i) handle the data and (ii) start the CMORizer, making 
 
 The most common modes of operation with the MPI default variant of the pCMORizer are decribed below.
 
-##### Operating mode 1: All types of variable, set single domain, one year per node (default)
+##### Operating mode 1: All types of variable set, single domain, one year per node (default)
 
 Within the pCMORizer working directory, adjust the run-control script (see comments in the script):
 
@@ -198,7 +198,7 @@ cd`$pCMORizer_DIR
 export Y=1998 && export DOM=d01 && sbatch --export=ALL,Y=$Y,DOM=$DOM --job-name=pCMORizer$Y$DOM pCMORizer_runctrl_allvars_single_domain.sh
 ```
 
-The run-control script generates a domain directory inside the `$pCMORizer_DIR` and within one subdirectory per year. All relevant namelist files, executables and input files are linked to this directory. The output (fully standard compliant DRS-based directory tree) is written as specified in the `runctrl.current.nml` namelist. The script does not clean up after itself, hence the working directory needs to be erased manually afterwards.
+The run-control script generates a domain directory, e.g. `d01/`, inside the `$pCMORizer_DIR` and within one subdirectory per year. All relevant namelist files, executables and input files are linked into to these directories. The output (fully standard compliant DRS-based directory tree) is written as specified in the `runctrl.current.nml` namelist. The script does not clean up after itself, hence the working directory needs to be erased manually afterwards.
 
 Alternatively, if all data is available to the compute nodes, launch the processing of several years and both domain for all variables. For a 10 year time slice CORDEx-FPSCONV simulation this results in 10 years x 2 domains nodes; with a single pass of the tool, all CMORized variables are generated:
 
@@ -209,9 +209,9 @@ vim pCMORizer_launcher_multipleYears1yPerCompNode.sh
 ```
 
 > Performance:<br>
-> Wall clock runtime on JURECA-DC with 128 cores per compute node, 79 variables (most of CORDEX-FPSCONV variable list), single year, hourly data processing: **about 5-5.5h**; memory usage is aon average about **42GB RAM**.<br>
-> Because th different types of variables have different procssing times (CAPE and CIN take the longest, pressure level the 2nd longest, then surface variables, and min/max variables, where no processing is to be done and which are on a daily basis only), the CPU load throughout the runtime varies and becomes somewhat inefficient towards the end.<br>
-> To shorten the processing time, CAPE and CIN are calculated on a monthly basis and then concatenated to yearly files.
+> - Wall clock runtime on JURECA-DC with 128 cores per compute node, 79 variables (most of CORDEX-FPSCONV variable list), single year, hourly data processing: **about 5-5.5h**; memory usage is aon average about **42GB RAM**.<br>
+> - Because the different types of variables have different procssing times (CAPE and CIN take the longest, pressure level the 2nd longest, then surface variables, and min/max variables, where no processing is to be done and which are on a daily basis only), the CPU load throughout the runtime varies and becomes somewhat inefficient towards the end.<br>
+> - To shorten the processing time, CAPE and CIN are calculated on a monthly basis and then concatenated to yearly files.
 
 In general the pCMORizer can work on any data granularity (yearly, monthly, sub-monthly) and input data time span. Data are always sorted into the output file to where they belong. If a shorter timespan is desired then the input data, then the input data outside this timespan is ignored.
 
@@ -321,7 +321,7 @@ Data processed with pCMORizer v1.0.0 have passed the QA Checker.
 
 **More information to come.**
 
-## Compatibility and standards compliance
+## Compatibility and standards compliance<a name="ref_standards"></a>
 
 pCMORizer was originally developed to cmorize raw [WRF RCM](https://www2.mmm.ucar.edu/wrf/users/) outputs. It seems generic enough in terms of structure and configuration to also be used for other RCMs, LSMs, HMs. 
 
@@ -343,28 +343,28 @@ Ongoing modfications:
 
 - Adjust for additional RCMs, LSMs, HMs based on the exsting structure and configuration namelists
 
-Missing variables in v1.0.0 according to CORDEX-FPSCONV VL, additional processing procedures need to be implemented in `pCMORizer.f90`; other variables need different model configuration:
+Missing variables in v1.0.0 according to CORDEX-FPSCONV VL, additional processing procedures would need to be implemented in `pCMORizer.f90` (mainly for ua100m, va100m); other variables need different model configuration (evspsblpot, lightning, cl):
 
 Fluxes:
-[-] `evspsblpot`
+- `evspsblpot`
 Wind speed:
-[ ] `ua100m`
-[ ] `va100m`
-[ ] `wsgsmax100m` 
+- `ua100m`
+- `va100m`
+- `wsgsmax100m` 
 fx-fields:
-[-] `mrsofc` 
-[-] `rootd`
+- `mrsofc` 
+- `rootd`
 Lightning parametrisation
-[-] `ic_lightning` 
-[-] `cg_lighning`
-[-] `total_lightning` 
+- `ic_lightning` 
+- `cg_lighning`
+- `total_lightning` 
 Microphys:
-[-] `clgvi`
-[-] `clhvi`
+- `clgvi`
+- `clhvi`
 Additional CMIP6 VL, excerpt:
-[ ] `clh`
-[ ] `clm`
-[ ] `cll`
+- `clh`
+- `clm`
+- `cll`
 
 Nice to have:
 
