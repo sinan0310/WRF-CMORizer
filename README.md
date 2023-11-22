@@ -346,22 +346,33 @@ Ongoing modfications:
 Missing variables in v1.0.0 according to CORDEX-FPSCONV VL, additional processing procedures would need to be implemented in `pCMORizer.f90` (mainly for ua100m, va100m); other variables need different model configuration (evspsblpot, lightning, cl):
 
 Fluxes:
+
 - `evspsblpot`
+
 Wind speed:
+
 - `ua100m`
 - `va100m`
 - `wsgsmax100m` 
+
 fx-fields:
+
 - `mrsofc` 
 - `rootd`
+
 Lightning parametrisation
+
 - `ic_lightning` 
 - `cg_lighning`
 - `total_lightning` 
+
 Microphys:
+
 - `clgvi`
 - `clhvi`
+
 Additional CMIP6 VL, excerpt:
+
 - `clh`
 - `clm`
 - `cll`
