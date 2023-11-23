@@ -1,6 +1,6 @@
 # pCMORizer
 
-2023-11-22
+2023-11-23
 
 The pCMORizer is a free open-source software tool to transfer and postprocess raw (regional climate) model ouputs into netCDF files, which comply to the [CMOR](https://cmor.llnl.gov) data standard as used by the [WCRP CORDEX](https://cordex.org) project. The goal is to make the model data standard compliant ([Standards section](#ref_standards)) to be efficiently (i) shared via data servers, such as the [ESGF](https://esgf-data.dkrz.de/projects/esgf-dkrz/) data nodes, and (ii) used in analyses. The tool was developed for the WRF RCM but can also be used with other model outputs after a few adjustments.
 
@@ -199,6 +199,8 @@ export Y=1998 && export DOM=d01 && sbatch --export=ALL,Y=$Y,DOM=$DOM --job-name=
 ```
 
 The run-control script generates a domain directory, e.g. `d01/`, inside the `$pCMORizer_DIR` and within one subdirectory per year. All relevant namelist files, executables and input files are linked into to these directories. The output (fully standard compliant DRS-based directory tree) is written as specified in the `runctrl.current.nml` namelist. The script does not clean up after itself, hence the working directory needs to be erased manually afterwards.
+
+The runcontrol script can recursively launch itself once finished, hence working on year by year.
 
 Alternatively, if all data is available to the compute nodes, launch the processing of several years and both domain for all variables. For a 10 year time slice CORDEx-FPSCONV simulation this results in 10 years x 2 domains nodes; with a single pass of the tool, all CMORized variables are generated:
 
