@@ -22,7 +22,12 @@ __status__ = "Release"
 # tool is entirely controlled via CMORizer runctrl namelist
 ################################################################################
 
-nml = f90nml.read('runctrl.current.nml_template_d02_DA')
+nml = f90nml.read('runctrl.current.nml_template_d01_BB')
+#nml = f90nml.read('runctrl.current.nml_template_d02_BB')
+#nml = f90nml.read('runctrl.current.nml_template_d01_CA')
+#nml = f90nml.read('runctrl.current.nml_template_d02_CA')
+#nml = f90nml.read('runctrl.current.nml_template_d01_DA')
+#nml = f90nml.read('runctrl.current.nml_template_d02_DA')
 
 xoffset = nml['model_config']['xoffset']
 xfocus = nml['model_config']['xfocus']
