@@ -211,13 +211,14 @@ vim pCMORizer_launcher_multipleYears1yPerCompNode.sh
 ```
 
 > Performance:<br>
-> - Wall clock runtime on JURECA-DC with 128 cores per compute node, 79 variables (most of CORDEX-FPSCONV variable list), single year, hourly data processing: **about 5-5.5h**; memory usage is aon average about **42GB RAM**.<br>
-> - Because the different types of variables have different procssing times (CAPE and CIN take the longest, pressure level the 2nd longest, then surface variables, and min/max variables, where no processing is to be done and which are on a daily basis only), the CPU load throughout the runtime varies and becomes somewhat inefficient towards the end.<br>
+> - Wall clock runtime on JURECA-DC with 128 cores per compute node, 79 variables (most of CORDEX-FPSCONV variable list), single year, hourly data processing: **about 5-6.5h**; memory usage is on average about **42GB RAM**.<br>
+> - Because the different types of variables have different procssing times (CAPE and CIN take the longest, pressure level the 2nd longest, then surface variables, and min/max variables, where no processing is to be done and which are on a daily basis only), the CPU load throughout the runtime varies and becomes somewhat inefficient towards the end, yet still CPU load is about 88% on average.<br>
 > - To shorten the processing time, CAPE and CIN are calculated on a monthly basis and then concatenated to yearly files.
+> - The runtime varies depending on from where data are read on JURECA-DC, scratch-based data I/O is about 1h faster than largedata I/O.
 
 In general the pCMORizer can work on any data granularity (yearly, monthly, sub-monthly) and input data time span. Data are always sorted into the output file to where they belong. If a shorter timespan is desired then the input data, then the input data outside this timespan is ignored.
 
-**Operating mode 1 is considered the most efficient for v1.0.0.**
+*Operating mode 1 is considered the most efficient for v1.0.0.*
 
 ##### Operating mode 2: Single type of variable set, two domains, one year per node 
 
@@ -297,6 +298,9 @@ sbatch ./pCMORizer_check_integrity.sh /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCON
 
 The DRS-based directory tree of the CMORized data remains untouched. 
 
+> Performance:<b>
+> About 20min wall clock time with 128 cores on a single compute node for all 1hr FPSCONV variables for 10 years.
+
 #### Checksums
 
 If data is transferred by whatever means, it might be helpful to have checksums available to ensure data integrity; one directory level above the root dir of the DRS diretory tree a file is created with checksums for each individual netCDF file in the DRS tree. After file transfers this checksum inventory might be used to ensure the exact replication of directory tree and data files. The tool operates like the integrity checker in parallel on a Linux cluster compute node:
@@ -306,6 +310,9 @@ cd $pCMORizer_DIR
 vim pCMORizer_checksums_centralized.sh
 sbatch ./pCMORizer_checksums_centralized.sh /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized  # 1 level above CORDEX-FPSCONV/
 ```
+
+> Performance:<br>
+> About 10min wall clock time for 1240 files with 128 core on a single compute node.
 
 An alternative tool exists which creates a checksum file per data directory, if this is preferred. Because it clutters the directory tree it should not be the preferred solution:
 

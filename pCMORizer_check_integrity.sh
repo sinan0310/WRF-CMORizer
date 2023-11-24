@@ -135,8 +135,9 @@ function calcStats(){
 # wait until all checks have finishedm, then continue to the next set of files
 # to check
 date
-for inFile in $(find ${inFiles[@]} -type f -wholename "*1hr/*/*.nc" | sort)
+for inFile in $(find ${inFiles[@]} -type f -wholename "*.nc" | sort)
 # for testing only with a subset of the data
+#for inFile in $(find ${inFiles[@]} -type f -wholename "*1hr/*/*.nc" | sort)
 #for inFile in $(find ${inFiles[@]} -type f -wholename "*1hr/*/*.nc" | sort | grep -E "rsds_")
 #for inFile in $(find ${inFiles[@]} -type f -wholename "*1hr/*/*.nc" | sort | grep -E "2002" | grep -E "rsds_")
 do
