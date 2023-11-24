@@ -14,7 +14,7 @@
 
 # AUTHOR(S): Heimo TRUHETZ (HTr), Uni-Graz/WEGC, heimo.truhetz@uni-graz.at, Klaus GOERGEN (KGo), FZJ/IBG-3, k.goergen@fz-juelich.de
 # VERSION: 2023-11-04
-# USAGE="export Y=1998 && export DOM=d01 && sbatch --export=ALL,Y=$Y,DOM=$DOM --job-name=pCMORizer$Y$DOM pCMORizer_runctrl_allvars_single_domain.sh"
+# USAGE="export Y=1998 && export DOM=d01 && sbatch --export=ALL,Y=$Y,DOM=$DOM --job-name=pCMORizer$Y$DOM pCMORizer_runctrl_allVarTypes_singleDomain.sh"
 # PURPOSE: Run-control script for pCMORizer.f90, work on single domain and year, all types of variables at the same time, the harddisk may be free of data once more
 
 source loadenv.JURECA-DC_2023_Intel-PSMPI.ini
@@ -81,10 +81,10 @@ log="/dev/zero"
 # array to hold the process IDs, needed to avoid a race condition, where one 
 # job stops the others being faster
 pid=()
-let ipid=0
+ipid=0
 
 # std sfc
-let nvar=39
+nvar=39
 cp -f ../../runctrl.current.nml_template_${DOM}_${identifier} runctrl.current.nml_${DOM}
 sed -i "s/__YYYY__/$Y/g" runctrl.current.nml_${DOM}
 sed -i "s/__nvar__/$nvar/g" runctrl.current.nml_${DOM}
@@ -96,7 +96,7 @@ let ipid+=1
 sleep 30
 
 # std presslev
-let nvar=36
+nvar=36
 cp -f ../../runctrl.current.nml_template_${DOM}_${identifier} runctrl.current.nml_${DOM}
 sed -i "s/__YYYY__/$Y/g" runctrl.current.nml_${DOM}
 sed -i "s/__nvar__/$nvar/g" runctrl.current.nml_${DOM}
@@ -108,7 +108,7 @@ let ipid+=1
 sleep 30
 
 # std minmax
-let nvar=2
+nvar=2
 cp -f ../../runctrl.current.nml_template_${DOM}_${identifier} runctrl.current.nml_${DOM}
 sed -i "s/__YYYY__/$Y/g" runctrl.current.nml_${DOM}
 sed -i "s/__nvar__/$nvar/g" runctrl.current.nml_${DOM}

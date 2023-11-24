@@ -287,7 +287,7 @@ The output is the fx-files with their correct DRS pathname and filename and meta
 
 #### Integrity check
 
-After CMORization checks integrity of highest temporal resolution (e.g., 1hr) output to clarify whether (i) the CMORizer ran OK, (ii) there are no I/O issues, (iii) the filesystem has not caused any issues with the data. See the extensive preamble to the code with further explanations. The log files of the tool easily indicate where potential issues might occur. The tool runs in parallel, on as many resources as available on Linux cluster compute node.
+Run this after CMORization in Step 1: checks integrity of highest temporal resolution (e.g., 1hr) output to clarify whether (i) the CMORizer ran OK, (ii) there are no I/O issues, (iii) the filesystem has not caused any issues with the data. See the extensive preamble to the code with further explanations. The log files of the tool easily indicate where potential issues might occur. The tool runs in parallel, on as many resources as available on Linux cluster compute node.
 
 ```
 cd $pCMORizer_DIR
@@ -295,7 +295,7 @@ vim pCMORizer_check_integrity.sh
 sbatch ./pCMORizer_check_integrity.sh /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized/CORDEX-FPSCONV`
 ```
 
-The DRS-based directory tree of the CMORized data remains untouched.
+The DRS-based directory tree of the CMORized data remains untouched. 
 
 #### Checksums
 
