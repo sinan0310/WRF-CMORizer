@@ -24,7 +24,7 @@
 #   Release
 #
 # PURPOSE: 
-#   - After CMORization checks integrity of highest temporal resolution (e.g., 
+#   - After CMORization: checks integrity of highest temporal resolution (e.g., 
 #     1hr) output to clarify whether (i) the CMORizer ran OK, (ii) there are 
 #     no I/O issues, (iii) the filesystem has not caused any issues with the 
 #     data.
@@ -36,25 +36,29 @@
 #   - Adjust sbatch settings to your local HPC environment.
 #
 # EXAMPLES: 
+#   Typical usage is on HPC compute node.
 #   - sbatch ./pCMORizer_check_integrity.sh /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized/CORDEX-FPSCONV
 #   - sbatch ./pCMORizer_check_integrity.sh /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized/CORDEX-FPSCONV /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized_2_was_thought_to_be_OK/CORDEX-FPSCONV
 #
 # EXAMPLE FOR TESTING: 
+#   Command line test also possible.
 #   - ./$0 <root_dir(s)_of_CMORized_output>
 #   - nohup ./$0 <root_dir(s)_of_CMORized_output> > output.txt &
 #   - See manual adjustments in the code to run on front node for single 
-#     variable (and year) tests.
+#     variable (and year) tests, mainly adjust the number of processes and
+#     most likely restruct the search pattern of find to work on less input
+#     files.
 #
 # PROCEDURE: 
-#   - Designed to  run on HPC compute node to allow for fast processing. Uses
-#     ntasks in parallelr; loads all threads ("&") and then wait ("wait) until 
-#     current batch (e.g., 128 processes) has finished. Total runtime is below
-#     30 min to check 10 years of 1hr CMORized CORDEX-FPSCONV output with 128
-#     core on JSC JURECA-DC HPC.
+#   - Designed to run on HPC compute node to allow for fast processing. Uses
+#     ntasks in parallel; loads all threads ("&") and then waits ("wait) until 
+#     current batch of processes (e.g., 128 ) has finished. 
+#   - Total runtime is below 30min to check 10 years of 1hr CMORized 
+#     CORDEX-FPSCONV output with 128 cores on JSC JURECA-DC HPC.
 #   - By reading ifiles and calculating statistics (cdo info) the tool detects
 #     (i) unreasonable data), (ii) fields with NaN values (missing values in the
 #     data due to pressure level intersections with topography are not detected
-#     as this is a feature, (iii) isses with the internal file structure (if a 
+#     as this is a feature, (iii) issues with the internal file structure (if a 
 #     HDF5 based netCDF4-classic file has is internally flawed for whatever 
 #     reason the tool issues a warning in the log. 
 #   - Adjust the RegEx in the for loop according to your needs. Otherwise all 
@@ -93,25 +97,35 @@
 #   - CDO -- tested with CDO v2.1.1
 # 
 # RESTRICTION:
-#   - Adjust the NaN search pattern to your needs manually in the code.
-#   - Assumes slurm is used as scheduler if used on HPC.
+#   - Adjust the NaN search pattern to your needs manually in the code. If the 
+#     size of the model domain changes, then the pattern needs adjustment.
+#   - Assumes slurm is used as scheduler if used on a HPC compute node.
+#   - If the CMORizer fails due to corrupted netCDF/HDF5 input file, this tool
+#     only helps to find the first occurence of the error. I.e. if there is a 
+#     real issue with the inputs in the same year, then this will need more 
+#     intensive checking.
 # 
 #-------------------------------------------------------------------------------
 
 # load environment; needs adjustment for different HPC environments
 source loadenv.JURECA-DC_2023_Intel-PSMPI.ini
 
-# multiple input paths are possible
-# set MAX_PARALLEL to the number of parallel threads, 1-n
-# if less files to check than MAX_PARALLEL, the number of files determines  the
-# number of threads
+# multiple input paths are possible, if this is however the same experiment
+# (like different CMORization attempts) then there might be naming conflicts
+# with the stats files; but different domains of the same experiment might be 
+# dealt with at the same time
 inFiles=$@
 echo "${inFiles[@]}"
+declare -i tmp_file_counter=0
+
+# set MAX_PARALLEL to the number of parallel threads, 1-n
+# if there are less files to check than MAX_PARALLEL, the number of files i
+# determines the number of parallel threads; OS usually takes care of the load
+# distribution on several cores
 #declare -i MAX_PARALLEL=128  # for front node testing
 declare -i MAX_PARALLEL=${SLURM_NTASKS}
 echo "MAX_PARALLEL: $MAX_PARALLEL"
 declare -i tmp_parallel_counter=0
-declare -i tmp_file_counter=0
 
 # a tmp direcory contains statistics outpouts from cdo info for each input file
 #dirLog=$(pwd)/tmp.pCMORizer_check_integrity.logs.$(date +%Y%m%d%H%M%S)  # for front node testing
@@ -164,7 +178,8 @@ echo "total number of nc files checked = ${tmp_file_counter}"
 echo "========================================"
 echo "files which have NaN and for how many fields (timesteps):"
 for inFile in $dirLog/* ; do 
-  n_nan=$(grep -i -c "197400  197400 :                     nan" $inFile)
+  n_nan=$(grep -i -c "197400  197400 :                     nan" $inFile)  # ALP-3
+  #n_nan=$(grep -i -c "111870  111870 :                     nan" $inFile)  # EUR-15
   if [[ $n_nan -ge 1 ]] ; then
     echo "${inFile}: ${n_nan}"
   fi
@@ -174,7 +189,8 @@ echo "per file indicate where (which timstep) exactly the NaNs occur"
 for inFile in $dirLog/* ; do 
   echo "--------------------"
   echo $inFile
-  grep -i "197400  197400 :                     nan" $inFile
+  grep -i "197400  197400 :                     nan" $inFile  # ALP-3
+  #grep -i "111870  111870 :                     nan" $inFile  # EUR-15
 done
 
 exit 0

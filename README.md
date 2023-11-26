@@ -1,6 +1,6 @@
 # pCMORizer
 
-2023-11-23
+2023-11-26
 
 The pCMORizer is a free open-source software tool to transfer and postprocess raw (regional climate) model ouputs into netCDF files, which comply to the [CMOR](https://cmor.llnl.gov) data standard as used by the [WCRP CORDEX](https://cordex.org) project. The goal is to make the model data standard compliant ([Standards section](#ref_standards)) to be efficiently (i) shared via data servers, such as the [ESGF](https://esgf-data.dkrz.de/projects/esgf-dkrz/) data nodes, and (ii) used in analyses. The tool was developed for the WRF RCM but can also be used with other model outputs after a few adjustments.
 
@@ -298,8 +298,10 @@ sbatch ./pCMORizer_check_integrity.sh /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCON
 
 The DRS-based directory tree of the CMORized data remains untouched. 
 
-> Performance:<b>
+> Performance:<br>
 > About 20min wall clock time with 128 cores on a single compute node for all 1hr FPSCONV variables for 10 years.
+
+Background: It happened that filesystem issues either during writing of original raw model outputs or during long-term storage on spinnning disk lead to corrupted files netCDF, i.e. underlying HDF5 files. This is a major problem and may lead inevitably to processing errors. As this is usually not to be assumed, this check is done after the CMORization; if there is an issue with input files, the processing might have to be repeated, e.g., with restaged input data.
 
 #### Checksums
 
@@ -322,7 +324,7 @@ vim pCMORizer_checksums_distributed.sh
 sbatch ./pCMORizer_checksums_distributed.sh /p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized  # 1 level above CORDEX-FPSCONV/
 ```
 
-### Step 5: Run the CMORized data through the QC Checker
+### Step 5: Run the CMORized data through the QA Checker
 
 See [Andreas Doblers repo](https://github.com/doblerone/QA-DKRZ_FPSCONV), with DKRZ QA Checker, adjusted to CORDEx-FPSCONV.
 
@@ -477,3 +479,22 @@ In this context the pCMORizer.f90 was orginally developed as a purely serial too
 - The looping constructs and the namelist format in the current tool still resemble the mode of operation ot looping through variable lists, and through temporal aggregations
 - Could be run on any machine, local computer as well as HPC compute node, no need for MPI environment
 - Processing functionality and basic design has remained unchanged
+
+## Collection of addons
+
+1.
+
+To be integrated into the texts above. 
+
+In case the integrity check shows there is a problem and a single year needs to be repeated, the following preparations are needed before launching the run-ctrl once more:
+
+```
+rm d02/
+rm $(find ./ -type f -wholename "*_2011*.nc")
+```
+
+See the pre-amble of the integrity-checker for details, but if there is a problem with a corrupted (netCDF / HDF5) file, then there is an entry in the err-log file; also, in the out-log file, the `cdo info` command indicates `nan`. Why can this happen? File system issues during raw data writing or later on storage might corrupt a raw model output data file. 
+
+2.
+
+The integrity checker needs to be manually adjusted for the different model domains with respect to the search pattern.
