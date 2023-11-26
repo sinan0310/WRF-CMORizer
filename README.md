@@ -211,7 +211,7 @@ vim pCMORizer_launcher_multipleYears1yPerCompNode.sh
 ```
 
 > Performance:<br>
-> - Wall clock runtime on JURECA-DC with 128 cores per compute node, 79 variables (most of CORDEX-FPSCONV variable list), single year, hourly data processing: **about 5-6.5h**; memory usage is on average about **42GB RAM**.<br>
+> - Wall clock runtime on JURECA-DC with 128 cores per compute node, 79 variables (most of CORDEX-FPSCONV variable list), single year, hourly data processing: ALP-3 domain: **about 5-6.5h** with about **42GB** on average RAM usage; EUR-15 domain: **about 3.5h**.<br>
 > - Because the different types of variables have different procssing times (CAPE and CIN take the longest, pressure level the 2nd longest, then surface variables, and min/max variables, where no processing is to be done and which are on a daily basis only), the CPU load throughout the runtime varies and becomes somewhat inefficient towards the end, yet still CPU load is about 88% on average.<br>
 > - To shorten the processing time, CAPE and CIN are calculated on a monthly basis and then concatenated to yearly files.
 > - The runtime varies depending on from where data are read on JURECA-DC, scratch-based data I/O is about 1h faster than largedata I/O.
