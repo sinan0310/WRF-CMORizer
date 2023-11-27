@@ -27,16 +27,21 @@ let Y=$Y
 DOM=$DOM
 
 # ADJUST
-identifier="BB" # BB CA DA
+identifier="DA" # BB CA DA
 #dir_data_in="/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/simres"
-dir_data_in="/p/largedata/jjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014/simres"
+#dir_data_in="/p/largedata/jjsc39/jjsc3900/sim/CORDEX-FPSCEM_EUR-15-ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-IBG3-WRF381BB_v03aJurecaCpuProdTt20002014/simres"
+dir_data_in="/p/largedata/jjsc39/jjsc3900/sim/CORDEX-FPSCONV_EUR-15-ALP-3_SMHI-EC-EARTH_historical_r12_FZJ-IDL-WRF381DA_v00aJurecaDcCpuProdPrjTt19952005/simres"
 
 # ADJUST, this is for cape and cin only, needs to be in line with the 
 # runctrl-namelists, different for d01 and d02
 #dir_special_var="/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized/CORDEX-FPSCONV/output/ALP-3/FZJ-IDL/SMHI-EC-EARTH/historical/r12i1p1/FZJ-IDL-WRF381DA/fpsconv-x1n2-v1/1hr"
-dir_special_var="/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_BB/postpro/CMORized/CORDEX-FPSCONV/output/ALP-3/FZJ/ECMWF-ERAINT/evaluation/r1i1p1/FZJ-WRF381BB/fpsconv-x1n2-v1/1hr"
+dir_special_var="/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized/CORDEX-FPSCONV/output/EUR-15/FZJ-IDL/SMHI-EC-EARTH/historical/r12i1p1/FZJ-IDL-WRF381DA/fpsconv-x0n1-v1/1hr"
+#dir_special_var="/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_BB/postpro/CMORized/CORDEX-FPSCONV/output/ALP-3/FZJ/ECMWF-ERAINT/evaluation/r1i1p1/FZJ-WRF381BB/fpsconv-x1n2-v1/1hr"
+#dir_special_var="/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_BB/postpro/CMORized/CORDEX-FPSCONV/output/EUR-15/FZJ/ECMWF-ERAINT/evaluation/r1i1p1/FZJ-WRF381BB/fpsconv-x0n1-v1/1hr"
 #fn_special_var="_ALP-3_SMHI-EC-EARTH_historical_r12i1p1_FZJ-IDL-WRF381DA_fpsconv-x1n2-v1_1hr_"
-fn_special_var="_ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-WRF381BB_fpsconv-x1n2-v1_1hr_"
+fn_special_var="_EUR-15_SMHI-EC-EARTH_historical_r12i1p1_FZJ-IDL-WRF381DA_fpsconv-x0n1-v1_1hr_"
+#fn_special_var="_ALP-3_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-WRF381BB_fpsconv-x1n2-v1_1hr_"
+#fn_special_var="_EUR-15_ECMWF-ERAINT_evaluation_r1i1p1_FZJ-WRF381BB_fpsconv-x0n1-v1_1hr_"
 
 dir_work=$(pwd)
 mkdir -p ${dir_work}/${DOM}/${Y}
@@ -61,10 +66,10 @@ ln -sf ${dir_data_in}/${DOM}/*/wrfxtrm_${DOM}_${Y}* .
 # ADJUST do not use this when just testing for a single month, the tool finds 
 # the additional file and does a processing, i.e. creates a new netCDF file and 
 # adds the data from the linked file below
-#if [ "$Y" != "2005" ]
-#then
+if [ "$Y" != "2005" ]
+then
   ln -sf ${dir_data_in}/${DOM}/*/wrfout_${DOM}_${Yn}0101* .
-#fi
+fi
 
 # ADJUST depending on the variables, set the nvar and link filenames and 
 # adjust the wall clock time
