@@ -27,7 +27,7 @@ function calcChecksum(){
 }
 
 cd $1 && pwd
-for inFile in $(find . -type f -wholename "*.nc" | sort) ; do  # | grep 
+for inFile in $(find . -type f -wholename "*.nc" | sort | grep "EUR-15") ; do
   echo "DEBUG: inFile ${inFile}"
   calcChecksum ${inFile} &
   (( tmp_parallel_counter++ ))
