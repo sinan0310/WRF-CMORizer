@@ -1,8 +1,11 @@
-FC = mpifort
-FCFLAGS = -O2 -assume realloc_lhs
-FCFLAGS += -fp-model precise -prec-div -prec-sqrt
-FCFLAGS += -I$(EBROOTNETCDFMINFORTRAN)/include
-LDFLAGS = -L$(EBROOTNETCDFMINFORTRAN)/lib -lnetcdff -lnetcdf
+FC = /oceano/gmeteo/users/milovacj/miniconda3/envs/cmor/bin/mpifort
+FCFLAGS = -O2
+FCFLAGS += -Wall
+FCFLAGS += -ffree-line-length-none
+FCFLAGS += -Wno-tabs
+FCFLAGS += -I/oceano/gmeteo/users/milovacj/miniconda3/envs/cmor/include
+FCFLAGS += -DSERIAL -cpp
+LDFLAGS = -L/oceano/gmeteo/users/milovacj/miniconda3/envs/cmor/lib -lnetcdff -lnetcdf
 
 PROGRAMS = pCMORizer
 
