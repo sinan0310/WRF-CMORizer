@@ -6,6 +6,7 @@
    long_name =     'Daily Minimum Near-Surface Air Temperature','Daily Maximum Near-Surface Air Temperature',
    units =         'K'                                         ,'K'                                         ,
    height =        2                                           ,2                                           ,
+   plevel =        -999                                        ,-999                                        ,
    positive =      '-999'                                      ,'-999'                                      ,
    time1hr =       F                                           ,F                                           ,
    cm1hr =         'mean'                                      ,'mean'                                      ,

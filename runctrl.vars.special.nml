@@ -6,6 +6,7 @@
    long_name =     '2-D Maximum Convective Available Potential Energy'           ,'2-D Maximum Convective Inhibition'           ,
    units =         'J kg-1'                                                      ,'J kg-1'                                      ,
    height =        -999                                                          ,-999                                          ,
+   plevel =        -999                                                          ,-999                                          ,
    positive =      '-999'                                                        ,'-999'                                        ,
    time1hr =       T                                                             ,T                                             ,
    cm1hr =         'point'                                                       ,'point'                                       ,
