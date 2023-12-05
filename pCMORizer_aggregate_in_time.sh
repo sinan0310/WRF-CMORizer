@@ -29,7 +29,9 @@ NCOBIN=${EBROOTNCO}/bin
 echo $CDOBIN
 echo $NCOBIN
 
-dir_src=/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_DA/postpro/CMORized/CORDEX-FPSCONV/output/EUR-15  # ADJUST!, input and output dir
+#dir_src=/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_BB/postpro/CMORized/CORDEX-FPSCONV/output/EUR-15/ # ADJUST!, input and output dir
+dir_src=/p/scratch/cjjsc39/goergen1/sim/tmp_FPSCONV/tmp_BB/postpro/CMORized/CORDEX-FPSCONV/output/ALP-3/ # ADJUST!, input and output dir
+
 let nproc_max=128 # ADJUST! maximum number of files to be processed in parallel, defaut is 128 on JURECA-DC, set to 1 to run the tool serially -> good to analyse the logs, otherwise all is cluttered due to the parellelism
 
 function process_file () {

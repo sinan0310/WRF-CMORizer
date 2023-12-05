@@ -19,7 +19,7 @@ declare -i tmp_parallel_counter=0
 declare -i tmp_file_counter=0
 
 function calcChecksum(){
-  sha256sum $1 >> checksum.sha256
+  sha256sum $1 >> checksum_ALP-3.sha256
   if [[ $? -ne 0 ]] ; then
     echo "WARNING: checksumming failed: $1"
     return 1
