@@ -8,9 +8,9 @@ MODULE FilelistHandling
 
   CHARACTER (len = 200):: tmpfileFL_std, tmpfileFL_xtrm, tmpfileFL_3d
   CHARACTER (len = 200), DIMENSION(:), ALLOCATABLE :: &
-    fl_wrfout   , &
-    fl_wrfxtr   , & 
-    fl_wrfpres  , &
+    fl_wrfout,  &
+    fl_wrfxtr,  & 
+    fl_wrfpres, &
     fl_input
   INTEGER :: ft
 
@@ -39,6 +39,7 @@ MODULE NamelistHandling
   IMPLICIT NONE
   SAVE
 
+! reading from runctrl.current.nml 
   INTEGER, PARAMETER :: nvars = 39 ! 39 maximum number of vars per namelist, keep const at max number
 
   CHARACTER (len = 300) :: Conventions, conventionsURL, contact, experiment, &
@@ -49,23 +50,26 @@ MODULE NamelistHandling
   CHARACTER (len = 1000) :: title, institute_run_id, comment, &
     nesting_levels, comment_nesting, comment_1nest, comment_2nest
 
-  CHARACTER (LEN = 100), DIMENSION(nvars) :: var_wrf, var_cmip, standard_name, &
-    long_name, units, filetype, cm1hr, cm3hr, cm6hr, cmDay, cmMon, cmSea, positive
-  INTEGER, DIMENSION(nvars):: height, cordexID
-  LOGICAL, DIMENSION(nvars):: time1hr, time3hr, time6hr, timeDay, timeMon, timeSea, &
-     interpolate
-
   CHARACTER (len = 300) :: DirInputSimResRoot, DirOutputPostProRoot, domain
-
-  INTEGER ::  nx, ny, nz, xoffset, yoffset, xfocus, yfocus
+  
+! Josipa: Add npl variables to read number of pressure levels in wrfpress file 
+  INTEGER ::  nx, ny, nz, npl, xoffset, yoffset, xfocus, yfocus
   CHARACTER (len = 4) :: ts, te
   CHARACTER (len = 19) :: tstot, tetot
-
   CHARACTER (len = 300) :: PnFnGeo
+! Josipa: Add projection variable to distingush rotated from lambert  
+  CHARACTER (len = 3) :: projection
 
   LOGICAL :: aggregation_yearly, aggregation_monthly, aggregation_individually
   CHARACTER (len = 19) :: tsact, teact
   INTEGER :: nvar
+
+! reading from runctrl.vars.nml*
+  CHARACTER (LEN = 100), DIMENSION(nvars) :: var_wrf, var_cmip, standard_name, &
+    long_name, units, filetype, cm1hr, cm3hr, cm6hr, cmDay, cmMon, cmSea, positive
+  INTEGER, DIMENSION(nvars):: height, plevel, cordexID
+  LOGICAL, DIMENSION(nvars):: time1hr, time3hr, time6hr, timeDay, timeMon, timeSea, &
+     interpolate
 
   NAMELIST / globalvars / Conventions, contact, experiment_id, experiment, &
     driving_experiment, driving_model_id, driving_model_ensemble_member, &
@@ -76,19 +80,19 @@ MODULE NamelistHandling
   NAMELIST / globalvars_additional / comment, institute_run_id, title, &
     nesting_levels, comment_nesting, comment_1nest, comment_2nest
 
-  NAMELIST / vars / var_wrf, var_cmip, standard_name, long_name, units, &
-    height, time1hr, time3hr, time6hr, timeDay, timeMon, timeSea, filetype, &
-    cm1hr, cm3hr, cm6hr, cmDay, cmMon, cmSea, interpolate, cordexID, positive
-
   NAMELIST / filesystem / DirInputSimResRoot, DirOutputPostProRoot, domain
 
-  NAMELIST / model_config / ts, te, nx, ny, nz, xoffset, yoffset, xfocus, &
+  NAMELIST / model_config / ts, te, nx, ny, nz, npl, xoffset, yoffset, xfocus, &
     yfocus, tstot, tetot
 
-  NAMELIST / static_fields / PnFnGeo
+  NAMELIST / static_fields / PnFnGeo, projection
 
   NAMELIST / tool_config / nvar, aggregation_yearly, aggregation_monthly, &
     aggregation_individually, tsact, teact
+    
+  NAMELIST / vars / var_wrf, var_cmip, standard_name, long_name, units, &
+    plevel, height, time1hr, time3hr, time6hr, timeDay, timeMon, timeSea, filetype, &
+    cm1hr, cm3hr, cm6hr, cmDay, cmMon, cmSea, interpolate, cordexID, positive
 
 END MODULE NamelistHandling
 
@@ -120,7 +124,7 @@ INTERFACE
   END SUBROUTINE CreateRefTimeArray
 
   ! HTr: modified calculation of mean sea level pressure adopted from 
-  ! wrf_interp.F90	
+  ! wrf_interp.F90  
   SUBROUTINE calcslp(slp,pres,qv,tk1,ght,nz,ns,ew,T00)
     IMPLICIT NONE
     INTEGER, INTENT(IN) :: nz,ns,ew
@@ -129,15 +133,24 @@ INTERFACE
     REAL, INTENT(IN) :: T00
   END SUBROUTINE calcslp
 
-  SUBROUTINE calcslptwo(slp, PP, P_s, PHI_s, T_L, nz, ns, ew)
+  SUBROUTINE calcslptwo(slp, PP, P_s, PHI_s, T_L, ns, ew)
     IMPLICIT NONE
     REAL, DIMENSION(:,:),   INTENT(OUT) :: slp
     REAL, DIMENSION(:,:,:), INTENT(IN)  :: PP
     REAL, DIMENSION(:,:),   INTENT(IN)  :: P_s
     REAL, DIMENSION(:,:),   INTENT(IN)  :: PHI_s
     REAL, DIMENSION(:,:),   INTENT(IN)  :: T_L
-    INTEGER,                INTENT(IN)  :: nz, ns, ew
+    INTEGER,                INTENT(IN)  :: ns, ew
   END SUBROUTINE calcslptwo
+
+! Josipa: Add subrotine to calculate wint at different levels 
+  SUBROUTINE var_zwind(nz, u, v, z, u10, v10, sa, ca, newz, unewz, vnewz)
+    IMPLICIT NONE
+    INTEGER, INTENT(in)                 :: nz
+    REAL, DIMENSION(nz), INTENT(in)     :: u,v,z
+    REAL, INTENT(in)                    :: u10, v10, sa, ca, newz
+    REAL, INTENT(out)                   :: unewz, vnewz
+  END SUBROUTINE var_zwind
 
 END INTERFACE
 
@@ -175,19 +188,19 @@ real(kind=8), parameter :: b1=-5.8666426e3,b2=22.32870244,b3=1.39387003e-2,b4=-3
 real(kind=8), parameter :: b5=2.7040955e-8,b6=6.7063522e-1
 real(kind=8), parameter :: fi1=3.62183e-4,fi2=2.6061244e-5,fi3=3.8667770e-7,fi4=3.8268958e-9,fi5=-10.7604,fi6=6.3987441e-2,fi7=-2.6351566e-4,fi8=1.6725084e-6
 real(kind=8), parameter :: fw1=3.536240e-4,fw2=2.932836e-5,fw3=2.616898e-7,fw4=8.581361e-9,fw5=-10.75880,fw6=6.326813e-2,fw7=-2.536893e-4,fw8=6.340529e-7
-
 ! new netCDF file
 INTEGER :: ncid, ncidin, ncidin0
 INTEGER :: lon_dimid, lat_dimid, rec_dimid, height_dimid, &
   nb2_dimid, x_dimid, y_dimid, plev_dimid, depth_dimid
-INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, &
-  rotated_pole_varid, height_varid, rec_varid, pp_varid, pb_varid, ph_varid, &
-  phb_varid, qv_varid, qc_varid, qi_varid, qr_varid, qs_varid, &
-  theta_varid, t2_varid, recbnds_varid, rainnc_varid, &
+!Josipa: Add lambert_varid for LCC projection, hgt_varid, pl_varid
+INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, hgt_varid, &
+  rotated_pole_varid, lambert_varid, height_varid, rec_varid, pp_varid, pb_varid, ph_varid, &
+  phb_varid, pl_varid, pl_varid_u, pl_varid_v, qv_varid, qc_varid, qi_varid, qr_varid, &
+  qs_varid, theta_varid, t2_varid, recbnds_varid, rainnc_varid, &
   rainc_varid, snownc_varid, u10_varid, v10_varid, u_varid, v_varid, w_varid, &
   sfcevp_varid, potevp_varid, sfroff_varid, udroff_varid, acsnom_varid, q2_varid, &
   sinalpha_varid, cosalpha_varid, plev_varid, plevbnds_varid, psfc_varid, &
-  landmask_varid, xland_varid, swdown_varid, depth_varid, soillayerbnds_varid
+  depth_varid, soillayerbnds_varid, cd_varid ! , xland_varid, swdown_varid, landmask_varid
 
 ! input data general query
 INTEGER :: ncid_in, ndims_in, nvars_in, ngatts_in, unlimdimid_in !!!, formatp_in
@@ -203,7 +216,7 @@ CHARACTER (len = 19), DIMENSION(:), ALLOCATABLE :: InVarDataRec
 
 ! data
 REAL, DIMENSION(:,:), ALLOCATABLE :: &
-  data_in       , &
+ ! data_in       , &
   psl_in        , &
   t2_in         , &
   q2_in         , &
@@ -222,14 +235,19 @@ REAL, DIMENSION(:,:), ALLOCATABLE :: &
   !!var_pl      , &
   psfc_in       , &
   tmp_2d        , &
-  tmp1_2d       , &
+  !tmp1_2d       , &
   tmp2_2d       , &
-  tmp3_2d       , &
-  tmp4_2d       , &
+  !tmp3_2d       , &
+  !tmp4_2d       , &
   rainc_max_in  , &
   rainnc_max_in , &
   landmask_in   , &
-  xland_in
+  !xland_in      , &
+  ! Josipa: Add variabels needed for wind speed at 100m height
+  var2d_u       , &
+  var2d_v       , &
+  hgt_in        , &       
+  cd_in    
 REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   data_in_3D  , &
   pp_in       , &
@@ -250,6 +268,9 @@ REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   v_in        , &
   w_in        , &
   var3d_in    , &
+  !Josipa: add variabels to calculate wind speed at 100m
+  var3d_in_u  , &
+  var3d_in_v  , &
   !var_pl      , &
   potevp_in   , &
   rainnc_in   , &
@@ -264,16 +285,35 @@ REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   sfroff_in   , &
   udroff_in   , &
   swdown_in   , &
-  tmp_3d
+  tmp_3d      , &
+! Josipa: add pressure level variables frpm wrfpress
+  pl_in       , &
+  pl_in_u     , &
+  pl_in_v
+
+! bucket system
+INTEGER, DIMENSION(:,:,:), ALLOCATABLE :: &
+  i_rainnc_in , &
+  i_rainc_in  , &
+  i_rad_in
+
+REAL :: bucket_mm, bucket_J 
+  
 REAL, DIMENSION(:,:,:,:), ALLOCATABLE :: &
   cldfra_in   , &
   smois_in
+  
 REAL, DIMENSION(:), ALLOCATABLE :: &
   GeoInRLat   , &
   GeoInRLon
 
 ! target pressure levels [Pa]
-REAL, DIMENSION(6) :: pout = (/100000.,92500.,85000.,70000.,50000.,20000./)
+!REAL, DIMENSION(6) :: pout = (/100000.,92500.,85000.,70000.,50000.,20000./)
+! Josipa: extend number of vertical levels
+REAL, DIMENSION(17) :: pout = (/100000., 92500., 85000., 70000., 60000., &
+        50000., 40000., 30000., 25000., 20000., &
+        15000., 10000., 7000.,  5000.,  3000., &
+        2000.,  1000./)
 
 ! time vec stuff
 REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: &
@@ -282,12 +322,9 @@ REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: &
 REAL(KIND=8), DIMENSION(:), ALLOCATABLE :: &
   TimeRefArraySubsetMean
 
-! bucket system
-INTEGER, DIMENSION(:,:,:), ALLOCATABLE :: &
-  i_rainnc_in , &
-  i_rainc_in  , &
-  i_rad_in
-REAL :: bucket_mm, bucket_J
+REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: &
+  tmp3_2d, tmp4_2d, tmp1_2d, data_in
+
 
 ! (HTr): base state temperature is made flexible in newer versions of WRF. The
 ! actual value is stored in variable T00
@@ -296,21 +333,25 @@ REAL, DIMENSION(1) :: T00, P00
 INTEGER :: t00_varid, p00_varid
 
 ! variable for adopted vertical interpolation
-REAL :: zg_pout
+! Josipa: Add p_miss for fill value in variables at pressure levels
+REAL :: p_miss !, zg_pout
 
 ! soil layer thickness may vary from simulation to simulation
 ! either DZS is read from WRF outout, or it can be hardcoded, see below
 REAL, DIMENSION(:), ALLOCATABLE :: DZS
-REAL, DIMENSION(:), ALLOCATABLE :: DZSmp
+!REAL, DIMENSION(:), ALLOCATABLE :: DZSmp
 
 ! subsurface layer thickness prescribed, e.g., compatible to ParFlow, hardcoded (hc)
 ! any number of soil layers is possible
 !REAL, DIMENSION(4) :: DZShc = (/0.10D0, 0.30D0, 0.60D0, 1.00D0/)
 REAL, DIMENSION(4) :: DZShc = (/0.1, 0.3, 0.6, 1.0/)
-REAL, DIMENSION(:,:), ALLOCATABLE :: soillayer_bnds
+!REAL, DIMENSION(:,:), ALLOCATABLE :: soillayer_bnds
 
 ! meta information about the geographic projection used (coordinates of the rotated pole)
 REAL :: GeoNPLat, GeoNPLon
+
+! Josipa: meta information about the geographic projection used (coordinates of the lambert projection)
+REAL :: GeoLat1, GeoLat2, GeoCenLon, GeoCenLat
 
 REAL :: t_ii, dtHours
 
@@ -334,22 +375,24 @@ INTEGER :: tsactYear, tsactMonth, tsactDay, tsactHour, tsactMinute, tsactSecond,
   teactYear, teactMonth, teactDay, teactHour, teactMinute, teactSecond
 CHARACTER (LEN=4) :: tsactYearStr, teactYearStr
 CHARACTER (LEN=2) :: tsactMonthStr, tsactDayStr, tsactHourStr, tsactMinuteStr, &
-  tsactSecondStr, teactMonthStr, teactDayStr, teactHourStr, teactMinuteStr, &
-  teactSecondStr
+  teactMonthStr, teactDayStr, teactHourStr, teactMinuteStr !, teactSecondStr, tsactSecondStr
 REAL(KIND=8) :: tsact_singlenumber, teact_singlenumber
 
-REAL(KIND=8), DIMENSION(:), ALLOCATABLE :: tmp2D_singlenumber
-REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: tmp2D
+!REAL(KIND=8), DIMENSION(:), ALLOCATABLE :: tmp2D_singlenumber
+!REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: tmp2D
 
 CHARACTER (LEN = 100), DIMENSION(nvars) :: cell_methods
 LOGICAL, DIMENSION(nvars) :: procflag
 
-LOGICAL :: fractSeaIce = .FALSE.
+!LOGICAL :: fractSeaIce = .FALSE.
+
+!Josipa: define number of lowest verstical levels needed to calculate wind speed at heights > 10m
+INTEGER, PARAMETER :: nz_lowest = 10
 
 !-------------------------------------------------------------------------------
 ! statistics
 
-REAL :: stat_mean, slope, stat_min, stat_max
+REAL :: slope !stat_mean, stat_min, stat_max
 
 !-------------------------------------------------------------------------------
 ! general
@@ -357,7 +400,7 @@ REAL :: stat_mean, slope, stat_min, stat_max
 ! problem?
 
 INTEGER :: i, j, k, sts, ivar, ifrq, ifl, it, counter, np, nl, ii, ivarnml, &
-  prevpass = 0, AllocateStatus, DeAllocateStatus
+  prevpass = 0
 LOGICAL :: FileExists, newpass, time_match, calc = .TRUE., inputtimesteptruncate = .FALSE.
 REAL :: cpuTs, cpuTe
 INTEGER, ALLOCATABLE :: ipos(:)
@@ -476,8 +519,13 @@ PRINT *, SHAPE(landmask_in)
 ALLOCATE( GeoInRLat(yfocus) )
 ALLOCATE( GeoInRLon(xfocus) )
 
+#ifdef SERIAL
+sts = NF90_OPEN(TRIM(PnFnGeo), NF90_NOWRITE, ncidin)
+#else
 sts = NF90_OPEN(TRIM(PnFnGeo), IOR(NF90_NOWRITE, NF90_MPIIO), ncidin, &
       comm = MPI_COMM_WORLD, info = MPI_INFO_NULL )
+#endif
+
 
 sts = NF90_INQ_VARID(ncidin, "XLONG_M", varid)
 sts = NF90_GET_VAR(ncidin, varid, GeoInLonLat(:, :, 1), &
@@ -499,13 +547,30 @@ sts = NF90_GET_VAR(ncidin, varid, GeoInRLat(:), &
 !PRINT *, "GeoInRLat shape (EUR-15, 330): ", SHAPE(GeoInRLat)
 !PRINT *, "GeoInRLat: ", GeoInRLat
 
-sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "POLE_LAT", GeoNPLat)
-sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "POLE_LON", GeoNPLon)
-
+!sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "POLE_LAT", GeoNPLat)
+!sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "POLE_LON", GeoNPLon)
 ! (2023-05-15) HTr - in all Euprean CORDEX domains POLE_LON has to set to -162 
 ! (which is equivalent to +18, as it is found in WRF)
-IF ( GeoNPLon > 0.0 ) THEN 
-  GeoNPLon = GeoNPlon -180.0
+!IF ( GeoNPLon > 0.0 ) THEN 
+!  GeoNPLon = GeoNPlon -180.0
+!END IF
+ 
+!Josipa: Add options needed depending on projection  
+IF ( projection == "LCC" ) THEN
+
+  sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "TRUELAT1", GeoLat1)
+  sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "TRUELAT2", GeoLat2)
+  sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "CEN_LON", GeoCenLon)
+  sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "CEN_LAT", GeoCenLat)
+  
+ELSE
+
+  sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "POLE_LAT", GeoNPLat)
+  sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "POLE_LON", GeoNPLon)
+  IF ( GeoNPLon > 0.0 ) THEN 
+          GeoNPLon = GeoNPlon -180.0
+  END IF
+  
 END IF
 
 ! binary, land=1, water=0, compared to LANDUSEF class 16, water fraction, 
@@ -621,7 +686,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
   !CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // " -name wrfout*" // TRIM(domain) // "*_" // TRIM(ts) // "*.nc -o -name wrfout*" // TRIM(domain) // "*_" // TRIM(te) // "*.nc | sort > " // tmpfileFL)
 
   IF ( rank == 0 ) THEN
-    CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name 'wrfout*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc' | sort > " // tmpfileFL_std)
+    CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name 'wrfout*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*' | sort > " // tmpfileFL_std)
   END IF
   CALL mpi_barrier(MPI_COMM_WORLD, ierr)
   IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
@@ -629,7 +694,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
   CALL GenerateFilelist
 
   IF ( rank == 0 ) THEN 
-    CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name 'wrfxtrm*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc' | sort > " // tmpfileFL_xtrm)
+    CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name 'wrfxtrm*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*' | sort > " // tmpfileFL_xtrm)
   END IF
   CALL mpi_barrier(MPI_COMM_WORLD, ierr)
   IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
@@ -637,7 +702,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
   CALL GenerateFilelist
 
   IF ( rank == 0) THEN
-    CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name 'wrfpress*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*.nc' | sort > " // tmpfileFL_3d)
+    CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name 'wrfpress*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*' | sort > " // tmpfileFL_3d)
   END IF
   CALL mpi_barrier(MPI_COMM_WORLD, ierr)
   IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
@@ -848,7 +913,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 
         PRINT *,"============================================================"
         PRINT *, "filelist filetype = ", filetype(ivar) 
-        PRINT *, "# files to process = ", SIZE(fl_input)
+        PRINT *, "#files to process = ", SIZE(fl_input)
 
         ! measure CPU time for 1 variable and file, including all timesteps
         CALL CPU_TIME(cpuTs)
@@ -864,7 +929,12 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! this determines how many times the tool has to loop over the inputs
 ! format of 'Times': 2009-06-20_08:00:00
 
+#ifdef SERIAL
+	sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncid_in)
+#else
         sts = NF90_OPEN(iflWRFin, IOR(NF90_NOWRITE, NF90_MPIIO), ncid_in, comm = MPI_COMM_WORLD, info = MPI_INFO_NULL)
+#endif
+	
         sts = NF90_INQUIRE(ncid_in, ndims_in, nvars_in, ngatts_in, unlimdimid_in)
         sts = NF90_INQ_VARID(ncid_in, "Times", InVarIdRec)
         sts = NF90_INQUIRE_DIMENSION(ncid_in, unlimdimid_in, &
@@ -1171,17 +1241,20 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               WRITE (tsactMonthStr,'(I2.2)') tsactMonth
               WRITE (tsactDayStr,'(I2.2)') tsactDay
               WRITE (tsactHourStr,'(I2.2)') tsactHour
+              WRITE (tsactMinuteStr,'(I2.2)') tsactMinute !Josipa: extract start minutes
               WRITE (teactYearStr,'(I4.4)') teactYear
               WRITE (teactMonthStr,'(I2.2)') teactMonth
               WRITE (teactDayStr,'(I2.2)') teactDay
               WRITE (teactHourStr,'(I2.2)') teactHour 
+              WRITE (teactMinuteStr,'(I2.2)') teactMinute !Josipa: extract end minutes
 
               IF ((frequency(ifrq) == '1hr') .OR. &
                   (frequency(ifrq) == '3hr') .OR. &
                   (frequency(ifrq) == '6hr')) THEN
-
-                FileNameStartDateTime = tsactYearStr//tsactMonthStr//tsactDayStr//tsactHourStr
-                FileNameEndDateTime = teactYearStr//teactMonthStr//teactDayStr//teactHourStr
+                                 
+                !Josipa: add minutes to the hourly files to avoid differences in file nameing between cumulative and non-cumulative variabels. 
+                FileNameStartDateTime = tsactYearStr//tsactMonthStr//tsactDayStr//tsactHourStr//tsactMinuteStr
+                FileNameEndDateTime = teactYearStr//teactMonthStr//teactDayStr//teactHourStr//teactMinuteStr             
 
               ELSE IF (frequency(ifrq) == 'day') THEN
   
@@ -1212,8 +1285,11 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                 WRITE (LastMinuteStr,'(I2.2)') INT( MOD( (24.*60.) - (dtHours/2.)*60., 60. ) )
                 PRINT *, "first and last h + min strings: ", FirstHourStr, FirstMinuteStr, LastHourStr, LastMinuteStr
               ELSE
+                !Josipa: add minutes to the hourly files to avoid differences in file nameing between cumulative and non-cumulative variabels. 
                 FirstHourStr = "00"
                 WRITE (LastHourStr,'(I2.2)') 24-INT(dtHours)
+		FirstMinuteStr = "00"
+		LastMinuteStr = "00"
               END IF
               PRINT *, "date/time information for the automatic output path- and filename generation: ", &
                 InDateTimeYearStr, InDateTimeMonthStr, FirstHourStr, LastHourStr, LastDayStr
@@ -1235,8 +1311,8 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                     FileNameStartDateTime = InDateTimeYearStr//InDateTimeMonthStr//"01"//FirstHourStr//FirstMinuteStr
                     FileNameEndDateTime = InDateTimeYearStr//InDateTimeMonthStr//LastDayStr//LastHourStr//LastMinuteStr
                   ELSE
-                    FileNameStartDateTime = InDateTimeYearStr//InDateTimeMonthStr//"01"//FirstHourStr
-                    FileNameEndDateTime = InDateTimeYearStr//InDateTimeMonthStr//LastDayStr//LastHourStr
+                    FileNameStartDateTime = InDateTimeYearStr//InDateTimeMonthStr//"01"//FirstHourStr//FirstMinuteStr
+                    FileNameEndDateTime = InDateTimeYearStr//InDateTimeMonthStr//LastDayStr//LastHourStr//LastMinuteStr
                   END IF  
 
                 ELSE IF (frequency(ifrq) == 'day') THEN
@@ -1261,8 +1337,8 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                     FileNameStartDateTime = InDateTimeYearStr//"0101"//FirstHourStr//FirstMinuteStr
                     FileNameEndDateTime = InDateTimeYearStr//"1231"//LastHourStr//LastMinuteStr
                   ELSE
-                    FileNameStartDateTime = InDateTimeYearStr//"0101"//FirstHourStr
-                    FileNameEndDateTime = InDateTimeYearStr//"1231"//LastHourStr
+                    FileNameStartDateTime = InDateTimeYearStr//"0101"//FirstHourStr//FirstMinuteStr
+                    FileNameEndDateTime = InDateTimeYearStr//"1231"//LastHourStr//LastMinuteStr
                   END IF
 
                 ! TODO: 5 yearly
@@ -1408,12 +1484,24 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               !sts = NF90_DEF_DIM(ncid, "x", xfocus, x_dimid)
               !sts = NF90_DEF_DIM(ncid, "y", yfocus, y_dimid)
               ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
-              sts = NF90_DEF_DIM(ncid, "rlon", xfocus, lon_dimid)
-              sts = NF90_DEF_DIM(ncid, "rlat", yfocus, lat_dimid)
-              IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
+              ! Josipa: Add projection dependency             
+              IF ( projection == "LCC" ) THEN 
+                sts = NF90_DEF_DIM(ncid, "x", xfocus, x_dimid)
+                sts = NF90_DEF_DIM(ncid, "y", yfocus, y_dimid)
+              ELSE
+                sts = NF90_DEF_DIM(ncid, "rlon", xfocus, lon_dimid)
+                sts = NF90_DEF_DIM(ncid, "rlat", yfocus, lat_dimid) 
+              END IF
+              
+              !Josipa: Redefine condition to indlude 100m wind
+              IF ( height(ivar) /= -999 ) THEN
+              !IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
                 sts = NF90_DEF_DIM(ncid, "height", 1, height_dimid)
               END IF
-              IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
+              
+              !Josipa: Add dependency to plevel, height > 10.  is not enought for the winds at 100m 
+              IF ( ( plevel(ivar) /= -999 ) ) THEN
+              !IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
                 sts = NF90_DEF_DIM(ncid, "plev", 1, plev_dimid)
               END IF
               ! special 4D vars, i.e. with real depth dimension
@@ -1440,62 +1528,91 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 
               ! always included -- longitude field, unrotated
               !sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ x_dimid, y_dimid /), lon_varid)
-              sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lon_varid)
-              sts = nf90_def_var_deflate(ncid, lon_varid, 1, 1, 1)
-              sts = nf90_put_att(ncid, lon_varid, "standard_name", "longitude")
-              sts = nf90_put_att(ncid, lon_varid, "long_name", "Longitude")
-              sts = nf90_put_att(ncid, lon_varid, "units", "degrees_east")
-              ! (2023-05-18) - HTr: _CoordinateAxisType provokes an annotation, because it should'nt start with an "_"
-              !sts = nf90_put_att(ncid, lon_varid, "_CoordinateAxisType", "Lon") ! special addon, not needed, but allowed
+              ! Josipa: add coordinated for LCC projection
+              IF ( projection == "LCC" ) THEN
+                sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ x_dimid, y_dimid /), lon_varid)
+                sts = nf90_def_var_deflate(ncid, lon_varid, 1, 1, 1)
+                sts = nf90_put_att(ncid, lon_varid, "standard_name", "longitude")
+                sts = nf90_put_att(ncid, lon_varid, "long_name", "Longitude")
+                sts = nf90_put_att(ncid, lon_varid, "units", "degrees_east")
+                sts = nf90_put_att(ncid, lon_varid, "_CoordinateAxisType", "Lon") ! special addon, not needed, but allowed
 
-              ! always included -- latitude field, unrotated
-              !sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ x_dimid, y_dimid /), lat_varid)
-              sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lat_varid)
-              sts = nf90_def_var_deflate(ncid, lat_varid, 1, 1, 1)
-              sts = nf90_put_att(ncid, lat_varid, "standard_name", "latitude")
-              sts = nf90_put_att(ncid, lat_varid, "long_name", "Latitude")
-              sts = nf90_put_att(ncid, lat_varid, "units", "degrees_north")
-              ! (2023-05-18) - HTr: _CoordinateAxisType provokes an annotation, because it should'nt start with an "_"
-              !sts = nf90_put_att(ncid, lat_varid, "_CoordinateAxisType", "Lat") ! special addon, not needed, but allowed
+                ! always included -- latitude field, unrotated
+                sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ x_dimid, y_dimid /), lat_varid)
+                sts = nf90_def_var_deflate(ncid, lat_varid, 1, 1, 1)
+                sts = nf90_put_att(ncid, lat_varid, "standard_name", "latitude")
+                sts = nf90_put_att(ncid, lat_varid, "long_name", "Latitude")
+                sts = nf90_put_att(ncid, lat_varid, "units", "degrees_north")
+                sts = nf90_put_att(ncid, lat_varid, "_CoordinateAxisType", "Lat") ! special addon, not needed, but allowed
+
+                sts = nf90_def_var(ncid, "lambert_conformal", NF90_CHAR, lambert_varid)
+                sts = nf90_put_att(ncid, lambert_varid, "grid_mapping_name", "lambert_conformal_conic")
+                sts = nf90_put_att(ncid, lambert_varid, "standard_parallel", GeoLat1)
+                sts = nf90_put_att(ncid, lambert_varid, "longitude_of_central_meridian", GeoCenLon)
+                sts = nf90_put_att(ncid, lambert_varid, "latitude_of_projection_origin", GeoCenLat)
+                sts = nf90_put_att(ncid, lambert_varid, "false_easting", "0.f")
+                sts = nf90_put_att(ncid, lambert_varid, "false_northing", "0.f")
+                
+              ELSE                     
+                sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lon_varid)
+                sts = nf90_def_var_deflate(ncid, lon_varid, 1, 1, 1)
+                sts = nf90_put_att(ncid, lon_varid, "standard_name", "longitude")
+                sts = nf90_put_att(ncid, lon_varid, "long_name", "Longitude")
+                sts = nf90_put_att(ncid, lon_varid, "units", "degrees_east")
+                ! (2023-05-18) - HTr: _CoordinateAxisType provokes an annotation, because it should'nt start with an "_"
+                !sts = nf90_put_att(ncid, lon_varid, "_CoordinateAxisType", "Lon") ! special addon, not needed, but allowed
+                ! always included -- latitude field, unrotated
+                !sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ x_dimid, y_dimid /), lat_varid)
+                sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lat_varid)
+                sts = nf90_def_var_deflate(ncid, lat_varid, 1, 1, 1)
+                sts = nf90_put_att(ncid, lat_varid, "standard_name", "latitude")
+                sts = nf90_put_att(ncid, lat_varid, "long_name", "Latitude")
+                sts = nf90_put_att(ncid, lat_varid, "units", "degrees_north")
+                ! (2023-05-18) - HTr: _CoordinateAxisType provokes an annotation, because it should'nt start with an "_"
+                !sts = nf90_put_att(ncid, lat_varid, "_CoordinateAxisType", "Lat") ! special addon, not needed, but allowed
+
+                ! always included -- longitude vector, rotated
+                ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
+                sts = nf90_def_var(ncid, "rlon", NF90_DOUBLE, (/ lon_dimid /), rlon_varid)
+                !sts = nf90_def_var(ncid, "rlon", NF90_DOUBLE, (/ x_dimid /), rlon_varid)
+                sts = nf90_def_var_deflate(ncid, rlon_varid, 1, 1, 1)
+                sts = nf90_put_att(ncid, rlon_varid, "standard_name", "grid_longitude")
+                sts = nf90_put_att(ncid, rlon_varid, "long_name", "Longitude in rotated pole grid")
+                sts = nf90_put_att(ncid, rlon_varid, "units", "degrees")
+                sts = nf90_put_att(ncid, rlon_varid, "axis", "X")
   
-              ! always included -- longitude vector, rotated
-              ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
-              sts = nf90_def_var(ncid, "rlon", NF90_DOUBLE, (/ lon_dimid /), rlon_varid)
-              !sts = nf90_def_var(ncid, "rlon", NF90_DOUBLE, (/ x_dimid /), rlon_varid)
-              sts = nf90_def_var_deflate(ncid, rlon_varid, 1, 1, 1)
-              sts = nf90_put_att(ncid, rlon_varid, "standard_name", "grid_longitude")
-              sts = nf90_put_att(ncid, rlon_varid, "long_name", "Longitude in rotated pole grid")
-              sts = nf90_put_att(ncid, rlon_varid, "units", "degrees")
-              sts = nf90_put_att(ncid, rlon_varid, "axis", "X")
-  
-              ! always included -- latitude vector, rotated
-              ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
-              sts = nf90_def_var(ncid, "rlat", NF90_DOUBLE, (/ lat_dimid /), rlat_varid)
-              !sts = nf90_def_var(ncid, "rlat", NF90_DOUBLE, (/ y_dimid /), rlat_varid)
-              sts = nf90_def_var_deflate(ncid, rlat_varid, 1, 1, 1)
-              sts = nf90_put_att(ncid, rlat_varid, "standard_name", "grid_latitude")
-              sts = nf90_put_att(ncid, rlat_varid, "long_name", "Latitude in rotated pole grid")
-              sts = nf90_put_att(ncid, rlat_varid, "units", "degrees")
-              sts = nf90_put_att(ncid, rlat_varid, "axis", "Y")
+                ! always included -- latitude vector, rotated
+                ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
+                sts = nf90_def_var(ncid, "rlat", NF90_DOUBLE, (/ lat_dimid /), rlat_varid)
+                !sts = nf90_def_var(ncid, "rlat", NF90_DOUBLE, (/ y_dimid /), rlat_varid)
+                sts = nf90_def_var_deflate(ncid, rlat_varid, 1, 1, 1)
+                sts = nf90_put_att(ncid, rlat_varid, "standard_name", "grid_latitude")
+                sts = nf90_put_att(ncid, rlat_varid, "long_name", "Latitude in rotated pole grid")
+                sts = nf90_put_att(ncid, rlat_varid, "units", "degrees")
+                sts = nf90_put_att(ncid, rlat_varid, "axis", "Y")
 
-              ! additional and useful
-              ! important for remapping with cdo (conservative remapping only 
-              ! possible with this information)
-              !        vertices = 4 ;
-              !        float lat_vertices(rlat, rlon, vertices) ;
-              !                lat_vertices:units = "degrees_north" ;
-              !        float lon_vertices(rlat, rlon, vertices) ;
-              !                lon_vertices:units = "degrees_east" ;
+		! additional and useful
+		! important for remapping with cdo (conservative remapping only 
+		! possible with this information)
+		!        vertices = 4 ;
+		!        float lat_vertices(rlat, rlon, vertices) ;
+		!                lat_vertices:units = "degrees_north" ;
+		!        float lon_vertices(rlat, rlon, vertices) ;
+		!                lon_vertices:units = "degrees_east" ;
 
-              ! always included, restriction to one domain only
-              sts = nf90_def_var(ncid, "rotated_pole", NF90_CHAR, rotated_pole_varid)
-              sts = nf90_put_att(ncid, rotated_pole_varid, "long_name", "Coordinates of the rotated North Pole")
-              sts = nf90_put_att(ncid, rotated_pole_varid, "grid_mapping_name", "rotated_latitude_longitude")
-              sts = nf90_put_att(ncid, rotated_pole_varid, "grid_north_pole_latitude", GeoNPLat)
-              sts = nf90_put_att(ncid, rotated_pole_varid, "grid_north_pole_longitude", GeoNPLon)
+		! always included, restriction to one domain only
+		sts = nf90_def_var(ncid, "rotated_pole", NF90_CHAR, rotated_pole_varid)
+		sts = nf90_put_att(ncid, rotated_pole_varid, "long_name", "Coordinates of the rotated North Pole")
+		sts = nf90_put_att(ncid, rotated_pole_varid, "grid_mapping_name", "rotated_latitude_longitude")
+		sts = nf90_put_att(ncid, rotated_pole_varid, "grid_north_pole_latitude", GeoNPLat)
+		sts = nf90_put_att(ncid, rotated_pole_varid, "grid_north_pole_longitude", GeoNPLon)
+            
+              END IF
   
               ! depends whether height is set in the nml, all between 1.5 and 10m
-              IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
+              ! Josipa: Redefine condition to include 100m wind
+              IF ( height(ivar) /= -999 ) THEN
+              !IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
                 sts = nf90_def_var(ncid, "height", NF90_DOUBLE, (/ height_dimid /), height_varid)
                 sts = nf90_put_att(ncid, height_varid, "standard_name", "height")
                 ! (2023-05-18) - HTr: "Height" --> "height"                
@@ -1508,7 +1625,9 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
   
               ! just level definition, single number, like height
               ! there is no distinction between height and plev in the nml file
-              IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
+              !Josipa: Add dependency to plevel, height > 10.  is not enought for the winds at 100m 
+              IF ( plevel(ivar) /= -999 ) THEN
+              !IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
                 sts = nf90_def_var(ncid, "plev", NF90_DOUBLE, (/ plev_dimid /), plev_varid)
                 sts = nf90_put_att(ncid, plev_varid, "standard_name", "air_pressure")
                 ! (2023-05-18) - HTr: "Pressure" --> "pressure"                
@@ -1623,18 +1742,28 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               ! this is also better for coding and data reading
               !IF ( height(ivar) /= -999 ) THEN
               ! HTr: only 2nd option
-              IF ((var_cmip(ivar) == "mrsol") &
-                .OR. (var_cmip(ivar) == "tsl")) THEN
-                ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
-                sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, depth_dimid, rec_dimid /), x_varid)
-                !sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid, depth_dimid, rec_dimid /), x_varid)
-                !sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, depth_dimid, rec_dimid /), x_varid, chunksizes = (/10, 10, 1, 8/), shuffle = .TRUE., fletcher32 = .FALSE., endianness = nf90_endian_little, deflate_level = 1)
+              
+              ! Josipa: redefine spatial dimensions for the LCC projection
+              IF ( projection == "LCC" ) THEN
+                IF ((var_cmip(ivar) == "mrsol") .OR. (var_cmip(ivar) == "tsl")) THEN
+                  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid, depth_dimid, rec_dimid /), x_varid)
+                ELSE
+                  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid, rec_dimid /), x_varid)
+                END IF                 
               ELSE
-                ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
-                sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, rec_dimid /), x_varid)
-                !sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid, rec_dimid /), x_varid)
-                !sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, rec_dimid /), x_varid, chunksizes = (/10, 10, 8/), shuffle = .TRUE., fletcher32 = .FALSE., endianness = nf90_endian_little, deflate_level = 1)
+                IF ((var_cmip(ivar) == "mrsol") .OR. (var_cmip(ivar) == "tsl")) THEN
+                  ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
+                  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, depth_dimid, rec_dimid /), x_varid)
+                  !sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid, depth_dimid, rec_dimid /), x_varid)
+                  !sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, depth_dimid, rec_dimid /), x_varid, chunksizes = (/10, 10, 1, 8/), shuffle = .TRUE., fletcher32 = .FALSE., endianness = nf90_endian_little, deflate_level = 1)
+                ELSE
+                  ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
+                  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, rec_dimid /), x_varid)
+                  !sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid, rec_dimid /), x_varid)
+                  !sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, rec_dimid /), x_varid, chunksizes = (/10, 10, 8/), shuffle = .TRUE., fletcher32 = .FALSE., endianness = nf90_endian_little, deflate_level = 1)
+                END IF
               END IF
+              
 
               ! TODO -> determine chunksizes vector beforehand otherwise
               ! this can only make it worse
@@ -1661,10 +1790,14 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               ELSE
                 sts = nf90_put_att(ncid, x_varid, "cell_methods", "time: "//TRIM(cell_methods(ivar)))
               END IF
-
-              IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
+              
+              !Josipa: Redefine condition to include 100m wind
+              IF ( height(ivar) /= -999 ) THEN
+              !IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "height lat lon")
-              ELSE IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
+              !Josipa: Redefine condition for pressure levels
+              ELSE IF ( plevel(ivar) /= -999 ) THEN 
+              !ELSE IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "plev lat lon") 
               ELSE IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. &
                 (TRIM(var_cmip(ivar)) == 'tsl')) THEN
@@ -1673,7 +1806,11 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               ELSE
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "lat lon")
               END IF
-              sts = nf90_put_att(ncid, x_varid, "grid_mapping", "rotated_pole")
+              IF ( projection == "LCC" ) THEN
+                sts = nf90_put_att(ncid, x_varid, "grid_mapping", "lambert_conformal")              
+              ELSE
+                sts = nf90_put_att(ncid, x_varid, "grid_mapping", "rotated_pole")
+              END IF
               ! (2023-05-15) HTr - "missing_value" is depreciated in CF-1.4
               sts = nf90_put_att(ncid, x_varid, "missing_value", mv)
               sts = nf90_put_att(ncid, x_varid, "_FillValue", mv)
@@ -1738,17 +1875,26 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                 START = (/ 1, 1, 2 /), COUNT = (/ xfocus, yfocus, 1 /) )
 
               ! add rotated coordinates
-              sts = NF90_PUT_VAR(ncid, rlon_varid, GeoInRLon )
-              sts = NF90_PUT_VAR(ncid, rlat_varid, GeoInRLat )
+              ! Josipa: Add if not ""
+              IF ( projection == "ROT" ) THEN
+                sts = NF90_PUT_VAR(ncid, rlon_varid, GeoInRLon )
+                sts = NF90_PUT_VAR(ncid, rlat_varid, GeoInRLat )
+              END IF
     
               ! add height from NML
-              IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
+              !Josipa: Redefine condition to include 100m wind
+              IF ( height(ivar) /= -999 ) THEN
+              !IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
                 sts = NF90_PUT_VAR(ncid, height_varid, height(ivar) )
               END IF
 
               ! add plev from NML, [hPa] -> [Pa]
-              IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
-                sts = NF90_PUT_VAR(ncid, plev_varid, height(ivar)*100. )
+              !Josipa: Redefine condition to exclude 100m wind and include plevel
+              IF ( plevel(ivar) /= -999 ) THEN
+              !IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
+                !sts = NF90_PUT_VAR(ncid, plev_varid, height(ivar)*100. )
+                !Josipa: Read plevel instead of height
+                sts = NF90_PUT_VAR(ncid, plev_varid, plevel(ivar)*100. )
               END IF
 
               ! total with Noah LSM 2m depth thickness of the layers in Noahi LSM / 0.1D0, 0.3D0, 0.6D0, 1.0D0 /
@@ -1852,14 +1998,14 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
           ! vector, 1 value /timestep, usually constant
           ! default changed over time with WRF versions, was 290K, is 300K
           ! but for DA: checked with registry and namelist -> 290 is used
-          T00(1) = 290.0 !300.0
-          !sts = NF90_INQ_VARID(ncidin, "T00", t00_varid)
-          !IF ( sts /= NF90_NOERR ) THEN
-          !  T00(1) = 300.0
-          !ELSE
-          !  sts = NF90_GET_VAR(ncidin, t00_varid, T00(:), &
-          !    START = (/ it /), COUNT = (/ 1 /) )
-          !END IF
+                    
+          sts = NF90_INQ_VARID(ncidin, "T00", t00_varid)
+          IF ( sts /= NF90_NOERR ) THEN
+            T00(1) = 290.0 !300.0
+          ELSE
+            sts = NF90_GET_VAR(ncidin, t00_varid, T00(:), &
+              START = (/ it /), COUNT = (/ 1 /) )
+          END IF
   
           ! HTr: use actual value of base state pressure P00, if possible
           sts = NF90_INQ_VARID(ncidin, "P00", p00_varid)
@@ -1903,12 +2049,14 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! variable
 
           IF ( (var_cmip(ivar) == "psl") &
-                .OR. (height(ivar) == 1000) &
-                .OR. (height(ivar) == 925) &
-                .OR. (height(ivar) == 850) &
-                .OR. (height(ivar) == 700) &
-                .OR. (height(ivar) == 500) &
-                .OR. (height(ivar) == 200) &
+                !.OR. (height(ivar) == 1000) &
+                !.OR. (height(ivar) == 925) &
+                !.OR. (height(ivar) == 850) &
+                !.OR. (height(ivar) == 700) &
+                !.OR. (height(ivar) == 500) &
+                !.OR. (height(ivar) == 200) &
+                !Josipa: read plevel for pressure levels instead of height
+                .OR. ( (plevel(ivar) /= -999) .AND. ( filetype(ivar) == "s") ) &
                 .OR. (var_cmip(ivar) == "prw") &
                 .OR. (var_cmip(ivar) == "clwvi") &
                 .OR. (var_cmip(ivar) == "clivi") &
@@ -1970,7 +2118,9 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 
             IF ( ( var_cmip(ivar) == "prw" )   .OR. &
                  ( var_cmip(ivar) == "psl" )   .OR. &
-                 ( height(ivar) > 10  )        .OR. &
+                 !Josipa: read plevel for pressure level instead of height
+                 ( (plevel(ivar) /= -999) .AND. ( filetype(ivar) == "s") ) .OR. &
+                 !( height(ivar) > 10  )        .OR. &
                  ( var_cmip(ivar) == "clwvi" ) .OR. &
                  ( var_cmip(ivar) == "clivi" ) .OR. &
                  ( var_cmip(ivar) == "cape" )  .OR. &
@@ -2099,11 +2249,115 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               sts = NF90_GET_VAR(ncidin, psfc_varid, psfc_in(:,:), &
                 START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
             END IF
+            
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! Josipa: Pressure level variables read from wrfpress
 
+            ELSE IF ( filetype(ivar) == "p" )  THEN
+              sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "P_LEV_MISSING", p_miss)
+              IF ( SCAN(var_cmip(ivar),"hus") == 1 ) THEN
+                PRINT *, "read Q_PL"
+                IF (.not. ALLOCATED(pl_in)) ALLOCATE( pl_in( xfocus, yfocus, npl  ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "Q_PL", pl_varid)
+                sts = NF90_GET_VAR(ncidin, pl_varid, pl_in(:,:,:), &
+                  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, npl, 1 /) )
+                  WHERE (pl_in < -900.) pl_in = mv
+              END IF
+              IF ( SCAN(var_cmip(ivar),"ta") == 1 ) THEN
+                PRINT *, "read T_PL"
+                IF (.not. ALLOCATED(pl_in)) ALLOCATE( pl_in( xfocus, yfocus, npl  ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "T_PL", pl_varid)
+                sts = NF90_GET_VAR(ncidin, pl_varid, pl_in(:,:,:), &
+                  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, npl, 1 /) )
+                  WHERE  (pl_in < -900.) pl_in(:,:,:) = mv
+              END IF
+              IF ( SCAN(var_cmip(ivar),"zg") == 1 ) THEN
+                PRINT *, "read GHT_PL"
+                IF (.not. ALLOCATED(pl_in)) ALLOCATE( pl_in( xfocus, yfocus, npl  ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "GHT_PL", pl_varid)
+                sts = NF90_GET_VAR(ncidin, pl_varid, pl_in(:,:,:), &
+                  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, npl, 1 /) )
+                  WHERE (pl_in < -900.) pl_in = mv
+              END IF
+              IF ( SCAN(var_cmip(ivar),"ua") == 1 ) THEN !.OR. &
+                 !  ( ( plevel(ivar) /= -999 ) .AND. ( SCAN(var_cmip(ivar),"va") == 1 ) ) ) THEN
+                PRINT *, "read U_PL"
+                IF (.not. ALLOCATED(pl_in_u)) ALLOCATE( pl_in_u( xfocus, yfocus, npl  ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "U_PL", pl_varid_u)
+                sts = NF90_GET_VAR(ncidin, pl_varid_u, pl_in_u(:,:,:), &
+                  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, npl, 1 /) )
+                  WHERE (pl_in_u < -900.) pl_in_u = mv
+                PRINT *, "read V_PL"
+                IF (.not. ALLOCATED(pl_in_v)) ALLOCATE( pl_in_v( xfocus, yfocus, npl  ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "V_PL", pl_varid_v)
+                sts = NF90_GET_VAR(ncidin, pl_varid_v, pl_in_v(:,:,:), &
+                  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, npl, 1 /) )
+                  WHERE (pl_in_v < -900.) pl_in_v = mv
+              END IF
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! Josipa: ua and va at height > 10m [ms-1] wind components at heights higher then 10m 
+
+						ELSE IF ( ( height(ivar) > 10. ) .AND. &
+							( (SCAN(var_cmip(ivar),"ua") == 1 ) .OR.  (SCAN(var_cmip(ivar),"va") == 1 ) ) ) THEN
+
+							PRINT *, "alocating 2D and 3D variables"
+							IF (.not. ALLOCATED(hgt_in)) ALLOCATE( hgt_in( xfocus, yfocus ), STAT=sts )
+							IF (.not. ALLOCATED(ph_in))  ALLOCATE( ph_in( xfocus, yfocus, nz_lowest + 1 ), STAT=sts )
+							IF (.not. ALLOCATED(phb_in)) ALLOCATE( phb_in( xfocus, yfocus, nz_lowest + 1 ), STAT=sts )
+							IF (.not. ALLOCATED(ph_fl))  ALLOCATE( ph_fl( xfocus, yfocus, nz_lowest ), STAT=sts )
+							IF (.not. ALLOCATED(u_in))   ALLOCATE( u_in( xfocus+1, yfocus, nz_lowest ), STAT=sts )
+							IF (.not. ALLOCATED(v_in))   ALLOCATE( v_in( xfocus, yfocus+1, nz_lowest ), STAT=sts )
+							IF (.not. ALLOCATED(u10_in)) ALLOCATE( u10_in ( xfocus, yfocus ), STAT=sts )
+							IF (.not. ALLOCATED(v10_in)) ALLOCATE( v10_in ( xfocus, yfocus ), STAT=sts ) 
+							IF (.not. ALLOCATED(var3d_in_u)) ALLOCATE( var3d_in_u ( xfocus, yfocus, nz_lowest), STAT=sts )
+							IF (.not. ALLOCATED(var3d_in_v)) ALLOCATE( var3d_in_v ( xfocus, yfocus, nz_lowest), STAT=sts )
+							IF (.not. ALLOCATED(sinalpha_in)) ALLOCATE( sinalpha_in( xfocus, yfocus ), STAT=sts )
+							IF (.not. ALLOCATED(cosalpha_in)) ALLOCATE( cosalpha_in( xfocus, yfocus ), STAT=sts )
+							IF (.not. ALLOCATED(var2d_u)) ALLOCATE( var2d_u( xfocus, yfocus ), STAT=sts )
+							IF (.not. ALLOCATED(var2d_v)) ALLOCATE( var2d_v( xfocus, yfocus ), STAT=sts )
+
+							PRINT *, "read HGT"
+							sts = NF90_INQ_VARID(ncidin, "HGT", hgt_varid)
+							sts = NF90_GET_VAR(ncidin, hgt_varid, hgt_in(:,:), &
+								START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+							PRINT *, "read PH"
+							sts = NF90_INQ_VARID(ncidin, "PH", ph_varid)
+							sts = NF90_GET_VAR(ncidin, ph_varid, ph_in(:,:,:), &
+								START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz_lowest+1, 1 /) )
+							PRINT *, "read PHB"
+							sts = NF90_INQ_VARID(ncidin, "PHB", phb_varid)
+							sts = NF90_GET_VAR(ncidin, phb_varid, phb_in(:,:,:), &
+								START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz_lowest+1, 1 /) )
+	            PRINT *, "read U"
+	            sts = NF90_INQ_VARID(ncidin, "U", u_varid)
+	            sts = NF90_GET_VAR(ncidin, u_varid, u_in(:,:,:), &
+	              START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus+1, yfocus, nz_lowest, 1 /) )
+	            PRINT *, "read V"
+	            sts = NF90_INQ_VARID(ncidin, "V", v_varid)
+	            sts = NF90_GET_VAR(ncidin, v_varid, v_in(:,:,:), &
+	              START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus+1, nz_lowest, 1 /) )
+	            PRINT *, "read U10"
+	            sts = NF90_INQ_VARID(ncidin, "U10", u10_varid)
+	            sts = NF90_GET_VAR(ncidin, u10_varid, u10_in(:,:), &
+	               START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+	            PRINT *, "read V10"
+	            sts = NF90_INQ_VARID(ncidin, "V10", v10_varid)  
+	            sts = NF90_GET_VAR(ncidin, v10_varid, v10_in(:,:), &
+	               START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )                        
+	            PRINT *, "read SINALPHA"              
+	            sts = NF90_INQ_VARID(ncidin, "SINALPHA", sinalpha_varid)
+	            sts = NF90_GET_VAR(ncidin, sinalpha_varid, sinalpha_in(:,:), &
+	              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+	            PRINT *, "read COSALPHA"              
+	            sts = NF90_INQ_VARID(ncidin, "COSALPHA", cosalpha_varid)
+	            sts = NF90_GET_VAR(ncidin, cosalpha_varid, cosalpha_in(:,:), &
+	              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )      				
+      				
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! clt [%] a Total Cloud Fraction
   
-          ELSE IF (var_cmip(ivar) == "clt") THEN
+          ELSE IF ( var_cmip(ivar) == "clt" ) THEN
 
             IF (.not. ALLOCATED(cldfra_in)) ALLOCATE( cldfra_in( xfocus, yfocus, nz, 2 ), STAT=sts )   
   
@@ -2142,6 +2396,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               calc = .FALSE.
 
             END IF
+  
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! pr [kg m-2 s-1] a Precipitation 
@@ -2208,21 +2463,18 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               IF (.not. ALLOCATED(rainc_in)) ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
               sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,1), &
-                START = (/ xoffset, yoffset, it /), &
-                COUNT = (/ xfocus, yfocus, 1 /) )
+                START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
 
               sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_MM", bucket_mm)
               IF ( bucket_mm > 0. ) THEN
                 IF (.not. ALLOCATED(i_rainnc_in)) ALLOCATE( i_rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, "I_RAINNC", varid)
                 sts = NF90_GET_VAR(ncidin, varid, i_rainnc_in(:,:,1), &
-                  START = (/ xoffset, yoffset, it /), &
-                  COUNT = (/ xfocus, yfocus, 1 /) )   
+                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )   
                 IF (.not. ALLOCATED(i_rainc_in)) ALLOCATE( i_rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, "I_RAINC", varid)
                 sts = NF90_GET_VAR(ncidin, varid, i_rainc_in(:,:,1), &
-                  START = (/ xoffset, yoffset, it /), &
-                  COUNT = (/ xfocus, yfocus, 1 /) )
+                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
               END IF
 
               ! just get the next input file
@@ -2243,14 +2495,14 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 
               sts = NF90_GET_ATT(ncidin0, NF90_GLOBAL, "BUCKET_MM", bucket_mm)
               IF ( bucket_mm > 0. ) THEN
+		IF (.not. ALLOCATED(i_rainnc_in)) ALLOCATE( i_rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin0, "I_RAINNC", varid)
                 sts = NF90_GET_VAR(ncidin0, varid, i_rainnc_in(:,:,2), &
-                  START = (/ xoffset, yoffset, 1 /), &
-                  COUNT = (/ xfocus, yfocus, 1 /) )   
+                  START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /) ) 
+                IF (.not. ALLOCATED(i_rainc_in)) ALLOCATE( i_rainc_in ( xfocus, yfocus, 2 ), STAT=sts )  
                 sts = NF90_INQ_VARID(ncidin0, "I_RAINC", varid)
                 sts = NF90_GET_VAR(ncidin0, varid, i_rainc_in(:,:,2), &
-                  START = (/ xoffset, yoffset, 1 /), &
-                  COUNT = (/ xfocus, yfocus, 1 /) )
+                  START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /) )
               END IF
 
               sts = NF90_CLOSE(ncidin0)
@@ -2317,6 +2569,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 
                 sts = NF90_GET_ATT(ncidin0, NF90_GLOBAL, "BUCKET_MM", bucket_mm)
                 IF ( bucket_mm > 0. ) THEN
+		  IF (.not. ALLOCATED(i_rainc_in)) ALLOCATE( i_rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
                   sts = NF90_INQ_VARID(ncidin0, "I_RAINC", varid)
                   sts = NF90_GET_VAR(ncidin0, varid, i_rainc_in(:,:,2), &
                     START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /) )
@@ -2658,16 +2911,32 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! rlut [W m-2] a TOA Outgoing Longwave Radiation
 ! rsdt [W m-2] a TOA Incident Shortwave Radiation
 ! rsut [W m-2] a TOA Outgoing Shortwave Radiation
+! rsdsdir [W m-2] a Surface Direct Downwelling Shortwave Radiation
+! rsdscs [W m-2] a Surface Downwelling Clear-Sky Shortwave Radiation
+! rldscs [W m-2] a Surface Downwelling Clear-Sky Longwave Radiation
+! rsuscs [W m-2] a Surface Upwelling Clear-Sky Shortwave Radiation
+! rluscs [W m-2] a Surface Upwelling Clear-Sky Longwave Radiation
+! rsutcs [W m-2] a TOA Outgoing Clear-Sky Shortwave Radiation
+! rlutcs [W m-2] a TOA Outgoing Clear-Sky Longwave Radiation
 ! only method in use finally: accumulated values with bucket
 ! restriction: assume bucket is used
-  
-          ELSE IF ((var_cmip(ivar) == "rsds") &
+            
+         	ELSE IF ( (var_cmip(ivar) == "rsds") &
             .OR. (var_cmip(ivar) == "rlds") &
             .OR. (var_cmip(ivar) == "rsus") &
             .OR. (var_cmip(ivar) == "rlus") &
             .OR. (var_cmip(ivar) == "rlut") &
             .OR. (var_cmip(ivar) == "rsdt") &
-            .OR. (var_cmip(ivar) == "rsut")) THEN
+            .OR. (var_cmip(ivar) == "rsut") &
+            .OR. (var_cmip(ivar) == "rsdsdir") &
+            .OR. (var_cmip(ivar) == "rsdscs") &
+            .OR. (var_cmip(ivar) == "rldscs") &
+            .OR. (var_cmip(ivar) == "rsuscs") &
+            .OR. (var_cmip(ivar) == "rluscs") &
+            .OR. (var_cmip(ivar) == "rsutcs") &
+            .OR. (var_cmip(ivar) == "rlutcs") ) THEN
+            
+            
 
             PRINT *, "get radiation variables incl. bucket if set"
 
@@ -2707,8 +2976,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                 IF (.not. ALLOCATED(i_rad_in)) ALLOCATE( i_rad_in ( xfocus, yfocus, 2 ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, TRIM('I_' // var_wrf(ivar)), varid)
                 sts = NF90_GET_VAR(ncidin, varid, i_rad_in(:,:,1), &
-                  START = (/ xoffset, yoffset, it /), &
-                  COUNT = (/ xfocus, yfocus, 1 /) )
+                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
               END IF
 
               iflWRFin = fl_input(ifl+1)
@@ -2717,15 +2985,15 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 
               sts = NF90_INQ_VARID(ncidin0, TRIM(var_wrf(ivar)), varid)
               sts = NF90_GET_VAR(ncidin0, varid, rad_in(:,:,2), &
-                START = (/ xoffset, yoffset, 1 /), &
-                COUNT = (/ xfocus, yfocus, 1/))
+                START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1/) )
 
               sts = NF90_GET_ATT(ncidin0, NF90_GLOBAL, "BUCKET_J", bucket_J)
               IF ( bucket_J > 0. ) THEN
+                PRINT *, "BUCKET_J = ", bucket_J
+                IF (.not. ALLOCATED(i_rad_in)) ALLOCATE( i_rad_in ( xfocus, yfocus, 2 ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin0, TRIM('I_' // var_wrf(ivar)), varid)
                 sts = NF90_GET_VAR(ncidin0, varid, i_rad_in(:,:,2), &
-                  START = (/ xoffset, yoffset, 1 /), &
-                  COUNT = (/ xfocus, yfocus, 1 /) )
+                  START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /) )
               END IF
 
               sts = NF90_CLOSE(ncidin0)
@@ -2904,7 +3172,35 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
             sts = NF90_GET_VAR(ncidin, sinalpha_varid, sinalpha_in(:,:), &
               START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
             sts = NF90_GET_VAR(ncidin, cosalpha_varid, cosalpha_in(:,:), &
-              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )          
+              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )  
+              
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! tauu [Pa] Surface Downward Eastward Wind Stress
+! tauv [Pa] Surface Downward Northward Wind Stress
+
+		        ELSE IF ( (var_cmip(ivar) == "tauu") .OR. (var_cmip(ivar) == "tauv") ) THEN
+		        
+ 				    IF (.not. ALLOCATED(cd_in)) ALLOCATE(cd_in ( xfocus, yfocus ), STAT=sts )
+			      IF (.not. ALLOCATED(u10_in)) ALLOCATE(u10_in ( xfocus, yfocus ), STAT=sts ) 
+			    	IF (.not. ALLOCATED(v10_in)) ALLOCATE(v10_in ( xfocus, yfocus ), STAT=sts ) 
+			    	IF (.not. ALLOCATED(t2_in)) ALLOCATE(t2_in ( xfocus, yfocus ), STAT=sts ) 
+			    	IF (.not. ALLOCATED(psfc_in)) ALLOCATE(psfc_in ( xfocus, yfocus ), STAT=sts ) 
+			    	
+			      sts = NF90_INQ_VARID(ncidin, "CD", cd_varid)  
+			      sts = NF90_GET_VAR(ncidin, cd_varid, cd_in(:,:), &
+			        START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )  
+			      sts = NF90_INQ_VARID(ncidin, "U10", u10_varid)
+			      sts = NF90_GET_VAR(ncidin, u10_varid, u10_in(:,:), &
+			        START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+		          sts = NF90_INQ_VARID(ncidin, "V10", v10_varid)  
+		          sts = NF90_GET_VAR(ncidin, v10_varid, v10_in(:,:), &
+		            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )   		            
+		          sts = NF90_INQ_VARID(ncidin, "T2", t2_varid)  
+		          sts = NF90_GET_VAR(ncidin, t2_varid, t2_in(:,:), &
+		            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )    
+ 		          sts = NF90_INQ_VARID(ncidin, "PSFC", psfc_varid)  
+		          sts = NF90_GET_VAR(ncidin, psfc_varid, psfc_in(:,:), &
+		            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )       
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! prhmax [kg m-2 s-1] m Daily Maximum Hourly Precipitation Rate (using wrfxtrm)
@@ -3015,12 +3311,14 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! levels needed FPSCONV: 1000  925   "   700   "    "
 
           IF ( (var_cmip(ivar) == "psl") .OR. &
-               (height(ivar) == 1000) .OR. &
-               (height(ivar) == 925) .OR. &
-               (height(ivar) == 850) .OR. &
-               (height(ivar) == 700) .OR. &
-               (height(ivar) == 500) .OR. &
-               (height(ivar) == 200) .OR. &
+          ! Josipa: read pressure level from plevel 
+               ( (plevel(ivar) /= -999) .AND. (filetype(ivar) == "s" ) ) .OR. &
+               !(height(ivar) == 1000) .OR. &
+               !(height(ivar) == 925) .OR. &
+               !(height(ivar) == 850) .OR. &
+               !(height(ivar) == 700) .OR. &
+               !(height(ivar) == 500) .OR. &
+               !(height(ivar) == 200) .OR. &
                (var_cmip(ivar) == "prw") .OR. &
                (var_cmip(ivar) == "clwvi") .OR. &
                (var_cmip(ivar) == "clivi") .OR. &
@@ -3057,18 +3355,55 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-            IF (height(ivar) == 1000) THEN
+            !IF (height(ivar) == 1000) THEN
+            !  np = 1
+            !ELSE IF (height(ivar) == 925) THEN
+            !  np = 2
+            !ELSE IF (height(ivar) == 850) THEN
+            !  np = 3
+            !ELSE IF (height(ivar) == 700) THEN
+            !  np = 4
+            !ELSE IF (height(ivar) == 500) THEN
+            !  np = 5
+            !ELSE IF (height(ivar) == 200) THEN
+            !  np = 6
+            !END IF
+
+            ! Josipa: Extend list of pressure levels
+            IF (plevel(ivar) == 1000) THEN
               np = 1
-            ELSE IF (height(ivar) == 925) THEN
+            ELSE IF (plevel(ivar) == 925) THEN
               np = 2
-            ELSE IF (height(ivar) == 850) THEN
+            ELSE IF (plevel(ivar) == 850) THEN
               np = 3
-            ELSE IF (height(ivar) == 700) THEN
+            ELSE IF (plevel(ivar) == 700) THEN
               np = 4
-            ELSE IF (height(ivar) == 500) THEN
+            ELSE IF (plevel(ivar) == 600) THEN
               np = 5
-            ELSE IF (height(ivar) == 200) THEN
+            ELSE IF (plevel(ivar) == 500) THEN
               np = 6
+            ELSE IF (plevel(ivar) == 400) THEN
+              np = 7
+            ELSE IF (plevel(ivar) == 300) THEN
+              np = 8
+            ELSE IF (plevel(ivar) == 250) THEN
+              np = 9
+            ELSE IF (plevel(ivar) == 200) THEN
+              np = 10
+            ELSE IF (plevel(ivar) == 150) THEN
+              np = 11
+            ELSE IF (plevel(ivar) == 100) THEN
+              np = 12
+            ELSE IF (plevel(ivar) == 70) THEN
+              np = 13
+            ELSE IF (plevel(ivar) == 50) THEN
+              np = 14
+            ELSE IF (plevel(ivar) == 30) THEN
+              np = 15
+            ELSE IF (plevel(ivar) == 20) THEN
+              np = 16
+            ELSE IF (plevel(ivar) == 10) THEN
+              np = 17
             END IF
  
             ! vars needed: 3x int.: t_in, p_in, ph_fl 
@@ -3368,7 +3703,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                 !PHI_s      !(input) 2D geopotential of the surface
                 !T_L        !(input) temperature at lowest level
                 !nz, ns, ew !(input) dimensions: vertical, north-south, east-west
-                CALL calcslptwo(psl_in, p_in, psfc_in, ph_in(:,:,1)+phb_in(:,:,1), t_in(:,:,1), nz, yfocus, xfocus)
+                CALL calcslptwo(psl_in, p_in, psfc_in, ph_in(:,:,1)+phb_in(:,:,1), t_in(:,:,1), yfocus, xfocus)
                 !                     int c    read   read          read         int c
               CASE DEFAULT
                 PRINT *, 'CAUTION: unknown setting for calcslp, proceed with default method'
@@ -3531,6 +3866,127 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
           END IF ! pressure levels processing
+          
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! Josipa: Processing variables on pressure levels        
+          
+          IF ( filetype(ivar) == "p" ) THEN
+            PRINT *, "Working on the pressure level", plevel(ivar)
+            IF (plevel(ivar) == 1000) THEN
+             np = 1
+            ELSE IF (plevel(ivar) == 925) THEN
+             np = 2
+            ELSE IF (plevel(ivar) == 850) THEN
+             np = 3
+            ELSE IF (plevel(ivar) == 700) THEN
+             np = 4
+            ELSE IF (plevel(ivar) == 600) THEN
+             np = 5
+            ELSE IF (plevel(ivar) == 500) THEN
+             np = 6
+            ELSE IF (plevel(ivar) == 400) THEN
+             np = 7
+            ELSE IF (plevel(ivar) == 300) THEN
+             np = 8
+            ELSE IF (plevel(ivar) == 250) THEN
+             np = 9
+            ELSE IF (plevel(ivar) == 200) THEN
+             np = 10
+            ELSE IF (plevel(ivar) == 150) THEN
+             np = 11
+            ELSE IF (plevel(ivar) == 100) THEN
+             np = 12
+            ELSE IF (plevel(ivar) == 70) THEN
+             np = 13
+            ELSE IF (plevel(ivar) == 50) THEN
+             np = 14
+            ELSE IF (plevel(ivar) == 30) THEN
+             np = 15
+            ELSE IF (plevel(ivar) == 20) THEN
+             np = 16
+            ELSE IF (plevel(ivar) == 10) THEN
+             np = 17
+            END IF
+
+            !PRINT *, "extracting/calculating", var_cmip(ivar) 
+            PRINT *, "New np level is", np
+            !If wind components, derotate, first u component, then v component.
+            !sinalpha and cosalha extracted fromt the geo_em file.
+            IF ( (SCAN(var_cmip(ivar),"ua") == 1) ) THEN
+              DO i = 1,xfocus 
+                DO j = 1,yfocus
+		  IF ( pl_in_u(i,j,np) == mv ) THEN
+		    data_in(i,j) = mv
+		  ELSE
+                    data_in(i,j) = pl_in_u(i,j,np)*cosalpha_in(i,j) - pl_in_v(i,j,np)*sinalpha_in(i,j) 
+		  END IF
+		END DO
+	      END DO
+            ELSE IF ( (SCAN(var_cmip(ivar),"va") == 1) ) THEN
+              data_in(:,:) = pl_in_u(:,:,np) !*sinalpha_in(:,:) + pl_in_v(:,:,np)*cosalpha_in(:,:)
+            ELSE
+              !for all other variables such as hus, ta and zg just read the datafrom the coresponing level. 
+              data_in(:,:) = pl_in(:,:,np) 
+            END IF
+
+            WHERE (data_in(:,:) > 100000.) data_in(:,:) = mv    
+                   
+          END IF 
+ 
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! Josipa: ua and va at height > 10m [m s-1] (e.g. ua100m, va100m) wind components at height > 10m
+! The code implemented from CORDEX-WRF v1.3 module https://gmd.copernicus.org/articles/12/1029/2019/
+
+					IF ( ( height(ivar) > 10. ) .AND. &
+						 ( (SCAN(var_cmip(ivar),"ua") == 1 ) .OR.  (SCAN(var_cmip(ivar),"va") == 1 ) ) ) THEN
+
+            !calculating height
+            DO nl = 1,nz_lowest 
+               ph_fl(:,:,nl) = (((ph_in(:,:,nl)+phb_in(:,:,nl))+ &
+                               (ph_in(:,:,nl+1)+phb_in(:,:,nl+1)))/2./gr) - hgt_in(:,:)
+            END DO 
+                          
+            !horizontal unstaggering     
+            DO i = 1,xfocus 
+               var3d_in_u(i,:,:) = 0.5*(u_in(i,:,:) + u_in(i+1,:,:))
+            END DO
+            
+            DO j = 1,yfocus 
+               var3d_in_v(:,j,:) = 0.5*(v_in(:,j,:) + v_in(:,j+1,:))
+            END DO
+
+            DO i = 1,xfocus 
+              DO j = 1,yfocus
+                CALL var_zwind( nz_lowest, var3d_in_u(i,j,:), var3d_in_v(i,j,:), ph_fl(i,j,:), u10_in(i,j), v10_in(i,j), &
+                  sinalpha_in(i,j), cosalpha_in(i,j), real(height(ivar)), var2d_u(i,j), var2d_v(i,j) )
+              END DO
+            END DO 
+
+            IF ( (SCAN(var_cmip(ivar),"ua") == 1 ) .AND. ( height(ivar) > 10 ) ) THEN
+            	data_in(:,:) = var2d_u(:,:)
+            ELSE IF ( (SCAN(var_cmip(ivar),"va") == 1 ) .AND. ( height(ivar) > 10 ) ) THEN
+            	data_in(:,:) = var2d_u(:,:)
+            END IF           
+          END IF
+          
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! Josipa: tauu and tauv [Pa]
+! Surface downward wind stress
+! Should be ok, but check!
+
+					IF ( (var_cmip(ivar) == "tauu") .OR. (var_cmip(ivar) == "tauv") ) THEN
+
+					  IF (var_cmip(ivar) == "tauu") THEN  				
+					  	  
+					    data_in(:,:) = cd_in*(psfc_in/(R*t2_in))*(u10_in(:,:)*cosalpha_in(:,:) - v10_in(:,:)*sinalpha_in(:,:))**2
+					    
+					  ELSE IF (var_cmip(ivar) == "tauv")  THEN  
+					  
+					    data_in(:,:) = cd_in*(psfc_in/(R*t2_in))*(u10_in(:,:)*sinalpha_in(:,:) + v10_in(:,:)*cosalpha_in(:,:))**2
+					  
+					  END IF
+					  
+					END IF				
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! CORDEX [X], FPS CEM [X]
@@ -3815,6 +4271,13 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! rlut [W m-2] a TOA Outgoing Longwave Radiation
 ! rsdt [W m-2] a TOA Incident Shortwave Radiation
 ! rsut [W m-2] a TOA Outgoing Shortwave Radiation
+! rsdsdir [W m-2] a Surface Direct Downwelling Shortwave Radiation
+! rsdscs [W m-2] a Surface Downwelling Clear-Sky Shortwave Radiation
+! rldscs [W m-2] a Surface Downwelling Clear-Sky Longwave Radiation
+! rsuscs [W m-2] a Surface Upwelling Clear-Sky Shortwave Radiation
+! rluscs [W m-2] a Surface Upwelling Clear-Sky Longwave Radiation
+! rsutcs [W m-2] a TOA Outgoing Clear-Sky Shortwave Radiation
+! rlutcs [W m-2] a TOA Outgoing Clear-Sky Longwave Radiation
   
           IF ( (var_cmip(ivar) == "rsds") &
             .OR. (var_cmip(ivar) == "rlds") &
@@ -3822,7 +4285,14 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
             .OR. (var_cmip(ivar) == "rlus") &
             .OR. (var_cmip(ivar) == "rlut") &
             .OR. (var_cmip(ivar) == "rsdt") &
-            .OR. (var_cmip(ivar) == "rsut") ) THEN
+            .OR. (var_cmip(ivar) == "rsut") &
+            .OR. (var_cmip(ivar) == "rsdsdir") &
+            .OR. (var_cmip(ivar) == "rsdscs") &
+            .OR. (var_cmip(ivar) == "rldscs") &
+            .OR. (var_cmip(ivar) == "rsuscs") &
+            .OR. (var_cmip(ivar) == "rluscs") &
+            .OR. (var_cmip(ivar) == "rsutcs") &
+            .OR. (var_cmip(ivar) == "rlutcs") ) THEN
     
             IF (calc) THEN
 
@@ -4089,6 +4559,43 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 
 !-------------------------------------------------------------------------------
 ! write data to netCDF file
+  
+          sts = NF90_OPEN( TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) &
+            // "/" // TRIM(fn_out), NF90_WRITE, ncid )
+
+          ! file must exist, just from the logic of the code, nevertheless: test
+          IF (sts/=0) EXIT
+          
+          sts = NF90_INQ_VARID(ncid, TRIM(var_cmip(ivar)), x_varid)
+          PRINT *, "NF90_OPEN",  sts
+  
+            PRINT *, 'NF90_INQ_VARID', ncid
+            PRINT *, 'var_cmip(ivar)', var_cmip(ivar)
+            PRINT *, 'x_varid', x_varid
+            PRINT *, 'counter/offset', counter
+            PRINT *, 'xfocus', xfocus
+            PRINT *, 'yfocus', yfocus
+    
+            ! not needed anymore, always store 3D only, have height information
+            ! in the coordinates, this was before a standard 'violation'
+            !IF ( height(ivar) /= -999 ) THEN
+            !  sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
+            !    START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1, 1 /) )
+            !ELSE
+              sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
+                START=(/ 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1 /) )
+            !END IF
+    
+            PRINT *, 'NF90_PUT_VAR', sts
+            PRINT *, 'ncid', ncid
+            PRINT *, 'x_varid', x_varid
+            PRINT *, 'some sample output 3x3 in the middle of the domain', &
+              data_in(xfocus/2:(xfocus/2+2),yfocus/2:(yfocus/2+2))
+
+          sts = NF90_CLOSE(ncid)
+          PRINT *, "NF90_CLOSE",  sts
+
+
             
           PRINT *, "*** WRITE DATA TO netCDF ***"
           PRINT *, TRIM(pn_out) // "/" // TRIM(fn_out)
@@ -4106,26 +4613,26 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
           ! avoid this by some time vec operations, but this seems more easy
           ! to implement: check for the existence of a field by doing a quick
           ! statistics calculation
-          ALLOCATE(tmp_2d(xfocus,yfocus))
-          sts = NF90_OPEN( TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) &
-            // "/" // TRIM(fn_out), NF90_NOWRITE, ncid )
-            sts = NF90_INQ_VARID(ncid, TRIM(var_cmip(ivar)), x_varid)
-            IF ((var_cmip(ivar) == "mrsol") &
-              .OR. (var_cmip(ivar) == "tsl")) THEN
-              sts = NF90_GET_VAR( ncid, x_varid, tmp_2d(:,:), &
-                START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1, 1 /) )
-            ELSE
-              sts = NF90_GET_VAR( ncid, x_varid, tmp_2d(:,:), &
-                START=(/ 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1 /) )
-            END IF
-          sts = NF90_CLOSE(ncid)
-          stat_min = MINVAL(tmp_2d(:,:))
-          stat_max = MAXVAL(tmp_2d(:,:))
-          DEALLOCATE(tmp_2d)
+          !ALLOCATE(tmp_2d(xfocus,yfocus))
+          !sts = NF90_OPEN( TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) &
+          !  // "/" // TRIM(fn_out), NF90_NOWRITE, ncid )
+          !  sts = NF90_INQ_VARID(ncid, TRIM(var_cmip(ivar)), x_varid)
+          !  IF ((var_cmip(ivar) == "mrsol") &
+          !    .OR. (var_cmip(ivar) == "tsl")) THEN
+          !    sts = NF90_GET_VAR( ncid, x_varid, tmp_2d(:,:), &
+          !      START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1, 1 /) )
+          !  ELSE
+          !    sts = NF90_GET_VAR( ncid, x_varid, tmp_2d(:,:), &
+          !      START=(/ 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1 /) )
+          !  END IF
+          !sts = NF90_CLOSE(ncid)
+          !stat_min = MINVAL(tmp_2d(:,:))
+          !stat_max = MAXVAL(tmp_2d(:,:))
+          !DEALLOCATE(tmp_2d)
 
           ! array is initialized with mv=1e20
           ! if it is still empty and OK to fill, then min=max=mv
-          IF ( (stat_min .EQ. mv) .AND. (stat_max .EQ. mv) ) THEN
+          !IF ( (stat_min .EQ. mv) .AND. (stat_max .EQ. mv) ) THEN
          
             ! if the timestep in the output file is empty still, put data in
             sts = NF90_OPEN( TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) &
@@ -4174,11 +4681,11 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
             sts = NF90_CLOSE(ncid)
             PRINT *, "NF90_CLOSE", sts
 
-          ELSE
+          !ELSE
             
-            PRINT *, "not empty any more: ", TRIM(fn_out), " at timestep ", counter
+            !PRINT *, "not empty any more: ", TRIM(fn_out), " at timestep ", counter
 
-          END IF
+          !END IF
 
 !-------------------------------------------------------------------------------
 
@@ -4379,7 +4886,7 @@ END SUBROUTINE calcslp
 !       November 10, 2011. The equation can be found especially in the section
 !       (4.3.1) "Mean sea level pressure PP_msl (routine PPPMER)"
 
-SUBROUTINE calcslptwo(slp, PP, P_s, PHI_s, T_L, nz, ns, ew)
+SUBROUTINE calcslptwo(slp, PP, P_s, PHI_s, T_L, ns, ew)
 
 IMPLICIT NONE
 
@@ -4388,7 +4895,7 @@ real, DIMENSION(:,:,:), INTENT(IN)  :: PP         !(input) 3D pressure
 real, DIMENSION(:,:),   INTENT(IN)  :: P_s        !(input) pressure at surface
 real, DIMENSION(:,:),   INTENT(IN)  :: PHI_s      !(input) 2D geopotential of the surface
 real, DIMENSION(:,:),   INTENT(IN)  :: T_L        !(input) temperature at lowest level
-INTEGER,                INTENT(IN)  :: nz, ns, ew !(input) dimensions: vertical, north-south, east-west
+INTEGER,                INTENT(IN)  :: ns, ew !(input) dimensions: north-south, east-west
 
 real, DIMENSION(ew,ns)              :: P_L        !(calculated) pressure at lowest level
 real                                :: T_surf     !(calculated) surface temperature
@@ -4468,6 +4975,101 @@ END DO
 !$OMP END PARALLEL DO
   
 END SUBROUTINE calcslptwo
+
+!*********************************************************************************************
+! Josipa: Add subroutine to extrapolate the wind at a given height following 
+! the 'power law' methodology, adapted from the CORDEX-WRF v1.3 (Fita et al. 2018; 
+! https://doi.org/10.5194/gmd-12-1029-2019)
+!    wss[newz] = wss[z1]*(newz/z1)**alpha
+!    alpha = (ln(wss[z2])-ln(wss[z1]))/(ln(z2)-ln(z1))
+! Original source is Phd Thesis: Benedicte Jourdier. Ressource eolienne en France metropolitaine: 
+! methodes d’evaluation du potentiel, variabilite et tendances. Climatologie. 
+! Ecole Doctorale Polytechnique, 2015. French
+!*********************************************************************************************
+SUBROUTINE var_zwind(nz, u, v, z, u10, v10, sa, ca, newz, unewz, vnewz)
+
+IMPLICIT NONE
+
+INTEGER, INTENT(in)                 :: nz
+REAL, DIMENSION(nz), INTENT(in)     :: u,v,z
+REAL, INTENT(in)                    :: u10, v10, sa, ca, newz
+REAL, INTENT(out)                   :: unewz, vnewz
+
+! Local
+INTEGER                             :: inear
+REAL                                :: zaground
+REAL, DIMENSION(2)                  :: v1, v2, zz, alpha, uvnewz
+
+!!!!!!! Variables
+! nz: number of vertical levels
+! u,v: vertical wind components [ms-1]
+! z: height above surface [m]
+! u10,v10: 10-m wind components [ms-1]
+! topo: topographical height [m]
+! sa, ca: local sine and cosine of map rotation [1.]
+! newz: height to which extrapolate
+! unewz,vnewz: Wind compoonents at the given height [ms-1]
+
+!!WRITE(message,*)' ilev zaground newz z[ilev+1] z[ilev+2] _______'
+!!CALL wrf_debug(750,message)
+! Looking for the level  below desired height
+IF (z(1) < newz ) THEN
+  DO inear = 1,nz-2
+    ! L. Fita, CIMA. Feb. 2018
+    !! Choose between extra/inter-polate. Maybe better interpolate?
+    ! Here we extrapolate from two closest lower levels
+    ! zaground = z(inear+2)
+    ! Here we interpolate between levels
+    zaground = z(inear+1)
+    !!WRITE(message,*)inear, z(inear), newz, z(inear+1), z(inear+2)
+    !!CALL wrf_debug(750,message)
+    IF ( zaground >= newz) EXIT
+  END DO
+ELSE
+  !!WRITE(message,*)1, z(1), newz, z(2), z(3), ' z(1) > newz'
+  !!CALL wrf_debug(750,message)
+  inear = nz - 2
+END IF
+
+IF (inear == nz-2) THEN
+! No vertical pair of levels is below newz, using 10m wind as first value
+! and the first level as the second
+   v1(1) = u10
+   v1(2) = v10
+   v2(1) = u(1)
+   v2(2) = v(1)
+   zz(1) = 10.
+   zz(2) = z(1)
+ELSE
+   v1(1) = u(inear)
+   v1(2) = v(inear)
+   v2(1) = u(inear+1)
+   v2(2) = v(inear+1)
+   zz(1) = z(inear)
+   zz(2) = z(inear+1)
+END IF
+
+! Computing for each component
+alpha = (LOG(ABS(v2))-LOG(ABS(v1)))/(LOG(zz(2))-LOG(zz(1)))
+!!WRITE(message,*)' Computing with v1:', v1, ' ms-1 v2:', v2, ' ms-1'
+!!CALL wrf_debug(750,message)
+!!WRITE(message,*)' z1:', zz(1), 'm z2:', zz(2), ' m'
+!!CALL wrf_debug(750,message)
+!!WRITE(message,*)' alhpa u:', alpha(1), ' alpha 2:', alpha(2)
+!!CALL wrf_debug(750,message)
+
+uvnewz = v1*(newz/zz(1))**alpha
+
+! Earth-rotation
+unewz = uvnewz(1)*ca - uvnewz(2)*sa
+vnewz = uvnewz(1)*sa + uvnewz(2)*ca
+
+!!WRITE(message,*)'  result vz:', uvnewz
+!!CALL wrf_debug(750,message)
+
+RETURN
+
+END SUBROUTINE var_zwind
 
 !===============================================================================
 
