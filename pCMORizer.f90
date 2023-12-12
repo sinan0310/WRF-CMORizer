@@ -106,8 +106,11 @@ USE NamelistHandling
 
 USE netcdf
 
+#ifdef MPIRUN
 USE MPI
+#endif
 !USE OMP_LIB
+
 
 IMPLICIT NONE
 
@@ -428,8 +431,9 @@ CHARACTER (len = 21) :: creationDate
 
 !===============================================================================
 
-! MPI
 
+! MPI
+#ifdef MPIRUN
 INTEGER, DIMENSION(:), ALLOCATABLE :: ivar_list
 INTEGER :: ierr, rank, numtasks
 
@@ -442,6 +446,7 @@ INTEGER :: ierr, rank, numtasks
 
   CALL MPI_COMM_SIZE(MPI_COMM_WORLD, numtasks, ierr)
   IF ( ierr /= MPI_SUCCESS ) STOP "MPI_COMM_WORLD"
+#endif
 
 PRINT *, "============================================================"
 PRINT *, "WRF RCM CMORizer"
@@ -519,11 +524,11 @@ PRINT *, SHAPE(landmask_in)
 ALLOCATE( GeoInRLat(yfocus) )
 ALLOCATE( GeoInRLon(xfocus) )
 
-#ifdef SERIAL
-sts = NF90_OPEN(TRIM(PnFnGeo), NF90_NOWRITE, ncidin)
-#else
+#ifdef MPIRUN
 sts = NF90_OPEN(TRIM(PnFnGeo), IOR(NF90_NOWRITE, NF90_MPIIO), ncidin, &
       comm = MPI_COMM_WORLD, info = MPI_INFO_NULL )
+#else
+sts = NF90_OPEN(TRIM(PnFnGeo), NF90_NOWRITE, ncidin)
 #endif
 
 
@@ -685,27 +690,39 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
   !CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // TRIM(ts) // " -name wrfout*" // TRIM(domain) // "*_" // TRIM(fl_filter) // "*.nc | sort > " // tmpfileFL)
   !CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // " -name wrfout*" // TRIM(domain) // "*_" // TRIM(ts) // "*.nc -o -name wrfout*" // TRIM(domain) // "*_" // TRIM(te) // "*.nc | sort > " // tmpfileFL)
 
+#ifdef MPIRUN
   IF ( rank == 0 ) THEN
     CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name 'wrfout*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*' | sort > " // tmpfileFL_std)
   END IF
   CALL mpi_barrier(MPI_COMM_WORLD, ierr)
   IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
+#else
+  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name 'wrfout*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*' | sort > " // tmpfileFL_std)
+#endif
   ft = 0 ! file type
   CALL GenerateFilelist
 
+#ifdef MPIRUN
   IF ( rank == 0 ) THEN 
     CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name 'wrfxtrm*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*' | sort > " // tmpfileFL_xtrm)
   END IF
   CALL mpi_barrier(MPI_COMM_WORLD, ierr)
   IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
+#else
+  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name 'wrfxtrm*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*' | sort > " // tmpfileFL_xtrm)
+#endif
   ft = 1
   CALL GenerateFilelist
 
+#ifdef MPIRUN
   IF ( rank == 0) THEN
     CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name 'wrfpress*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*' | sort > " // tmpfileFL_3d)
   END IF
   CALL mpi_barrier(MPI_COMM_WORLD, ierr)
   IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
+#else
+  CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/ -name 'wrfpress*" // TRIM(domain) // "*" // TRIM(fl_filter) // "*' | sort > " // tmpfileFL_3d)
+#endif
   ft = 2
   CALL GenerateFilelist
  
@@ -858,6 +875,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! better avoid this kind of filtering: create a new namelist or switch the vars
 ! properly on/off for the respective temporal aggregation level
 
+#ifdef MPIRUN
   ALLOCATE( ivar_list(nvar_nml) )
   DO ivar = 1, nvar_nml, 1
     ivar_list(ivar) = ivar
@@ -865,7 +883,9 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 
   CALL MPI_SCATTER( ivar_list, 1, MPI_INT, ivar, 1, MPI_INT, 0, MPI_COMM_WORLD, ierr)
   IF ( ierr /= MPI_SUCCESS ) STOP "MPI_SCATTER"
-
+#else
+  DO ivar = 1, nvar_nml, 1
+#endif
 !    DO ivar = 1, nvar_nml, 1
 !    DO ivar = 8,9, 1
   
@@ -929,10 +949,10 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! this determines how many times the tool has to loop over the inputs
 ! format of 'Times': 2009-06-20_08:00:00
 
-#ifdef SERIAL
-	sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncid_in)
-#else
+#ifdef MPIRUN
         sts = NF90_OPEN(iflWRFin, IOR(NF90_NOWRITE, NF90_MPIIO), ncid_in, comm = MPI_COMM_WORLD, info = MPI_INFO_NULL)
+#else
+	sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncid_in)
 #endif
 	
         sts = NF90_INQUIRE(ncid_in, ndims_in, nvars_in, ngatts_in, unlimdimid_in)
@@ -1448,9 +1468,9 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 !              READ(1,*) creationDate
 !              CLOSE(1)
 !              PRINT *, "date externally generated creation date = ", creationDate
-
+ 
+#ifdef MPIRUN
               WRITE(FileNrStr,'(i3)') rank
-
               CALL SYSTEM("uuidgen -t > tmpfileUUID"//TRIM(domain)//TRIM(fnNMLvar(ivarnml))//TRIM(ADJUSTL(FileNrStr)))
               OPEN(1,FILE="tmpfileUUID"//TRIM(domain)//TRIM(fnNMLvar(ivarnml))//TRIM(ADJUSTL(FileNrStr)),STATUS='old')
               READ(1,*) trackingID
@@ -1465,6 +1485,20 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 
               CALL mpi_barrier(MPI_COMM_WORLD, ierr)
               IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
+#else
+
+              CALL SYSTEM("uuidgen -t > tmpfileUUID"//TRIM(domain)//TRIM(fnNMLvar(ivarnml)))
+              OPEN(1,FILE="tmpfileUUID"//TRIM(domain)//TRIM(fnNMLvar(ivarnml)),STATUS='old')
+              READ(1,*) trackingID
+              CLOSE(1)
+              PRINT *, "uuidgen externally generated trackingID = ", trackingID
+
+              CALL SYSTEM("date -u +%Y-%m-%d-T%H:%M:%SZ > tmpfileDate"//TRIM(domain)//TRIM(fnNMLvar(ivarnml)))
+              OPEN(1,FILE="tmpfileDate"//TRIM(domain)//TRIM(fnNMLvar(ivarnml)),STATUS='old')
+              READ(1,*) creationDate
+              CLOSE(1)
+              PRINT *, "date externally generated creation date = ", creationDate
+#endif
              
 !-------------------------------------------------------------------------------
 ! create netCDF file, must be NetCDF4 'classic data model' and compression lvl=1
@@ -4733,16 +4767,18 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 
     END DO ! ivar - variable loop
 
+#ifdef MPIRUN
     CALL mpi_barrier(MPI_COMM_WORLD, ierr)
     IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
     CALL mpi_finalize(ierr)
     IF ( ierr /= MPI_SUCCESS ) stop "Problem with MPI_FINALIZE" 
 
-    DEALLOCATE( ivar_list ) 
+    DEALLOCATE( ivar_list )
+#else 
+    END DO ! ivarnml - namelist loop     
+#endif 
 
-  END DO ! ivarnml - namelist loop 
-
-!END DO ! ifrq - different temporal aggregations
+END DO ! ifrq - different temporal aggregations
 
 !===============================================================================
 
