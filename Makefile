@@ -1,9 +1,8 @@
 FC = mpifort
-FCFLAGS = -O2
-FCFLAGS += -Wall
-FCFLAGS += -ffree-line-length-none
-FCFLAGS += -Wno-tabs
-FCFLAGS += -cpp
+FCFLAGS_GNU = -ffree-line-length-none -Wall -Wno-tabs
+FCFLAGS_INTEL = -assume realloc_lhs -fp-model precise -prec-div -prec-sqrt
+FCFLAGS = -O2 -cpp
+FCFLAGS += $(FCFLAGS_GNU)
 FCFLAGS += -I$(shell nc-config --includedir)
 LDFLAGS = $(shell nc-config --libs) -lnetcdff
 
