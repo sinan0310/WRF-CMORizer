@@ -1,4 +1,4 @@
-name: cmor
+name: pcmorizer
 channels:
   - conda-forge
   - defaults
