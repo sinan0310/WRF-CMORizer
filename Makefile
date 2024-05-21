@@ -4,9 +4,7 @@ FCFLAGS_INTEL = -assume realloc_lhs -fp-model precise -prec-div -prec-sqrt
 FCFLAGS = -O2 -cpp
 FCFLAGS += $(FCFLAGS_GNU)
 FCFLAGS += -I$(shell nc-config --includedir)
-LDFLAGS = $(shell nc-config --libs) -lnetcdff
-
-PROGRAMS = pCMORizer
+LDFLAGS = -L$(shell nc-config --libs) -lnetcdff -lnetcdf
 
 all: $(PROGRAMS)
 
