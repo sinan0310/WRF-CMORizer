@@ -131,6 +131,8 @@ zmla,PBLH,m,i,Height of Boundary Layer,atmosphere_boundary_layer_thickness,x,x,,
 prw,-999,kg m-2,i,Water Vapor Path,atmosphere_mass_content_of_water_vapor,x,x,,,x,TIER 1
 clwvi,-999,kg m-2,i,Condensed Water Path,atmosphere_mass_content_of_cloud_condensed_water,x,x,,,x,TIER 1
 clivi,-999,kg m-2,i,Ice Water Path,atmosphere_mass_content_of_cloud_ice,x,x,,,x,TIER 1
+clgvi,-999,kg m-2,i,Vertical integral of mass content of graupel,atmosphere_mass_content_of_graupel,x,x,,,x,TIER 1
+clhvi,-999,kg m-2,i,Vertical integral of mass content of hail,atmosphere_mass_content_of_hail,x,x,,,x,TIER 1
 ua1000,-999,m s-1,i,Eastward Wind,eastward_wind,x,x,x,,x,TIER 1
 ua925,-999,m s-1,i,Eastward Wind,eastward_wind,x,x,x,,x,TIER 1
 ua850,-999,m s-1,i,Eastward Wind,eastward_wind,x,x,x,,x,TIER 1
