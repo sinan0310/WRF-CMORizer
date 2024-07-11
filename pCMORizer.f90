@@ -2641,13 +2641,14 @@ fnNMLvar(1) = "runctrl.vars.nml"
               START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
             IF (.not. ALLOCATED(psfc_in)) ALLOCATE( psfc_in ( xfocus, yfocus ), STAT=sts )
             sts = NF90_INQ_VARID(ncidin, "PSFC", psfc_varid)
-            sts = NF90_GET_VAR(ncidin, psfc_varid, psfc_in(:,:), &
+            sts = NF90_GET_VAR(ncidin, psfc_varid, psfc_in(:,:), & 
               START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! sfcWind [m s-1] i Near-Surface Wind Speed
-
-          ELSE IF (var_cmip(ivar) == "sfcWind") THEN
+ 
+          ELSE IF ( (var_cmip(ivar) == "sfcWind") .OR. \
+            ( (var_cmip(ivar) == "sfcWindmax") .AND. (filetype(ivar) == "s" ) ) ) THEN
   
             IF (.not. ALLOCATED(u10_in)) ALLOCATE( u10_in ( xfocus, yfocus ), STAT=sts ) 
             IF (.not. ALLOCATED(v10_in)) ALLOCATE( v10_in ( xfocus, yfocus ), STAT=sts )
@@ -3575,7 +3576,8 @@ fnNMLvar(1) = "runctrl.vars.nml"
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! [ms-1] i Near-Surface Wind Speed
   
-          IF (var_cmip(ivar) == "sfcWind") THEN  
+          IF ( (var_cmip(ivar) == "sfcWind") .OR. \
+             ( (var_cmip(ivar) == "sfcWindmax") .AND. (filetype(ivar) == "s" ) ) )THEN  
             data_in(:,:) = (u10_in(:,:)**2 + v10_in(:,:)**2)**0.5   
           END IF
   
