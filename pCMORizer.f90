@@ -201,7 +201,7 @@ INTEGER :: lon_dimid, lat_dimid, rec_dimid, height_dimid, &
 INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, hgt_varid, &
   rotated_pole_varid, lambert_varid, height_varid, rec_varid, pp_varid, pb_varid, ph_varid, &
   phb_varid, pl_varid, pl_varid_u, pl_varid_v, qv_varid, qc_varid, qi_varid, qr_varid, &
-  qs_varid, theta_varid, t2_varid, recbnds_varid, rainnc_varid, &
+  qg_varid, qh_varid, qs_varid, theta_varid, t2_varid, recbnds_varid, rainnc_varid, &
   rainc_varid, u10_varid, v10_varid, u_varid, v_varid, w_varid, &
   sfcevp_varid, potevp_varid, sfroff_varid, udroff_varid, acsnom_varid, q2_varid, &
   sinalpha_varid, cosalpha_varid, plev_varid, plevbnds_varid, psfc_varid, &
@@ -276,6 +276,8 @@ REAL, DIMENSION(:,:), ALLOCATABLE :: &
   prw           , &
   clwvi         , &
   clivi         , &
+  clgvi         , &
+  clhvi         , &
   sinalpha_in   , &
   cosalpha_in   , &
   psfc_in       , &
@@ -301,6 +303,8 @@ REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   qc_in       , &
   qr_in       , &
   qi_in       , &
+  qg_in       , &
+  qh_in       , &
   qs_in       , &
   theta_in    , &
   t_in        , &
@@ -1703,6 +1707,8 @@ fnNMLvar(1) = "runctrl.vars.nml"
                 .OR.  (var_cmip(ivar) == "prw") &
                 .OR.  (var_cmip(ivar) == "clwvi") &
                 .OR.  (var_cmip(ivar) == "clivi") &
+                .OR.  (var_cmip(ivar) == "clgvi") &
+                .OR.  (var_cmip(ivar) == "clhvi") &
                 .OR.  (var_cmip(ivar) == "cape") &
                 .OR.  (var_cmip(ivar) == "cin") &
                 .OR.  ( (plevel(ivar) /= -999) &
@@ -1742,6 +1748,14 @@ fnNMLvar(1) = "runctrl.vars.nml"
 
               IF ( var_cmip(ivar) == "clivi" ) THEN
                 IF (.not. ALLOCATED(clivi)) ALLOCATE( clivi( xfocus, yfocus ), STAT=sts )
+              END IF
+
+              IF ( var_cmip(ivar) == "clgvi" ) THEN
+                IF (.not. ALLOCATED(clgvi)) ALLOCATE( clgvi( xfocus, yfocus ), STAT=sts )
+              END IF
+
+              IF ( var_cmip(ivar) == "clhvi" ) THEN
+                IF (.not. ALLOCATED(clhvi)) ALLOCATE( clhvi( xfocus, yfocus ), STAT=sts )
               END IF
 
               IF ( (plevel(ivar) /= -999) .AND. ( filetype(ivar) == "s") ) THEN
@@ -1824,6 +1838,23 @@ fnNMLvar(1) = "runctrl.vars.nml"
                 sts = NF90_GET_VAR(ncidin, qs_varid, qs_in(:,:,:), &
                   START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
               END IF
+
+              IF ( var_cmip(ivar) == "clgvi" ) THEN
+                PRINT *, "read QGRAUP"
+                IF (.not. ALLOCATED(qg_in)) ALLOCATE( qg_in( xfocus, yfocus, nz  ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "QGRAUP", qg_varid)
+                sts = NF90_GET_VAR(ncidin, qg_varid, qg_in(:,:,:), &
+                  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
+              END IF
+
+              IF ( var_cmip(ivar) == "clhvi" ) THEN
+                PRINT *, "read QHAIL"
+                IF (.not. ALLOCATED(qh_in)) ALLOCATE( qh_in( xfocus, yfocus, nz  ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "QHAIL", qh_varid)
+                sts = NF90_GET_VAR(ncidin, qh_varid, qh_in(:,:,:), &
+                  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
+              END IF
+
 
               IF ( (SCAN(var_cmip(ivar),"ua") == 1) .OR. (SCAN(var_cmip(ivar),"va") == 1) ) THEN
                 PRINT *, "read U"
@@ -2723,6 +2754,8 @@ fnNMLvar(1) = "runctrl.vars.nml"
                (var_cmip(ivar) == "prw") .OR. &
                (var_cmip(ivar) == "clwvi") .OR. &
                (var_cmip(ivar) == "clivi") .OR. &
+               (var_cmip(ivar) == "clgvi") .OR. &
+               (var_cmip(ivar) == "clhvi") .OR. &
                (var_cmip(ivar) == "cape") .OR. &
                (var_cmip(ivar) == "cin") .OR. &
                ( (plevel(ivar) /= -999) .AND. (filetype(ivar) == "s" ) ) ) THEN
@@ -3003,6 +3036,45 @@ fnNMLvar(1) = "runctrl.vars.nml"
               data_in(:,:) = clivi(:,:)
     
             END IF
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! clgvi  [kg m-2] i Groupel Water Path
+
+            IF ( (var_cmip(ivar) == "clgvi")) THEN
+
+              !t_in(:,:,:) = (theta_in(:,:,:)+T00(1))*((pp_in(:,:,:)+pb_in(:,:,:))/P00(1))**(R/cp)
+              !p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
+
+              clgvi(:,:) = 0.
+              DO nl = 1,nz - 1
+                clgvi(:,:) = clgvi(:,:) + (qg_in(:,:,nl)) * &
+                             p_in(:,:,nl)/(R*t_in(:,:,nl)) * &
+                             ((ph_in(:,:,nl+1)+phb_in(:,:,nl+1)) - &
+                             (ph_in(:,:,nl)+phb_in(:,:,nl)))/gr
+              END DO
+              data_in(:,:) = clgvi(:,:)
+
+            END IF
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! clhvi  [kg m-2] i Ice Water Path
+
+            IF ( (var_cmip(ivar) == "clhvi")) THEN
+
+              !t_in(:,:,:) = (theta_in(:,:,:)+T00(1))*((pp_in(:,:,:)+pb_in(:,:,:))/P00(1))**(R/cp)
+              !p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
+
+              clhvi(:,:) = 0.
+              DO nl = 1,nz - 1
+                clhvi(:,:) = clhvi(:,:) + (qh_in(:,:,nl)) * &
+                             p_in(:,:,nl)/(R*t_in(:,:,nl)) * &
+                             ((ph_in(:,:,nl+1)+phb_in(:,:,nl+1)) - &
+                             (ph_in(:,:,nl)+phb_in(:,:,nl)))/gr
+              END DO
+              data_in(:,:) = clhvi(:,:)
+
+            END IF
+
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! cape [J kg-1] i 2-D Maximum Convective Available Potential Energy
