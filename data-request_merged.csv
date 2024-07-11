@@ -1,0 +1,278 @@
+out_name,frequency,units,long_name,priority,priority_urb,priority_conv,comment
+anthroheat,1hr,W/m2,Anthropogenic heat flux,,URB-URB-RCC,,On grid cell avarage
+anthroheat,day,W/m2,Anthropogenic heat flux,,URB-URB-RCC,,On grid cell avarage
+anthroheat,mon,W/m2,Anthropogenic heat flux,,URB-URB-RCC,,On grid cell avarage
+areacella,fx,m2,Atmosphere Grid-Cell Area,,,CONV-CORE,
+cape,day,J kg-1,Convective Available Potential Energy,,,CONV-TIER1,
+cg_lighning,day,counts,Cloud-ground lightning flashes,,,CONV-TIER1,explicitly declare how the separation between IC and CG was performed
+cin,day,J kg-1,Convective Inhibition,,,CONV-TIER1,
+clgvi,1hr,kg m-2,Vertical integral of mass content of graupel,,,CONV-TIER1,
+clhvi,1hr,kg m-2,Vertical integral of mass content of hail,,,CONV-TIER1,
+clivi,1hr,kg m-2,Ice Water Path,,,CONV-CORE,
+clt,1hr,%,Total Cloud Cover Percentage,,URB-CORE,CONV-CORE,
+clt,day,%,Total Cloud Cover Percentage,,URB-CORE,,
+clt,mon,%,Total Cloud Cover Percentage,,URB-CORE,,
+clwvi,1hr,kg m-2,Condensed Water Path,,,CONV-CORE,
+evspsbl,1hr,kg m-2 s-1,Evaporation Including Sublimation and Transpiration,,URB-CORE,CONV-CORE,
+evspsbl,day,kg m-2 s-1,Evaporation Including Sublimation and Transpiration,,URB-CORE,,
+evspsbl,mon,kg m-2 s-1,Evaporation Including Sublimation and Transpiration,,URB-CORE,,
+evspsblpot,1hr,kg m-2 s-1,Potential Evapotranspiration,,,CONV-CORE,
+hfls,1hr,W m-2,Surface Upward Latent Heat Flux,,URB-CORE,CONV-CORE,
+hfls,day,W m-2,Surface Upward Latent Heat Flux,,URB-CORE,,
+hfls,mon,W m-2,Surface Upward Latent Heat Flux,,URB-CORE,,
+hfss,1hr,W m-2,Surface Upward Sensible Heat Flux,,URB-CORE,CONV-CORE,
+hfss,day,W m-2,Surface Upward Sensible Heat Flux,,URB-CORE,,
+hfss,mon,W m-2,Surface Upward Sensible Heat Flux,,URB-CORE,,
+hurs,1hr,%,Near-Surface Relative Humidity,I4C-CORE,URB-CORE,,#T33 #WP6
+hurs,day,%,Near-Surface Relative Humidity,I4C-CORE,URB-CORE,,#T33 #WP4
+hurs,mon,%,Near-Surface Relative Humidity,,URB-CORE,,
+hurscan,1hr,%,Near-Surface Relative Humidity within canyon,,URB-URB-RCC,,
+hurscan,day,%,Near-Surface Relative Humidity within canyon,,URB-URB-RCC,,
+hurscan,mon,%,Near-Surface Relative Humidity within canyon,,URB-URB-RCC,,
+hus1000,1hr,1,Specific Humidity,I4C-TIER1,,,#T33
+hus1000,3hr,1,Specific Humidity,,,CONV-CORE,
+hus1000,day,1,Specific Humidity,I4C-TIER1,,,#T33
+hus200,1hr,1,Specific Humidity,I4C-TIER1,,,#T33
+hus200,3hr,1,Specific Humidity,,,CONV-CORE,
+hus200,day,1,Specific Humidity,I4C-TIER1,,,#T33
+hus500,1hr,1,Specific Humidity,I4C-TIER1,,,#T33
+hus500,3hr,1,Specific Humidity,,,CONV-CORE,
+hus500,day,1,Specific Humidity,I4C-TIER1,,,#T33
+hus50m,1hr,1,Specific Humidity at 50m,,URB-TIER1,,requested for urban modeling
+hus50m,day,1,Specific Humidity at 50m,,URB-TIER1,,requested for urban modeling
+hus50m,mon,1,Specific Humidity at 50m,,URB-TIER1,,requested for urban modeling
+hus700,1hr,1,Specific Humidity,I4C-TIER1,,,#T33
+hus700,3hr,1,Specific Humidity,,,CONV-CORE,
+hus700,day,1,Specific Humidity,I4C-TIER1,,,#T33
+hus850,1hr,1,Specific Humidity,I4C-TIER1,,,#T33
+hus850,3hr,1,Specific Humidity,,,CONV-CORE,
+hus850,day,1,Specific Humidity,I4C-TIER1,,,#T33
+hus925,1hr,1,Specific Humidity,I4C-TIER1,,,#T33
+hus925,3hr,1,Specific Humidity,,,CONV-CORE,
+hus925,day,1,Specific Humidity,I4C-TIER1,,,#T33
+huss,1hr,1,Near-Surface Specific Humidity,I4C-CORE,URB-CORE,CONV-CORE,#T33 #WP6
+huss,day,1,Near-Surface Specific Humidity,I4C-CORE,URB-CORE,,#T33
+huss,mon,1,Near-Surface Specific Humidity,,URB-CORE,,
+husscan,1hr,1,Near-Surface Specific Humidity within canyon,,URB-URB-RCC,,
+husscan,day,1,Near-Surface Specific Humidity within canyon,,URB-URB-RCC,,
+husscan,mon,1,Near-Surface Specific Humidity within canyon,,URB-URB-RCC,,
+ic_lightning,day,counts,Intra-cloud lightning flashes,,,CONV-TIER1,explicitly declare how the separation between IC and CG was performed
+mrro,1hr,kg m-2 s-1,Total Runoff,I4C-CORE,,CONV-CORE,#WP6
+mrros,1hr,kg m-2 s-1,Surface Runoff,I4C-CORE,,CONV-CORE,#WP6
+mrso,1hr,kg m-2,Total Soil Moisture Content,I4C-CORE,,,"#WP6 The mass of water in all phases per unit area, summed over all soil layers."
+mrso,day,kg m-2,Total Soil Moisture Content,,,CONV-CORE,"The mass of water in all phases per unit area, summed over all soil layers."
+mrsofc,fx,kg m-2,Capacity of Soil to Store Water  (Field Capacity),,URB-TIER2,CONV-CORE,
+mrsol,day,kg m-2,Total Water Content of Soil Layer,,,CONV-CORE,The mass of water in all phases in each soil layer (3D variable). Reported as missing for grid cells with no land.
+orog,fx,m,Surface Altitude,I4C-CORE,URB-CORE,CONV-CORE,#T33 #WP4 #WP6
+pr,1hr,kg m-2 s-1,Precipitation,I4C-CORE,URB-CORE,CONV-CORE,#T33 #WP4 #WP6
+pr,day,kg m-2 s-1,Precipitation,I4C-CORE,URB-CORE,,#T33 #WP4 #WP6
+pr,mon,kg m-2 s-1,Precipitation,I4C-CORE,URB-CORE,,#T33
+prc,1hr,kg m-2 s-1,Convective Precipitation,,URB-TIER1,,
+prc,day,kg m-2 s-1,Convective Precipitation,,URB-TIER1,,
+prc,mon,kg m-2 s-1,Convective Precipitation,,URB-TIER1,,
+prw,1hr,kg m-2,Water Vapor Path,,,CONV-CORE,
+ps,1hr,Pa,Surface Air Pressure,I4C-CORE,URB-CORE,,#WP6
+ps,6hr,Pa,Surface Air Pressure,,,CONV-CORE,
+ps,day,Pa,Surface Air Pressure,,URB-CORE,,
+ps,mon,Pa,Surface Air Pressure,,URB-CORE,,
+psl,1hr,Pa,Sea Level Pressure,I4C-CORE,URB-CORE,,#T33
+psl,6hr,Pa,Sea Level Pressure,,,CONV-CORE,
+psl,day,Pa,Sea Level Pressure,I4C-CORE,URB-CORE,,#T33
+psl,mon,Pa,Sea Level Pressure,,URB-CORE,,
+rlds,1hr,W m-2,Surface Downwelling Longwave Radiation,I4C-CORE,URB-CORE,CONV-CORE,#T33 #WP6
+rlds,day,W m-2,Surface Downwelling Longwave Radiation,I4C-CORE,URB-CORE,,#T33 #WP6
+rlds,mon,W m-2,Surface Downwelling Longwave Radiation,,URB-CORE,,
+rlus,1hr,W m-2,Surface Upwelling Longwave Radiation,,,CONV-CORE,
+rootd,fx,m,Maximum Root Depth,,,CONV-CORE,
+rsds,1hr,W m-2,Surface Downwelling Shortwave Radiation,I4C-CORE,URB-CORE,CONV-CORE,#T33 #WP6
+rsds,day,W m-2,Surface Downwelling Shortwave Radiation,I4C-CORE,URB-CORE,,#T33 #WP6
+rsds,mon,W m-2,Surface Downwelling Shortwave Radiation,,URB-CORE,,
+rsus,1hr,W m-2,Surface Upwelling Shortwave Radiation,,,CONV-CORE,
+sfcWind,1hr,m s-1,Near-Surface Wind Speed,I4C-CORE,URB-CORE,,#T33 #WP6
+sfcWind,day,m s-1,Near-Surface Wind Speed,I4C-CORE,URB-CORE,,#T33 #WP4 #WP6
+sfcWind,mon,m s-1,Near-Surface Wind Speed,I4C-CORE,URB-CORE,,#T33
+sfcWindcan,1hr,m s-1,Near-Surface Wind Speed within canyon,,URB-URB-RCC,,
+sfcWindcan,day,m s-1,Near-Surface Wind Speed within canyon,,URB-URB-RCC,,
+sfcWindcan,mon,m s-1,Near-Surface Wind Speed within canyon,,URB-URB-RCC,,
+sfcWindmax,day,m s-1,Daily Maximum Near-Surface Wind Speed,,,CONV-CORE,Maximum from all integrated time steps per day
+sftgif,fx,%,Percentage of the Grid Cell Covered by Glacier,,,CONV-CORE,
+sftlaf,fx,%,Percentage of the Grid Cell Occupied by Lake,,URB-TIER2,,not in CMIP or in CF
+sftlf,fx,%,Percentage of the Grid Cell Occupied by Land,I4C-CORE,URB-CORE,CONV-CORE,#T33 #WP4 #WP6
+sfturf,fx,%,Percentage of the Grid Cell Occupied by Urban Area,I4C-TIER2,URB-CORE,,#T33 #WP4 #WP6 not in CMIP or in CF
+snc,day,%,Snow Area Percentage,,,CONV-CORE,
+snd,day,m,Snow Depth,,,CONV-CORE,
+snw,1hr,kg m-2,Surface Snow Amount,I4C-CORE,,,#WP6
+ta1000,1hr,K,Air Temperature,I4C-TIER1,,,#T33
+ta1000,3hr,K,Air Temperature,,,CONV-CORE,
+ta1000,6hr,K,Air Temperature,,URB-TIER1,,
+ta1000,day,K,Air Temperature,I4C-TIER1,URB-TIER1,,#T33
+ta1000,mon,K,Air Temperature,,URB-TIER1,,
+ta200,1hr,K,Air Temperature,I4C-TIER1,,,#T33
+ta200,3hr,K,Air Temperature,,,CONV-CORE,
+ta200,day,K,Air Temperature,I4C-TIER1,,,#T33
+ta500,1hr,K,Air Temperature,I4C-TIER1,,,#T33
+ta500,3hr,K,Air Temperature,,,CONV-CORE,
+ta500,day,K,Air Temperature,I4C-TIER1,,,#T33
+ta50m,1hr,K,Air Temperature at 50m,,URB-TIER1,,requested for urban modeling
+ta50m,day,K,Air Temperature at 50m,,URB-TIER1,,requested for urban modeling
+ta50m,mon,K,Air Temperature at 50m,,URB-TIER1,,requested for urban modeling
+ta700,1hr,K,Air Temperature,I4C-TIER1,,,#T33
+ta700,3hr,K,Air Temperature,,,CONV-CORE,
+ta700,6hr,K,Air Temperature,,URB-TIER1,,
+ta700,day,K,Air Temperature,I4C-TIER1,URB-TIER1,,#T33
+ta700,mon,K,Air Temperature,,URB-TIER1,,
+ta850,1hr,K,Air Temperature,I4C-TIER1,,,#T33
+ta850,3hr,K,Air Temperature,,,CONV-CORE,
+ta850,6hr,K,Air Temperature,,URB-TIER1,,
+ta850,day,K,Air Temperature,I4C-TIER1,URB-TIER1,,#T33
+ta850,mon,K,Air Temperature,,URB-TIER1,,
+ta925,1hr,K,Air Temperature,I4C-TIER1,,,#T33
+ta925,3hr,K,Air Temperature,,,CONV-CORE,
+ta925,6hr,K,Air Temperature,,URB-TIER1,,
+ta925,day,K,Air Temperature,I4C-TIER1,URB-TIER1,,#T33
+ta925,mon,K,Air Temperature,,URB-TIER1,,
+tas,1hr,K,Near-Surface Air Temperature,I4C-CORE,URB-CORE,CONV-CORE,#T33 #WP4 #WP6
+tas,day,K,Near-Surface Air Temperature,I4C-CORE,URB-CORE,,#T33 #WP4 #WP6
+tas,mon,K,Near-Surface Air Temperature,I4C-CORE,URB-CORE,,#T33
+tasblue,1hr,K,Near-surface temperature blue spaces,,URB-URB-RCC,,
+tasblue,day,K,Near-surface temperature blue spaces,,URB-URB-RCC,,
+tasblue,mon,K,Near-surface temperature blue spaces,,URB-URB-RCC,,
+tascan,1hr,K,Near-surface temperature within canyon,,URB-URB-RCC,,
+tascan,day,K,Near-surface temperature within canyon,,URB-URB-RCC,,
+tascan,mon,K,Near-surface temperature within canyon,,URB-URB-RCC,,
+tasgree,1hr,K,Near-surface temperature green spaces,,URB-URB-RCC,,
+tasgree,day,K,Near-surface temperature green spaces,,URB-URB-RCC,,
+tasgree,mon,K,Near-surface temperature green spaces,,URB-URB-RCC,,
+tasmax,1hr,K,Daily Maximum Near-Surface Air Temperature,,URB-CORE,,maximum from all integrated time steps per day
+tasmax,day,K,Daily Maximum Near-Surface Air Temperature,I4C-CORE,URB-CORE,CONV-CORE,#T33 #WP4 maximum from all integrated time steps per day
+tasmax,mon,K,Daily Maximum Near-Surface Air Temperature,,URB-CORE,,maximum from all integrated time steps per day
+tasmin,1hr,K,Daily Minimum Near-Surface Air Temperature,,URB-CORE,,minimum from all integrated time steps per day
+tasmin,day,K,Daily Minimum Near-Surface Air Temperature,I4C-CORE,URB-CORE,CONV-CORE,#T33 #WP4 minimum from all integrated time steps per day
+tasmin,mon,K,Daily Minimum Near-Surface Air Temperature,,URB-CORE,,minimum from all integrated time steps per day
+taspav,1hr,K,Near-surface temperature pavements,,URB-URB-RCC,,
+taspav,day,K,Near-surface temperature pavements,,URB-URB-RCC,,
+taspav,mon,K,Near-surface temperature pavements,,URB-URB-RCC,,
+tasroof,1hr,K,Near-surface temperature roof,,URB-URB-RCC,,
+tasroof,day,K,Near-surface temperature roof,,URB-URB-RCC,,
+tasroof,mon,K,Near-surface temperature roof,,URB-URB-RCC,,
+total_lightning,day,counts,Total number lightning flashes,,,CONV-TIER1,if supplying ic_lightning and cg_lightning just add these
+ts,1hr,K,Surface Temperature,,URB-CORE,CONV-CORE,
+ts,day,K,Surface Temperature,I4C-TIER1,URB-CORE,,#T33
+ts,mon,K,Surface Temperature,I4C-TIER1,URB-CORE,,#T33
+tsblue,1hr,K,Surface temperature blue spaces,,URB-URB-RCC,,
+tsblue,day,K,Surface temperature blue spaces,,URB-URB-RCC,,
+tsblue,mon,K,Surface temperature blue spaces,,URB-URB-RCC,,
+tsgree,1hr,K,Surface temperature green spaces,,URB-URB-RCC,,
+tsgree,day,K,Surface temperature green spaces,,URB-URB-RCC,,
+tsgree,mon,K,Surface temperature green spaces,,URB-URB-RCC,,
+tsl,6hr,K,Temperature of Soil,,URB-TIER1,,Temperature of each soil layer (3D variable). Reported as missing for grid cells with no land.
+tsl,day,K,Temperature of Soil,,URB-TIER1,,Temperature of each soil layer (3D variable). Reported as missing for grid cells with no land.
+tsl,mon,K,Temperature of Soil,,URB-TIER1,,Temperature of each soil layer (3D variable). Reported as missing for grid cells with no land.
+tspav,1hr,K,Surface temperature pavements,,URB-URB-RCC,,
+tspav,day,K,Surface temperature pavements,,URB-URB-RCC,,
+tspav,mon,K,Surface temperature pavements,,URB-URB-RCC,,
+tsroof,1hr,K,Surface temperature roof,,URB-URB-RCC,,
+tsroof,day,K,Surface temperature roof,,URB-URB-RCC,,
+tsroof,mon,K,Surface temperature roof,,URB-URB-RCC,,
+tsskin,1hr,K,Skin temperature,,URB-URB-RCC,,
+tsskin,day,K,Skin temperature,,URB-URB-RCC,,
+tsskin,mon,K,Skin temperature,,URB-URB-RCC,,
+ua1000,1hr,m s-1,Eastward Wind,I4C-TIER1,,,#T33
+ua1000,3hr,m s-1,Eastward Wind,,,CONV-CORE,
+ua1000,6hr,m s-1,Eastward Wind,,URB-TIER1,,
+ua1000,day,m s-1,Eastward Wind,I4C-TIER1,URB-TIER1,,#T33
+ua1000,mon,m s-1,Eastward Wind,,URB-TIER1,,
+ua100m,1hr,m s-1,Eastward Wind at 100m,,,CONV-CORE,
+ua200,1hr,m s-1,Eastward Wind,I4C-TIER1,,,#T33
+ua200,3hr,m s-1,Eastward Wind,,,CONV-CORE,
+ua200,day,m s-1,Eastward Wind,I4C-TIER1,,,#T33
+ua500,1hr,m s-1,Eastward Wind,I4C-TIER1,,,#T33
+ua500,3hr,m s-1,Eastward Wind,,,CONV-CORE,
+ua500,day,m s-1,Eastward Wind,I4C-TIER1,,,#T33 #WP4
+ua50m,1hr,m s-1,Eastward Wind at 50m,,URB-TIER1,,
+ua50m,day,m s-1,Eastward Wind at 50m,,URB-TIER1,,
+ua50m,mon,m s-1,Eastward Wind at 50m,,URB-TIER1,,
+ua700,1hr,m s-1,Eastward Wind,I4C-TIER1,,,#T33
+ua700,3hr,m s-1,Eastward Wind,,,CONV-CORE,
+ua700,6hr,m s-1,Eastward Wind,,URB-TIER1,,
+ua700,day,m s-1,Eastward Wind,I4C-TIER1,URB-TIER1,,#T33
+ua700,mon,m s-1,Eastward Wind,,URB-TIER1,,
+ua850,1hr,m s-1,Eastward Wind,I4C-TIER1,,,#T33
+ua850,3hr,m s-1,Eastward Wind,,,CONV-CORE,
+ua850,6hr,m s-1,Eastward Wind,,URB-TIER1,,
+ua850,day,m s-1,Eastward Wind,I4C-TIER1,URB-TIER1,,#T33
+ua850,mon,m s-1,Eastward Wind,,URB-TIER1,,
+ua925,1hr,m s-1,Eastward Wind,I4C-TIER1,,,#T33
+ua925,3hr,m s-1,Eastward Wind,,,CONV-CORE,
+ua925,6hr,m s-1,Eastward Wind,,URB-TIER1,,
+ua925,day,m s-1,Eastward Wind,I4C-TIER1,URB-TIER1,,#T33
+ua925,mon,m s-1,Eastward Wind,,URB-TIER1,,
+uas,1hr,m s-1,Eastward Near-Surface Wind,I4C-CORE,URB-CORE,CONV-CORE,#T33 #WP6
+uas,day,m s-1,Eastward Near-Surface Wind,I4C-CORE,URB-CORE,,#T33 #WP6
+uas,mon,m s-1,Eastward Near-Surface Wind,I4C-CORE,URB-CORE,,#T33
+va1000,1hr,m s-1,Northward Wind,I4C-TIER1,,,#T33
+va1000,3hr,m s-1,Northward Wind,,,CONV-CORE,
+va1000,6hr,m s-1,Northward Wind,,URB-TIER1,,
+va1000,day,m s-1,Northward Wind,I4C-TIER1,URB-TIER1,,#T33
+va1000,mon,m s-1,Northward Wind,,URB-TIER1,,
+va100m,1hr,m s-1,Northward Wind at 100m,,,CONV-CORE,
+va200,1hr,m s-1,Northward Wind,I4C-TIER1,,,#T33
+va200,3hr,m s-1,Northward Wind,,,CONV-CORE,
+va200,day,m s-1,Northward Wind,I4C-TIER1,,,#T33
+va500,1hr,m s-1,Northward Wind,I4C-TIER1,,,#T33
+va500,3hr,m s-1,Northward Wind,,,CONV-CORE,
+va500,day,m s-1,Northward Wind,I4C-TIER1,,,#T33 #WP4
+va50m,1hr,m s-1,Northward Wind at 50m,,URB-TIER1,,
+va50m,day,m s-1,Northward Wind at 50m,,URB-TIER1,,
+va50m,mon,m s-1,Northward Wind at 50m,,URB-TIER1,,
+va700,1hr,m s-1,Northward Wind,I4C-TIER1,,,#T33
+va700,3hr,m s-1,Northward Wind,,,CONV-CORE,
+va700,6hr,m s-1,Northward Wind,,URB-TIER1,,
+va700,day,m s-1,Northward Wind,I4C-TIER1,URB-TIER1,,#T33
+va700,mon,m s-1,Northward Wind,,URB-TIER1,,
+va850,1hr,m s-1,Northward Wind,I4C-TIER1,,,#T33
+va850,3hr,m s-1,Northward Wind,,,CONV-CORE,
+va850,6hr,m s-1,Northward Wind,,URB-TIER1,,
+va850,day,m s-1,Northward Wind,I4C-TIER1,URB-TIER1,,#T33
+va850,mon,m s-1,Northward Wind,,URB-TIER1,,
+va925,1hr,m s-1,Northward Wind,I4C-TIER1,,,#T33
+va925,3hr,m s-1,Northward Wind,,,CONV-CORE,
+va925,6hr,m s-1,Northward Wind,,URB-TIER1,,
+va925,day,m s-1,Northward Wind,I4C-TIER1,URB-TIER1,,#T33
+va925,mon,m s-1,Northward Wind,,URB-TIER1,,
+vas,1hr,m s-1,Northward Near-Surface Wind,I4C-CORE,URB-CORE,CONV-CORE,#T33 #WP6
+vas,day,m s-1,Northward Near-Surface Wind,I4C-CORE,URB-CORE,,#T33 #WP6
+vas,mon,m s-1,Northward Near-Surface Wind,I4C-CORE,URB-CORE,,#T33
+wa1000,3hr,m s-1,Upward Air Velocity,,,CONV-CORE,
+wa200,3hr,m s-1,Upward Air Velocity,,,CONV-CORE,
+wa500,3hr,m s-1,Upward Air Velocity,,,CONV-CORE,
+wa700,3hr,m s-1,Upward Air Velocity,,,CONV-CORE,
+wa850,3hr,m s-1,Upward Air Velocity,,,CONV-CORE,
+wa925,3hr,m s-1,Upward Air Velocity,,,CONV-CORE,
+wsgmax100m,day,m s-1,Maximum wind speed of gust at 100m,,,CONV-TIER1,new variable to include wind at turbine height
+wsgsmax,1hr,m s-1,Daily Maximum Near-Surface Wind Speed of Gust,,,CONV-CORE,
+wsgsmax,day,m s-1,Daily Maximum Near-Surface Wind Speed of Gust,,,CONV-CORE,
+z0,day,m,Surface Roughness Length,,URB-CORE,,
+z0,mon,m,Surface Roughness Length,,URB-CORE,,
+zg1000,6hr,m,Geopotential Height,,URB-TIER1,CONV-CORE,
+zg1000,day,m,Geopotential Height,,URB-TIER1,,
+zg1000,mon,m,Geopotential Height,,URB-TIER1,,
+zg200,6hr,m,Geopotential Height,,,CONV-CORE,
+zg500,1hr,m,Geopotential Height,I4C-TIER1,,,#T33
+zg500,6hr,m,Geopotential Height,,,CONV-CORE,
+zg500,day,m,Geopotential Height,I4C-TIER1,,,#T33
+zg700,1hr,m,Geopotential Height,I4C-TIER1,,,#T33
+zg700,6hr,m,Geopotential Height,,URB-TIER1,CONV-CORE,
+zg700,day,m,Geopotential Height,I4C-TIER1,URB-TIER1,,#T33
+zg700,mon,m,Geopotential Height,,URB-TIER1,,
+zg850,1hr,m,Geopotential Height,I4C-TIER1,,,#T33
+zg850,6hr,m,Geopotential Height,,URB-TIER1,CONV-CORE,
+zg850,day,m,Geopotential Height,I4C-TIER1,URB-TIER1,,#T33
+zg850,mon,m,Geopotential Height,,URB-TIER1,,
+zg925,1hr,m,Geopotential Height,I4C-TIER1,,,#T33
+zg925,6hr,m,Geopotential Height,,URB-TIER1,CONV-CORE,
+zg925,day,m,Geopotential Height,I4C-TIER1,URB-TIER1,,#T33
+zg925,mon,m,Geopotential Height,,URB-TIER1,,
+zmla,1hr,m,Height of Boundary Layer,,URB-TIER1,CONV-TIER1,
+zmla,day,m,Height of Boundary Layer,,URB-TIER1,,
+zmla,mon,m,Height of Boundary Layer,,URB-TIER1,,

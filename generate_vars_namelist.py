@@ -18,6 +18,8 @@
 #
 # Contact: milovacj@unican.es
 
+wrfpress_levels=[1000, 925, 850, 700, 500, 200]
+
 def print_instructions():
     """Prints instructions."""
     instructions = """
@@ -26,13 +28,13 @@ def print_instructions():
 
     Options:
         custom <variables>  (list variables in form - var1 var2 var3 ...)
-    		output: runctrl.vars.custom.nml
+            output: runctrl.vars.custom.nml
 
         <variable>  (list variable in form - var1)
-		output: runctrl.vars.var1.nml
-		
+        output: runctrl.vars.var1.nml
+
         <variable_list>  (one of already set variable lists, e.g. - core)
-		output: runctrl.vars.variable_list.nml    
+        output: runctrl.vars.variable_list.nml    
 
             variable_lists:
                 core, trier1, trier2, 
@@ -46,7 +48,7 @@ def generate_namelist(varlist, nvars):
     
     # Set header and footer:
     header = "&vars\n"
-    footer = "/"
+    footer = "/\n"
     
     # Set titles:
     titles = [
@@ -59,6 +61,8 @@ def generate_namelist(varlist, nvars):
         '   height',
         '   plevel',
         '   positive',
+        '   timefx',
+        '   cmfx',
         '   time1hr',
         '   cm1hr',
         '   time3hr',
@@ -138,7 +142,8 @@ def create_vararray(varname, filepath):
             elif "min" in varname:
                 cm1hr = cm3hr = cm6hr = cmDay = "'min'"
             else:
-                cm1hr = cm3hr = cm6hr = cmDay = "'point'"
+                cm1hr = cm3hr = cm6hr = "'point'"
+                cmDay = "'mean'"
                 
             if "down" in entry['standard_name'] or \
             "incoming" in entry['standard_name'] or \
@@ -149,20 +154,32 @@ def create_vararray(varname, filepath):
             "outgoing"  in entry['standard_name']:
                 positive = f"'up'"
             else:
-                positive = f"'-999'"  
+                positive = f"'-999'"                
+             
                 
-            height = find_height(entry['WRF variable']) 
-            plevel = "-999"
+            height="-999"                 
+            plevel="-999"
             
-            for name in ["ua","va","wa","ta","zg"]:
+            if any(char.isdigit() for char in entry['WRF variable']):
+                height = find_height(entry['WRF variable'])  
+              
+            
+            for name in ["ua","va","wa","ta","zg","hus"]:
                 if name in varname:
-                    if "m" in varname:
+                    if "m" in varname:       
                         height = find_height(varname)
-                        plevel = "-999"
                     else:
-                        height = "-999"
-                        plevel = find_height(varname)
-            
+                        plevel = find_height(varname)                          
+                         
+            if "tasmax" in varname or "tasmin" in varname:
+                #ftype="'x'"
+                ftype="'s'"
+            elif plevel != "-999" and "wa" not in varname and plevel in map(str, wrfpress_levels): 
+                ftype="'p'"                 
+            else:
+                ftype="'s'"            
+                                         
+
             vararray = ["999",\
                         f"'{entry['WRF variable']}'",\
                         f"'{entry['output variable name']}'",\
@@ -172,19 +189,21 @@ def create_vararray(varname, filepath):
                        height,\
                        plevel,\
                        positive,\
-                       map_to_tf(entry['1hr']),\
+                       "T",\
+                       "'point'",
+                       "T",\
                        cm1hr,\
-                       map_to_tf(entry['3hr']),\
+                       "T",\
                        cm3hr,\
-                       map_to_tf(entry['6hr']),\
+                       "T",\
                        cm6hr,\
-                       map_to_tf(entry['day']),\
+                       "T",\
                        cmDay,\
-                       map_to_tf(entry['mon']),\
+                       "T",\
                        "'mean'",\
                        "F",\
                        "'mean'",\
-                       "'s'",\
+                       ftype,\
                        "T",\
                       ]   
             return vararray
@@ -283,39 +302,32 @@ varlists_dic = {
     'trier2_fx': trier2_fx,
 }
 
-# Read the command line aqrguments:
-if len(sys.argv) < 2:
-    print("  Argument is missing")
-    print("  Try again with providing the list of variables as an argument")
-    print_instructions()
-    sys.exit()
-else:	
-    if sys.argv[1] == "custom":
-        varnames = sys.argv[2:]  	
-        fname = sys.argv[1]  
+def write_namelist_file(filepath, template):
+    try:
+        with open(filepath, "w") as f:
+            f.write(template)
+        print(f"Namelist file created successfully at {filepath}")
+    except Exception as e:
+        print(f"Error writing namelist file: {e}")
+
+def main():
+    if len(sys.argv) < 2:
+        print("Error: Too few arguments")
+        print_instructions()
+        sys.exit(1)
+
+    filepath = "CORDEX_CMIP6_variables.csv"
+    varlist = sys.argv[1:]
+    output_file = f"runctrl.vars.{varlist[0]}.nml"
+
+    print(f"Processing variables: {varlist}")
+
+    vararray = create_multi_vararray(filepath, *varlist)
+    if vararray:
+        template = generate_namelist(vararray, len(vararray))
+        write_namelist_file(output_file, template)
     else:
-        varnames = sys.argv[1:]  
-        fname = sys.argv[1] 
+        print("No valid variables found to process")
 
-# Read the list of variables
-varnames = varlists_dic.get(varnames[0], tuple(varnames))
-
-# csv files with the CORDEX variables
-filepath   = "CORDEX_CMIP6_variables.csv"
-
-# E.g. generate namelist for core variables
-varlist_array = create_multi_vararray(filepath, *varnames)
-namelist_content = generate_namelist(varlist_array, len(varlist_array))
-
-# Specify the file path
-file_path = f'runctrl.vars.{fname}.nml'
-
-# Write the content to the file
-with open(file_path, "w") as file:
-    file.write(namelist_content)
-
-print(f"File '{file_path}' created successfully.")
-
-
-
-
+if __name__ == "__main__":
+    main()
