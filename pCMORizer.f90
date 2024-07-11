@@ -26,8 +26,6 @@ MODULE RefTimeVecs
   SAVE
 
   REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: TimeRefArray
-  !DOUBLE PRECISION, DIMENSION(:,:), ALLOCATABLE :: TimeRefArray
-  !INTEGER :: Tyear_start, Tyear_end
 
 END MODULE RefTimeVecs
 
@@ -42,18 +40,19 @@ MODULE NamelistHandling
 ! reading from runctrl.current.nml 
   INTEGER, PARAMETER :: nvars = 39 ! 39 maximum number of vars per namelist, keep const at max number
 
-  CHARACTER (len = 300) :: Conventions, conventionsURL, contact, experiment, &
-    driving_experiment, experiment_id, driving_model_id, driving_model_ensemble_member, &
-    driving_experiment_name, institution, institute_id, model_id, &
-    rcm_version_id, project_id, CORDEX_domain, product, references
+  CHARACTER (len = 300) :: activity_id, contact, Conventions, domain_id, att_domain, &
+  	driving_experiment_id,driving_experiment, &
+  	driving_institution_id, driving_source_id, driving_variant_label, grid, institution, &
+  	institution_id, license, mip_era, product, project_id, source, &
+  	source_id, source_type, version, version_realization, references, tracking_id, &
+	variable_id
 
-  CHARACTER (len = 1000) :: title, institute_run_id, comment, &
-    nesting_levels, comment_nesting, comment_1nest, comment_2nest
+  CHARACTER (len = 1000) :: comment
 
-  CHARACTER (len = 300) :: DirInputSimResRoot, DirOutputPostProRoot, domain
+  CHARACTER (len = 300) :: DirInputSimResRoot, DirOutputPostProRoot, domain, calendar
   
 ! Josipa: Add npl variables to read number of pressure levels in wrfpress file 
-  INTEGER ::  nx, ny, nz, npl, xoffset, yoffset, xfocus, yfocus
+  INTEGER ::  nx, ny, nz, npl, xoffset, yoffset, xfocus, yfocus, nfiles
   CHARACTER (len = 4) :: ts, te
   CHARACTER (len = 19) :: tstot, tetot
   CHARACTER (len = 300) :: PnFnGeo
@@ -66,21 +65,19 @@ MODULE NamelistHandling
 
 ! reading from runctrl.vars.nml*
   CHARACTER (LEN = 100), DIMENSION(nvars) :: var_wrf, var_cmip, standard_name, &
-    long_name, units, filetype, cm1hr, cm3hr, cm6hr, cmDay, cmMon, cmSea, positive
+    long_name, units, filetype, cmfx, cm1hr, cm3hr, cm6hr, cmDay, cmMon, cmSea, positive
   INTEGER, DIMENSION(nvars):: height, plevel, cordexID
   LOGICAL, DIMENSION(nvars):: time1hr, time3hr, time6hr, timeDay, timeMon, timeSea, &
-     interpolate
+     interpolate, timefx
 
-  NAMELIST / globalvars / Conventions, contact, experiment_id, experiment, &
-    driving_experiment, driving_model_id, driving_model_ensemble_member, &
-    driving_experiment_name, institution, institute_id, model_id, &
-    rcm_version_id, project_id, CORDEX_domain, product, references, &
-    conventionsURL
+  NAMELIST / globalvars / activity_id, contact, Conventions, domain_id, att_domain, &
+  driving_experiment_id,driving_experiment, &
+  driving_institution_id, driving_source_id, driving_variant_label, grid, institution, &
+  institution_id, license, mip_era, product, project_id, source, &
+  source_id, source_type, version, version_realization, references, &
+  comment
 
-  NAMELIST / globalvars_additional / comment, institute_run_id, title, &
-    nesting_levels, comment_nesting, comment_1nest, comment_2nest
-
-  NAMELIST / filesystem / DirInputSimResRoot, DirOutputPostProRoot, domain
+  NAMELIST / filesystem / DirInputSimResRoot, DirOutputPostProRoot, domain, calendar
 
   NAMELIST / model_config / ts, te, nx, ny, nz, npl, xoffset, yoffset, xfocus, &
     yfocus, tstot, tetot
@@ -91,8 +88,8 @@ MODULE NamelistHandling
     aggregation_individually, tsact, teact
     
   NAMELIST / vars / var_wrf, var_cmip, standard_name, long_name, units, &
-    plevel, height, time1hr, time3hr, time6hr, timeDay, timeMon, timeSea, filetype, &
-    cm1hr, cm3hr, cm6hr, cmDay, cmMon, cmSea, interpolate, cordexID, positive
+    plevel, height, time1hr, time3hr, time6hr, timeDay, timeMon, timeSea, timefx, &
+    filetype, cmfx, cm1hr, cm3hr, cm6hr, cmDay, cmMon, cmSea, interpolate, cordexID, positive
 
 END MODULE NamelistHandling
 
@@ -163,63 +160,109 @@ END INTERFACE
 ! loop; create symbolic links to have different base namelists, depending on the
 ! dataset and experiment
 
-CHARACTER (len = *), PARAMETER :: fnNMLexp = "runctrl.current.nml"
-CHARACTER (len = 100), DIMENSION(:), ALLOCATABLE :: fnNMLvar
-CHARACTER (len = 200) :: pn_out, fn_out, iflWRFin
+CHARACTER (LEN=*), PARAMETER :: fnNMLexp = "runctrl.current.nml"
+CHARACTER (LEN=100), DIMENSION(:), ALLOCATABLE :: fnNMLvar
+CHARACTER (LEN=200) :: pn_out, fn_out, iflWRFin
+
+! Choose how psl is calculated, 0 OK, 1 OK, 2 OK, no not change throughout
+INTEGER :: calc_slp_type = 2 
+
+! (HTr): Choose how geopotantial height and hus is vertically interpolated to given pressure levels
+INTEGER :: vint_type = 1
 
 !-------------------------------------------------------------------------------
-
-REAL, PARAMETER :: cp = 1004.0 ! [J kg-1 K-1]
-REAL, PARAMETER :: R = 287.04 ! [J kg-1 K-1]
-REAL, PARAMETER :: L = 2501000.0 ! [J kg-1]
-REAL, PARAMETER :: a = 610.78 ! [Pa]
-REAL, PARAMETER :: b = 17.27 ! 17.2693882
-REAL, PARAMETER :: c = 273.15 !
-REAL, PARAMETER :: d = 35.86 !
-REAL, PARAMETER :: n = L*0.622*a/cp !
-REAL, PARAMETER :: mv = 1.e20 ! missing value as specified
+! constants 
+REAL, PARAMETER :: cp = 1004.0      ! [J kg-1 K-1]
+REAL, PARAMETER :: R = 287.04       ! [J kg-1 K-1]
+REAL, PARAMETER :: L = 2501000.0    ! [J kg-1]
+REAL, PARAMETER :: a = 610.78       ! [Pa]
+REAL, PARAMETER :: b = 17.27        ! 17.2693882
+REAL, PARAMETER :: c = 273.15  
+REAL, PARAMETER :: d = 35.86  
+REAL, PARAMETER :: n = L*0.622*a/cp 
+REAL, PARAMETER :: mv = 1.e20       ! missing value as specified
 REAL, PARAMETER :: gr = 9.81
 REAL, PARAMETER :: epsil = 0.6220
-
-! auxilliary vars, just needed during development
-! INTEGER, PARAMETER :: nt = 8
+REAL, PARAMETER :: erad=6370000.
 
 ! constants for hurs calc
-real(kind=8), parameter :: a1=-2.8365744e3,a2=-6.028076559e3,a3=19.54263612,a4=-2.737830188e-2
-real(kind=8), parameter :: a5=1.6261698e-5,a6=7.0229056e-10,a7=-1.8680009e-13,a8=2.7150305
-real(kind=8), parameter :: b1=-5.8666426e3,b2=22.32870244,b3=1.39387003e-2,b4=-3.4262402e-5
-real(kind=8), parameter :: b5=2.7040955e-8,b6=6.7063522e-1
-real(kind=8), parameter :: fi1=3.62183e-4,fi2=2.6061244e-5,fi3=3.8667770e-7,fi4=3.8268958e-9,fi5=-10.7604,fi6=6.3987441e-2,fi7=-2.6351566e-4,fi8=1.6725084e-6
-real(kind=8), parameter :: fw1=3.536240e-4,fw2=2.932836e-5,fw3=2.616898e-7,fw4=8.581361e-9,fw5=-10.75880,fw6=6.326813e-2,fw7=-2.536893e-4,fw8=6.340529e-7
+REAL(KIND=8), PARAMETER :: a1=-2.8365744e3,a2=-6.028076559e3,a3=19.54263612,a4=-2.737830188e-2
+REAL(KIND=8), PARAMETER :: a5=1.6261698e-5,a6=7.0229056e-10,a7=-1.8680009e-13,a8=2.7150305
+REAL(KIND=8), PARAMETER :: b1=-5.8666426e3,b2=22.32870244,b3=1.39387003e-2,b4=-3.4262402e-5
+REAL(KIND=8), PARAMETER :: b5=2.7040955e-8,b6=6.7063522e-1
+REAL(KIND=8), PARAMETER :: fi1=3.62183e-4,fi2=2.6061244e-5,fi3=3.8667770e-7,fi4=3.8268958e-9,fi5=-10.7604,fi6=6.3987441e-2,fi7=-2.6351566e-4,fi8=1.6725084e-6
+REAL(KIND=8), PARAMETER :: fw1=3.536240e-4,fw2=2.932836e-5,fw3=2.616898e-7,fw4=8.581361e-9,fw5=-10.75880,fw6=6.326813e-2,fw7=-2.536893e-4,fw8=6.340529e-7
+
 ! new netCDF file
 INTEGER :: ncid, ncidin, ncidin0
 INTEGER :: lon_dimid, lat_dimid, rec_dimid, height_dimid, &
   nb2_dimid, x_dimid, y_dimid, plev_dimid, depth_dimid
-!Josipa: Add lambert_varid for LCC projection, hgt_varid, pl_varid
+
 INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, hgt_varid, &
   rotated_pole_varid, lambert_varid, height_varid, rec_varid, pp_varid, pb_varid, ph_varid, &
   phb_varid, pl_varid, pl_varid_u, pl_varid_v, qv_varid, qc_varid, qi_varid, qr_varid, &
   qs_varid, theta_varid, t2_varid, recbnds_varid, rainnc_varid, &
-  rainc_varid, snownc_varid, u10_varid, v10_varid, u_varid, v_varid, w_varid, &
+  rainc_varid, u10_varid, v10_varid, u_varid, v_varid, w_varid, &
   sfcevp_varid, potevp_varid, sfroff_varid, udroff_varid, acsnom_varid, q2_varid, &
   sinalpha_varid, cosalpha_varid, plev_varid, plevbnds_varid, psfc_varid, &
-  depth_varid, soillayerbnds_varid, cd_varid ! , xland_varid, swdown_varid, landmask_varid
+  depth_varid, soillayerbnds_varid, cd_varid, xlon_varid, ylat_varid, t00_varid, p00_varid, &
+  mask_varid
 
 ! input data general query
-INTEGER :: ncid_in, ndims_in, nvars_in, ngatts_in, unlimdimid_in !!!, formatp_in
+INTEGER :: ncid_in, ndims_in, nvars_in, ngatts_in, unlimdimid_in
+INTEGER :: InVarIdRec, InDimLenRec 
+INTEGER :: nvar_nml 
 
-! inputs, number of elements
-INTEGER :: nvar_nml
-! record variable in input data
-INTEGER :: InVarIdRec, InDimLenRec !!!, InVarNdimsRec
-CHARACTER (len = NF90_MAX_NAME) :: InDimNameRec !!!, InVarNameRec
-!!!INTEGER, DIMENSION(NF90_MAX_VAR_DIMS) :: InDimIdsRec
-CHARACTER (len = 50) :: fl_filter
-CHARACTER (len = 19), DIMENSION(:), ALLOCATABLE :: InVarDataRec
+! n of lowest vertical levels to calculate wind speed at heights > 10m, to avoid loading complete set of levels
+INTEGER, PARAMETER :: nz_lowest = 10
 
+CHARACTER (LEN=NF90_MAX_NAME) :: InDimNameRec 
+CHARACTER (LEN=50) :: fl_filter
+CHARACTER (LEN=19), DIMENSION(:), ALLOCATABLE :: InVarDataRec
+
+!-------------------------------------------------------------------------------
 ! data
+REAL :: &
+  ! geographical metadata info
+  GeoNPLon      , &
+  GeoNPLat      , &
+  GeoLat1       , &
+  GeoLat2       , &
+  GeoCenLon     , &
+  GeoCenLat     , &
+  dx_distance   , &  
+  dy_distance   , &
+  ! bucket variables
+  bucket_mm     , &
+  bucket_J      , &
+  ! tmp variable to calcualte cape and ci
+  t_ii          , &  
+  !variable to fill the missing data in variabels extracted from wrfpress
+  p_miss        , &          
+  ! vertical interpolation
+  slope     
+
+! Time vec stuff
+REAL(KIND=8), DIMENSION(:), ALLOCATABLE :: &
+  TimeRefArraySubsetMean
+REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: &
+  TimeRefArraySubset      , &   
+  Time_bnds               , &
+  tmp1_2d                 , &
+  tmp3_2d                 , &
+  tmp4_2d                 , &
+  data_in  
+
+! 1D variables 
+REAL, DIMENSION(:), ALLOCATABLE :: &
+  GeoInRLat     , & 
+  GeoInRLon     , &
+  GeoInYLat     , & 
+  GeoInXLon     , &
+  Std_parallel
+
+! 2D variables 
 REAL, DIMENSION(:,:), ALLOCATABLE :: &
- ! data_in       , &
   psl_in        , &
   t2_in         , &
   q2_in         , &
@@ -235,22 +278,18 @@ REAL, DIMENSION(:,:), ALLOCATABLE :: &
   clivi         , &
   sinalpha_in   , &
   cosalpha_in   , &
-  !!var_pl      , &
   psfc_in       , &
-  tmp_2d        , &
-  !tmp1_2d       , &
-  tmp2_2d       , &
-  !tmp3_2d       , &
-  !tmp4_2d       , &
   rainc_max_in  , &
   rainnc_max_in , &
   landmask_in   , &
-  !xland_in      , &
-  ! Josipa: Add variabels needed for wind speed at 100m height
   var2d_u       , &
   var2d_v       , &
   hgt_in        , &       
-  cd_in    
+  cd_in         , &
+  tmp_2d        , &
+  tmp2_2d       
+
+! 3D variables 
 REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   data_in_3D  , &
   pp_in       , &
@@ -271,17 +310,14 @@ REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   v_in        , &
   w_in        , &
   var3d_in    , &
-  !Josipa: add variabels to calculate wind speed at 100m
   var3d_in_u  , &
   var3d_in_v  , &
-  !var_pl      , &
   potevp_in   , &
   rainnc_in   , &
   rainc_in    , &
   rad_in      , &
   hflux_in    , &
   t_p         , &
-  snownc_in   , &
   acsnom_in   , &
   GeoInLonLat , &
   sfcevp_in   , &
@@ -289,148 +325,69 @@ REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   udroff_in   , &
   swdown_in   , &
   tmp_3d      , &
-! Josipa: add pressure level variables frpm wrfpress
   pl_in       , &
   pl_in_u     , &
-  pl_in_v
+  pl_in_v     , &
+  smois_in    , & 
+  tslb_in  
+
+
+! 4D variables
+REAL, DIMENSION(:,:,:,:), ALLOCATABLE :: &
+  cldfra_in
+
+! Base temperature of temperature and pressure
+REAL, DIMENSION(1) :: T00, P00 ! base temperature of temperature and pressure
+
+! Soil data dimension
+REAL, DIMENSION(:), ALLOCATABLE :: DZS ! soil layer thickness may vary from simulation to simulation
+REAL, DIMENSION(4) :: DZShc = (/0.1, 0.3, 0.6, 1.0/)
+
+! pressure levels [Pa]; Shorter set: REAL, DIMENSION(6) :: pout = (/100000.,92500.,85000.,70000.,50000.,20000./)
+INTEGER, PARAMETER :: num_levels = 6
+REAL, DIMENSION(num_levels) :: pout = (/1000.,925.,850.,700.,500.,200./)
 
 ! bucket system
 INTEGER, DIMENSION(:,:,:), ALLOCATABLE :: &
-  i_rainnc_in , &
-  i_rainc_in  , &
-  i_rad_in
+  i_rainnc_in, i_rainc_in, i_rad_in
 
-REAL :: bucket_mm, bucket_J 
-  
-REAL, DIMENSION(:,:,:,:), ALLOCATABLE :: &
-  cldfra_in   , &
-  smois_in
-  
-REAL, DIMENSION(:), ALLOCATABLE :: &
-  GeoInRLat   , &
-  GeoInRLon
-
-! target pressure levels [Pa]
-!REAL, DIMENSION(6) :: pout = (/100000.,92500.,85000.,70000.,50000.,20000./)
-! Josipa: extend number of vertical levels
-REAL, DIMENSION(17) :: pout = (/100000., 92500., 85000., 70000., 60000., &
-        50000., 40000., 30000., 25000., 20000., &
-        15000., 10000., 7000.,  5000.,  3000., &
-        2000.,  1000./)
-
-! time vec stuff
-REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: &
-  TimeRefArraySubset, &
-  Time_bnds
-REAL(KIND=8), DIMENSION(:), ALLOCATABLE :: &
-  TimeRefArraySubsetMean
-
-REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: &
-  tmp3_2d, tmp4_2d, tmp1_2d, data_in
-
-
-! (HTr): base state temperature is made flexible in newer versions of WRF. The
-! actual value is stored in variable T00
-! also the base state pressure (P00) is kept flexible now.
-REAL, DIMENSION(1) :: T00, P00
-INTEGER :: t00_varid, p00_varid
-
-! variable for adopted vertical interpolation
-! Josipa: Add p_miss for fill value in variables at pressure levels
-REAL :: p_miss !, zg_pout
-
-! soil layer thickness may vary from simulation to simulation
-! either DZS is read from WRF outout, or it can be hardcoded, see below
-REAL, DIMENSION(:), ALLOCATABLE :: DZS
-!REAL, DIMENSION(:), ALLOCATABLE :: DZSmp
-
-! subsurface layer thickness prescribed, e.g., compatible to ParFlow, hardcoded (hc)
-! any number of soil layers is possible
-!REAL, DIMENSION(4) :: DZShc = (/0.10D0, 0.30D0, 0.60D0, 1.00D0/)
-REAL, DIMENSION(4) :: DZShc = (/0.1, 0.3, 0.6, 1.0/)
-!REAL, DIMENSION(:,:), ALLOCATABLE :: soillayer_bnds
-
-! meta information about the geographic projection used (coordinates of the rotated pole)
-REAL :: GeoNPLat, GeoNPLon
-
-! Josipa: meta information about the geographic projection used (coordinates of the lambert projection)
-REAL :: GeoLat1, GeoLat2, GeoCenLon, GeoCenLat
-
-REAL :: t_ii, dtHours
-
+!-------------------------------------------------------------------------------
 ! time and date handling
-CHARACTER (len = 3), DIMENSION(:), ALLOCATABLE :: frequency
-!!!INTEGER :: WRFfileNyears, WRFfileNmonths
-INTEGER, DIMENSION(:), ALLOCATABLE :: InDateTimeYear, InDateTimeMonth, &
-  InDateTimeDay, InDateTimeHour, InDateTimeMinute, InDateTimeSecond      !, WRFfileIyears, WRFfileImonths
+REAL :: dtHours
+REAL(KIND=8) :: tsact_singlenumber, teact_singlenumber
 REAL, DIMENSION(:), ALLOCATABLE :: InDateTimeCombined
-CHARACTER (LEN=4) :: InDateTimeYearStr
-CHARACTER (LEN=2) :: &
-  InDateTimeMonthStr    , &
-  FirstHourStr          , &
-  FirstMinuteStr        , &
-  LastDayStr            , &
-  LastHourStr           , &
-  LastMinuteStr
+CHARACTER (LEN=4) :: InDateTimeYearStr, tsactYearStr, teactYearStr
+CHARACTER (LEN=3), DIMENSION(:), ALLOCATABLE :: frequency 
+CHARACTER (LEN=2) :: InDateTimeMonthStr, FirstHourStr, FirstMinuteStr, LastDayStr, &
+  LastHourStr, LastMinuteStr, tsactMonthStr, tsactDayStr, tsactHourStr, tsactMinuteStr, &
+  teactMonthStr, teactDayStr, teactHourStr, teactMinuteStr
+CHARACTER (LEN=12) :: FileNameStartDateTime, FileNameEndDateTime
+CHARACTER (LEN=100), DIMENSION(nvars) :: cell_methods
 INTEGER :: InDateTimeYearPrev = 0, InDateTimeMonthPrev = 0
-CHARACTER (len = 12) :: FileNameStartDateTime, FileNameEndDateTime
 INTEGER :: tsactYear, tsactMonth, tsactDay, tsactHour, tsactMinute, tsactSecond, & 
   teactYear, teactMonth, teactDay, teactHour, teactMinute, teactSecond
-CHARACTER (LEN=4) :: tsactYearStr, teactYearStr
-CHARACTER (LEN=2) :: tsactMonthStr, tsactDayStr, tsactHourStr, tsactMinuteStr, &
-  teactMonthStr, teactDayStr, teactHourStr, teactMinuteStr !, teactSecondStr, tsactSecondStr
-REAL(KIND=8) :: tsact_singlenumber, teact_singlenumber
-
-!REAL(KIND=8), DIMENSION(:), ALLOCATABLE :: tmp2D_singlenumber
-!REAL(KIND=8), DIMENSION(:,:), ALLOCATABLE :: tmp2D
-
-CHARACTER (LEN = 100), DIMENSION(nvars) :: cell_methods
+INTEGER, DIMENSION(:), ALLOCATABLE :: InDateTimeYear, InDateTimeMonth, &
+  InDateTimeDay, InDateTimeHour, InDateTimeMinute, InDateTimeSecond 
 LOGICAL, DIMENSION(nvars) :: procflag
 
-!LOGICAL :: fractSeaIce = .FALSE.
-
-!Josipa: define number of lowest verstical levels needed to calculate wind speed at heights > 10m
-INTEGER, PARAMETER :: nz_lowest = 10
-
-!-------------------------------------------------------------------------------
-! statistics
-
-REAL :: slope !stat_mean, stat_min, stat_max
-
-!-------------------------------------------------------------------------------
-! general
 ! some special switch for input handling
-! problem?
-
-INTEGER :: i, j, k, sts, ivar, ifrq, ifl, it, counter, np, nl, ii, ivarnml, &
-  prevpass = 0
+INTEGER :: i, j, k, sts, ivar, ifrq, ifl, it, counter, np, nl, ii, ivarnml, prevpass = 0
 LOGICAL :: FileExists, newpass, time_match, calc = .TRUE., inputtimesteptruncate = .FALSE.
 REAL :: cpuTs, cpuTe
 INTEGER, ALLOCATABLE :: ipos(:)
-! choose how psl is calculated, 0 OK, 1 OK, 2 OK, no not change throughout
-! see preamble for detailed information
-INTEGER :: calc_slp_type = 2 
-! (HTr): choose how geopotantial height and hus is vertically interpolated to given pressure levels
-! see preamble for detailed information
-INTEGER :: vint_type = 1
 
-!INTEGER :: deflate_level, endianness
-!logical :: contiguous, shuffle, fletcher32
-!integer :: xtype, ndims, natts
-
-CHARACTER (len = 3) :: FileNrStr
-
+#ifndef SERIAL
+CHARACTER (LEN = 3) :: FileNrStr
+#endif
 !-------------------------------------------------------------------------------
-! system calls
+! system calls for tracking ID and date
+CHARACTER (LEN=*), PARAMETER :: cmdUUID = "uuidgen -t > tmpfileUUID"
+CHARACTER (LEN=37) :: trackingID
 
-CHARACTER (len = *), PARAMETER :: cmdUUID = "uuidgen -t > tmpfileUUID"
-CHARACTER (len = 37) :: trackingID
-
-CHARACTER (len = *), PARAMETER :: cmdDate = "date -u +%Y-%m-%d-T%H:%M:%SZ > tmpfileDate"
-CHARACTER (len = 21) :: creationDate
+CHARACTER (LEN=*), PARAMETER :: cmdDate = "date -u +%Y-%m-%dT%H:%M:%SZ > tmpfileDate"
+CHARACTER (LEN=20) :: creationDate
 
 !===============================================================================
-
 
 ! MPI
 #ifndef SERIAL
@@ -458,10 +415,6 @@ PRINT *, fnNMLexp
 
 OPEN(2,FILE=fnNMLexp)
 READ(UNIT=2,NML=globalvars)
-CLOSE(2)
-
-OPEN(2,FILE=fnNMLexp)
-READ(UNIT=2,NML=globalvars_additional)
 CLOSE(2)
 
 OPEN(2,FILE=fnNMLexp)
@@ -518,19 +471,14 @@ PRINT *, "*** STATIC FIELDS ***"
 PRINT *, TRIM(PnFnGeo)
 
 ALLOCATE( GeoInLonLat(xfocus, yfocus, 2) )
-PRINT *, SHAPE(GeoInLonLat)
 ALLOCATE( landmask_in(xfocus, yfocus) )
-PRINT *, SHAPE(landmask_in)
-ALLOCATE( GeoInRLat(yfocus) )
-ALLOCATE( GeoInRLon(xfocus) )
 
-#ifdef SERIAL
-sts = NF90_OPEN(TRIM(PnFnGeo), NF90_NOWRITE, ncidin)
-#else
+#ifndef SERIAL
 sts = NF90_OPEN(TRIM(PnFnGeo), IOR(NF90_NOWRITE, NF90_MPIIO), ncidin, &
-      comm = MPI_COMM_WORLD, info = MPI_INFO_NULL )
+   comm = MPI_COMM_WORLD, info = MPI_INFO_NULL )
+#else
+sts = NF90_OPEN(TRIM(PnFnGeo), NF90_NOWRITE, ncidin)
 #endif
-
 
 sts = NF90_INQ_VARID(ncidin, "XLONG_M", varid)
 sts = NF90_GET_VAR(ncidin, varid, GeoInLonLat(:, :, 1), &
@@ -540,65 +488,58 @@ sts = NF90_INQ_VARID(ncidin, "XLAT_M", varid)
 sts = NF90_GET_VAR(ncidin, varid, GeoInLonLat(:, :, 2), &
   START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /))
 
-sts = NF90_INQ_VARID(ncidin, "CLONG", varid)
-sts = NF90_GET_VAR(ncidin, varid, GeoInRLon(:), &
-  START = (/ xoffset, 1, 1 /), COUNT = (/ xfocus, 1, 1 /))
-!PRINT *, "GeoInRLon shape (EUR-15, 339): ", SHAPE(GeoInRLon)
-!PRINT *, "GeoInRLon: ", GeoInRLon
 
-sts = NF90_INQ_VARID(ncidin, "CLAT", varid)
-sts = NF90_GET_VAR(ncidin, varid, GeoInRLat(:), &
-  START = (/ 1, yoffset, 1 /), COUNT = (/ 1, yfocus, 1 /))
-!PRINT *, "GeoInRLat shape (EUR-15, 330): ", SHAPE(GeoInRLat)
-!PRINT *, "GeoInRLat: ", GeoInRLat
 
-!sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "POLE_LAT", GeoNPLat)
-!sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "POLE_LON", GeoNPLon)
-! (2023-05-15) HTr - in all Euprean CORDEX domains POLE_LON has to set to -162 
-! (which is equivalent to +18, as it is found in WRF)
-!IF ( GeoNPLon > 0.0 ) THEN 
-!  GeoNPLon = GeoNPlon -180.0
-!END IF
- 
-!Josipa: Add options needed depending on projection  
 IF ( projection == "LCC" ) THEN
-
-  sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "TRUELAT1", GeoLat1)
-  sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "TRUELAT2", GeoLat2)
+  ALLOCATE( Std_parallel(2) )
+  sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "TRUELAT1", Std_parallel(1))
+  sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "TRUELAT2", Std_parallel(2))
   sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "CEN_LON", GeoCenLon)
   sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "CEN_LAT", GeoCenLat)
-  
+
+  sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "DX", dx_distance)
+  sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "DY", dy_distance)  
+     
+  ALLOCATE( GeoInYLat(yfocus) )
+  ALLOCATE( GeoInXLon(xfocus) )
+  DO i = 1,xfocus
+    GeoInXLon(i) = i*dx_distance - dx_distance/2 - (xfocus)*dx_distance/2
+  END DO
+  DO j = 1,yfocus
+    GeoInYLat(j) = j*dy_distance - dy_distance/2 - (yfocus)*dy_distance/2
+  END DO
+
 ELSE
+  ALLOCATE( GeoInRLat(yfocus) )
+  ALLOCATE( GeoInRLon(xfocus) )
+
+  sts = NF90_INQ_VARID(ncidin, "CLONG", varid)
+  sts = NF90_GET_VAR(ncidin, varid, GeoInRLon(:), &
+    START = (/ xoffset, 1, 1 /), COUNT = (/ xfocus, 1, 1 /))
+
+  sts = NF90_INQ_VARID(ncidin, "CLAT", varid)
+  sts = NF90_GET_VAR(ncidin, varid, GeoInRLat(:), &
+    START = (/ 1, yoffset, 1 /), COUNT = (/ 1, yfocus, 1 /))
 
   sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "POLE_LAT", GeoNPLat)
   sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "POLE_LON", GeoNPLon)
   IF ( GeoNPLon > 0.0 ) THEN 
-          GeoNPLon = GeoNPlon -180.0
+    GeoNPLon = GeoNPlon -180.0
   END IF
   
 END IF
 
-! binary, land=1, water=0, compared to LANDUSEF class 16, water fraction, 
-! >0.5 water fraction is water, including large lakes
-sts = NF90_INQ_VARID(ncidin, "LANDMASK", varid)
-sts = NF90_GET_VAR(ncidin, varid, landmask_in(:, :), &
-  START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /))
+IF (.not. ALLOCATED(sinalpha_in)) ALLOCATE( sinalpha_in( xfocus, yfocus ), STAT=sts )
+sts = NF90_INQ_VARID(ncidin, "SINALPHA", sinalpha_varid)
+sts = NF90_GET_VAR(ncidin, sinalpha_varid, sinalpha_in(:,:), &
+  START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /) )
+
+IF (.not. ALLOCATED(cosalpha_in)) ALLOCATE( cosalpha_in( xfocus, yfocus ), STAT=sts )
+sts = NF90_INQ_VARID(ncidin, "COSALPHA", cosalpha_varid)
+sts = NF90_GET_VAR(ncidin, cosalpha_varid, cosalpha_in(:,:), &
+  START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /) )
   
 sts = NF90_CLOSE(ncidin)
-
-!PRINT *, "rlon = "
-!PRINT *, SHAPE(GeoInRLon)
-!PRINT *, GeoInRLon
-
-!PRINT *, "rlat = "
-!PRINT *, SHAPE(GeoInRLat)
-!PRINT *, GeoInRLat
-
-!PRINT *, "GeoInLonLat shape = ", SHAPE(GeoInLonLat)
-!PRINT *, "lon = ", GeoInLonLat(:,:,1)
-!PRINT *, "lat = ", GeoInLonLat(:,:,2)
-
-!PRINT *, 'landmask_in shape = ', SHAPE(landmask_in)
 
 !-------------------------------------------------------------------------------
 ! setup of loop control vectors
@@ -612,59 +553,14 @@ frequency(5) = "mon"
 frequency(6) = "sem"
 frequency(7) = "fx"
 
-ALLOCATE ( fnNMLvar(22) )
-fnNMLvar(1) = "runctrl.vars.nml_pr_tas_1hr_test" ! OK
-fnNMLvar(2) = "runctrl.vars.nml_vars_on_plevels" ! OK
-fnNMLvar(3) = "runctrl.vars.nml" ! OK
-fnNMLvar(4) = "runctrl.vars.nml_pr_mrso" ! OK
-fnNMLvar(5) = "runctrl.vars.nml_minmax" ! OK
-fnNMLvar(6) = "runctrl.vars.nml_evp_roff" ! ok not yet tested: evspsbl, evspsblpot
-fnNMLvar(7) = "runctrl.vars.nml_water_column" ! OK
-fnNMLvar(8) = "runctrl.vars.nml_radiation" ! OK
-fnNMLvar(9) = "runctrl.vars.nml_snow" ! ok not yet tested in winter: sic
-fnNMLvar(10) = "runctrl.vars.nml_cape" ! OK
-fnNMLvar(11) = "runctrl.vars.nml_weathertyping"  ! new from HTr, not implemented
-fnNMLvar(12) = "runctrl.vars.nml_psl"            ! new from HTr, not implemented
-fnNMLvar(13) = "runctrl.vars.nml_Alvaro"         ! new from HTr, not implemented
-fnNMLvar(14) = "runctrl.vars.nml_alb"         ! new from HTr, not implemented
-fnNMLvar(15) = "runctrl.vars.nml_KlausStefan"         ! new from HTr, not implemented
-fnNMLvar(16) = "runctrl.vars.nml_Alvaro_200"         ! new from HTr, not implemented
-fnNMLvar(17) = "runctrl.vars.nml_Sophie"         ! new from HTr, not implemented
-fnNMLvar(18) = "runctrl.vars.std_sfc.nml"
-fnNMLvar(19) = "runctrl.vars.std_presslev.nml"
-fnNMLvar(20) = "runctrl.vars.std_minmax.nml"
-fnNMLvar(21) = "runctrl.vars.special.nml"
-fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
-
+ALLOCATE ( fnNMLvar(1) )
+fnNMLvar(1) = "runctrl.vars.nml" 
 
 !-------------------------------------------------------------------------------
-! individual vars contain information on whether they are treated or not, i.e.
-! the tool may loop over all frequencies and the namelist controls what is to 
-! be done
-! this is the outer loop as it also controls the averaging; the main processing
-! is done during the 1st pass, i.e., the tier-2 processing at dt=1h or 3h
-! ATTENTION: averaging functionality not it reintegrated
-!            during testing too lazy to set all temporally aggregated vars to 
-!            FALSE
-!            -> just run the outer loop over 1 frequency only
-
-!DO ifrq = 1, SIZE(frequency), 1 
  DO ifrq = 1, 1, 1 ! 1hr
-!DO ifrq = 4, 4, 1 ! check min/max day
 
   PRINT *, "============================================================"
   PRINT *, "freq = ", frequency(ifrq)
-
-!-------------------------------------------------------------------------------
-! - get a file list of all wrfout, wrfxtrm and wrfpress files -- if they exist
-! - use regex to refine the ls output and the filelist
-! - non-std F95, works for gfortran (fct & subroutine) + ifort
-! - in order to not check the filesystem too often, this is done at this point
-! - also the search results might be limited using the filter
-! - this can be made more efficient, but then it is not so generic anymore
-!   depending on the depth of the search path find takes some time
-! - using find in combination with a data root directory should be OK with most
-!   ways users store their files
   
   PRINT *, "============================================================"
   PRINT *, "*** FILELIST CREATION ***"
@@ -677,18 +573,9 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
   IF ( (ts == "0000") .AND. (te == "0000") ) THEN
     fl_filter = ""
   ELSE
-    !fl_filter = "{" // ts // ".." // te // "}" ! does not work with SYSTEM call
     fl_filter = ts
   END IF
   PRINT *, "fl_filter from runctrl nml: ", fl_filter
-
-  ! decisive for the filelist which in turn determines whether, e.g., the last
-  ! timestep in the output file can be generated when averaging
-  ! there is an interplay between the scripting and this pattern matching, which
-  ! has to be adjusted individually in the end
-  !CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // TRIM(ts) // " -name wrfout*" // TRIM(domain) // "*_" // "*.nc | sort > " // tmpfileFL)
-  !CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // "/" // TRIM(ts) // " -name wrfout*" // TRIM(domain) // "*_" // TRIM(fl_filter) // "*.nc | sort > " // tmpfileFL)
-  !CALL SYSTEM("find " // TRIM(DirInputSimResRoot) // "/" // TRIM(domain) // " -name wrfout*" // TRIM(domain) // "*_" // TRIM(ts) // "*.nc -o -name wrfout*" // TRIM(domain) // "*_" // TRIM(te) // "*.nc | sort > " // tmpfileFL)
 
 #ifndef SERIAL
   IF ( rank == 0 ) THEN
@@ -726,56 +613,28 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
   ft = 2
   CALL GenerateFilelist
  
-  DO i=1,SIZE(fl_wrfout(:)),1
-    PRINT '(100A)', fl_wrfout(i)
-  END DO
-  DO i=1,SIZE(fl_wrfxtr(:)),1
-    PRINT '(100A)', fl_wrfxtr(i)
-  END DO
-  DO i=1,SIZE(fl_wrfpres(:)),1
-    PRINT '(100A)', fl_wrfpres(i)
-  END DO
-  
-!-------------------------------------------------------------------------------
-! creation of the main reference array
-! independent of the actual timespan under processing
-! usually it starts earlier or at the same date/time and ends at the same 
-! date/time or later
-! input time information in WRF is 2009-06-20_00:00:00 for extremes
+  !DO i=1,SIZE(fl_wrfout(:)),1
+    !PRINT '(100A)', fl_wrfout(i)
+  !END DO
+  !DO i=1,SIZE(fl_wrfxtr(:)),1
+    !PRINT '(100A)', fl_wrfxtr(i)
+  !END DO
+  !DO i=1,SIZE(fl_wrfpres(:)),1
+    !PRINT '(100A)', fl_wrfpres(i)
+  !END DO
 
   PRINT *, "============================================================"
   PRINT *, "*** TIME REFERENCE ARRAY ***"
   
   CALL CreateRefTimeArray( frequency(ifrq) )
   
-  PRINT *, "size & shape of the TimRefArray = ", SIZE(TimeRefArray), &
+  PRINT *, "size & shape of the TimRefArray = ", &
+    SIZE(TimeRefArray), &
     SHAPE(TimeRefArray)
   PRINT *, "SIZE(TimeRefArray,1): ", SIZE(TimeRefArray,1) 
-  !PRINT *, "SHAPE(TimeRefArray,1): ", SHAPE(TimeRefArray,1)
 
 !-------------------------------------------------------------------------------
-! loop over the different namelists, each containing a specific set of related
-! variables, this offers more flexibility in using the tool than putting all
-! vars into a single namelist; choose just specific namelists from list above if
-! you want to postprocess just specific variables or create your own variable 
-! combinations
-  
-!  DO ivarnml = 1, 9, 1 ! loop over all regular namelists
-!  DO ivarnml = 2, 2, 1 ! recommended to all for first steps and testing: nml #1
-!  DO ivarnml = 17, 17, 1 ! tas and precip, only. For Sophie
-!  DO ivarnml = 3, 3, 1 ! tas and precip, only
-!  DO ivarnml = 13, 13, 1 ! Alvaro paper
-!  DO ivarnml = 15, 15, 1 ! Klaus Stefan
-!  DO ivarnml = 16, 16, 1 ! Alvaro 200 hPa
-!  DO ivarnml = 14, 14, 1 ! albedo investigations
-!  DO ivarnml = 1, 2, 1 ! ICTP paper data contrib
-!  DO ivarnml = 5, 5, 1 ! test min/max
-   DO ivarnml = 18, 18, 1 ! std sfc
-!  DO ivarnml = 19, 19, 1 ! std presslev
-!  DO ivarnml = 20, 20, 1 ! std minmax
-!  DO ivarnml = 21, 21, 1 ! special
-!  DO ivarnml = 22, 22, 1 ! std sfc test for development
-  
+   DO ivarnml = 1, 1, 1  
     PRINT *, "============================================================"
     PRINT *, "var. namelist nr. and name: ", ivarnml, TRIM(fnNMLvar(ivarnml))
 
@@ -785,8 +644,6 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
     CLOSE(2)
 
     ! must have read the namelist already
-    ! get the call methods from the namelist, determines what has to be done with 
-    ! a variable 
     SELECT CASE (frequency(ifrq))
     CASE ('1hr')
       cell_methods(:) = cm1hr(:)
@@ -812,6 +669,10 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
       STOP "seasonal aggregation not yet implemented"
       cell_methods(:) = cmSea(:)
       procflag(:) = timeSea(:)
+    CASE ('fx')
+      cell_methods(:) = cmfx(:)
+      procflag(:) = timefx(:)
+      dtHours = 1.
     CASE DEFAULT
       PRINT *, "invalid time interval specified"
       STOP
@@ -821,133 +682,74 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
     ! sequence here does not matter
     SELECT CASE (TRIM(fnNMLvar(ivarnml)))
     CASE ("runctrl.vars.nml") ! OK
-      nvar_nml = nvar !36 38  ! 2 or 13
-    CASE ("runctrl.vars.nml_evp_roff") ! ok -- see above
-      nvar_nml = 4
-    CASE ("runctrl.vars.nml_water_column") ! OK
-      nvar_nml = 3
-    CASE ("runctrl.vars.nml_vars_on_plevels") ! OK
-      nvar_nml = 36
-    CASE ("runctrl.vars.nml_pr_mrso") ! OK --> new: tsl mrlsl, from 4 to 6
-      nvar_nml = 6
-    CASE ("runctrl.vars.nml_snow") ! ok -- see above
-      nvar_nml = 6 
-    CASE ("runctrl.vars.nml_radiation") ! OK
-      nvar_nml = 10
-    CASE ("runctrl.vars.nml_cape") ! OK
-      nvar_nml = 2
-    CASE ("runctrl.vars.nml_pr_tas_1hr_test") ! OK
-      nvar_nml = 12 
-    CASE ("runctrl.vars.nml_weathertyping") ! new stuff from HTr, no nml yet available
-      nvar_nml = 6
-    CASE ("runctrl.vars.nml_psl") ! new stuff from HTr, no nml yet available
-      nvar_nml = 1
-    CASE ("runctrl.vars.nml_minmax") ! OK
-      nvar_nml = 4
-    CASE ("runctrl.vars.nml_Alvaro") 
-      nvar_nml = 27
-    CASE ("runctrl.vars.nml_alb") 
-      nvar_nml = 8
-    CASE ("runctrl.vars.nml_KlausStefan") 
-      nvar_nml = 11
-    CASE ("runctrl.vars.nml_Alvaro_200") 
-      nvar_nml = 6
-    CASE ("runctrl.vars.nml_Sophie") 
-      nvar_nml = 2
-    CASE ("runctrl.vars.std_sfc.nml") 
-      nvar_nml = 39
-    CASE ("runctrl.vars.std_presslev.nml") 
-      nvar_nml = 36
-    CASE ("runctrl.vars.std_minmax.nml") 
-      nvar_nml = 2
-    CASE ("runctrl.vars.special.nml") 
-      nvar_nml = 2
-    CASE ("runctrl.vars.std_sfc_test.nml") 
-      nvar_nml = 3
+      nvar_nml = nvar
     END SELECT
  
     PRINT *, "number of vars inside current namelist: nvar_nml = ", nvar_nml
   
-!-------------------------------------------------------------------------------
-! loop over all vars in the individual namelist
-! OR for testing choose just specific variables from namelist 
-! (look up var column position in individual namelist)
-! better avoid this kind of filtering: create a new namelist or switch the vars
-! properly on/off for the respective temporal aggregation level
-
+  !-------------------------------------------------------------------------------
+  ! loop over all vars in the individual namelist
 #ifndef SERIAL
-  ALLOCATE( ivar_list(nvar_nml) )
-  DO ivar = 1, nvar_nml, 1
-    ivar_list(ivar) = ivar
-  END DO
+    ALLOCATE( ivar_list(nvar_nml) )
+    DO ivar = 1, nvar_nml, 1
+      ivar_list(ivar) = ivar
+    END DO
 
-  CALL MPI_SCATTER( ivar_list, 1, MPI_INT, ivar, 1, MPI_INT, 0, MPI_COMM_WORLD, ierr)
-  IF ( ierr /= MPI_SUCCESS ) STOP "MPI_SCATTER"
+    CALL MPI_SCATTER( ivar_list, 1, MPI_INT, ivar, 1, MPI_INT, 0, MPI_COMM_WORLD, ierr)
+    IF ( ierr /= MPI_SUCCESS ) STOP "MPI_SCATTER"
 #else
-  DO ivar = 1, nvar_nml, 1
+    DO ivar = 1, nvar_nml, 1
 #endif
-!    DO ivar = 1, nvar_nml, 1
-!    DO ivar = 8,9, 1
   
       PRINT *,"============================================================"
       PRINT *, "*** ", TRIM(var_cmip(ivar)), procflag(ivar), " ***"
  
-      ! shall this variable be processed at all?
-      ! either control by i) including/excluding brute-force from a namelist, by 
-      ! customizing the namelist list or ii) by setting "timeXX" per temporal 
-      ! resolution/aggregation to TRUE or FALSE (=recommended way)
       IF (procflag(ivar)) THEN
-
-      !this is the place to put the ref time vec calculation to incorporate
-      !the specifics of the respective variable, like point or mean data in
-      !combinaiton with the ifrq  
  
-!-------------------------------------------------------------------------------
-! loop over the filelist
-! content of filelist is defined by filename patterns in system call
-! three types of filelists: fl_wrfout, fl_wrfxtr (all depends on the variable
-! which filelist shall be used)
-! the filelist loops does not care whether (a) the filelist spans multiple
-! simulated years or just a single day or hour, neither does it care (b) how
-! many files are contained and (c) whether a single file is oerlapping a 
-! beginnning or end of the desired temporal unit (year, month, individual, etc.)
+      !-------------------------------------------------------------------------------
+      ! loop over the filelists
 
-      IF ( filetype(ivar) == "s" ) THEN ! variable is in "s"tandard wrfout file
-        IF (ALLOCATED(fl_input)) DEALLOCATE( fl_input )
-        ALLOCATE( fl_input ( SIZE(fl_wrfout) ), STAT=sts )
-        fl_input = fl_wrfout
-      ELSE IF ( filetype(ivar) == "x" ) THEN ! variable is in e"x"tremes wrfxtrm file
-        IF (ALLOCATED(fl_input)) DEALLOCATE( fl_input )
-        ALLOCATE( fl_input ( SIZE(fl_wrfxtr) ), STAT=sts )
-        fl_input = fl_wrfxtr
-      ELSE IF ( filetype(ivar) == "p" ) THEN ! variable is in "p"ress wrfpress file
-        IF (ALLOCATED(fl_input)) DEALLOCATE( fl_input )
-        ALLOCATE( fl_input ( SIZE(fl_wrfpres) ), STAT=sts )
-        fl_input = fl_wrfpres
-      ELSE
-        STOP "filetype in the variable namelist must be one of s, x, p"
-      END IF
+        IF ( filetype(ivar) == "s" ) THEN ! variable is in "s"tandard wrfout file
+          IF (ALLOCATED(fl_input)) DEALLOCATE( fl_input )
+          ALLOCATE( fl_input ( SIZE(fl_wrfout) ), STAT=sts )
+          fl_input = fl_wrfout
+        ELSE IF ( filetype(ivar) == "x" ) THEN ! variable is in e"x"tremes wrfxtrm file
+          IF (ALLOCATED(fl_input)) DEALLOCATE( fl_input )
+          ALLOCATE( fl_input ( SIZE(fl_wrfxtr) ), STAT=sts )
+          fl_input = fl_wrfxtr
+        ELSE IF ( filetype(ivar) == "p" ) THEN ! variable is in "p"ress wrfpress file
+          IF (ALLOCATED(fl_input)) DEALLOCATE( fl_input )
+          ALLOCATE( fl_input ( SIZE(fl_wrfpres) ), STAT=sts )
+          fl_input = fl_wrfpres
+        ELSE
+          STOP "filetype in the variable namelist must be one of s, x, p"
+        END IF
 
-      !DO ifl = 1, 1, 1 ! testing: loop over specific entry in filelist (e.g. just January)
-      DO ifl = 1, SIZE(fl_input), 1 ! operational: loop over complete filelist
+        IF ( frequency(ifrq) == "fx" ) THEN
+          nfiles = 1
+        ELSE
+          nfiles = SIZE(fl_input)
+        END IF
 
-        PRINT *,"============================================================"
-        PRINT *, "filelist filetype = ", filetype(ivar) 
-        PRINT *, "#files to process = ", SIZE(fl_input)
+        DO ifl = 1, nfiles, 1 ! operational: loop over complete filelist
 
-        ! measure CPU time for 1 variable and file, including all timesteps
-        CALL CPU_TIME(cpuTs)
-        PRINT *, "-----------------------------------------------------------"
+          PRINT *,"============================================================"
+          PRINT *, "filelist filetype = ", filetype(ivar) 
+          PRINT *, "#files to process = ", SIZE(fl_input)
 
-        iflWRFin = fl_input(ifl)
-        PRINT *, "this is the file to work on now:"
-        PRINT '(100A)', TRIM(iflWRFin)
+          ! measure CPU time for 1 variable and file, including all timesteps
+          CALL CPU_TIME(cpuTs)
+          PRINT *, "-----------------------------------------------------------"
+
+          iflWRFin = fl_input(ifl)
+          PRINT *, "this is the file to work on now:"
+          PRINT '(100A)', TRIM(iflWRFin)
   
-!-------------------------------------------------------------------------------
-! which timespan is covered by the CURRENT WRF input file
-! even in the same filelist file, each input file may cover a different timespan
-! this determines how many times the tool has to loop over the inputs
-! format of 'Times': 2009-06-20_08:00:00
+         !-------------------------------------------------------------------------------
+         ! which timespan is covered by the CURRENT WRF input file
+         ! even in the same filelist file, each input file may cover a different timespan
+         ! this determines how many times the tool has to loop over the inputs
+         ! format of 'Times': 2009-06-20_08:00:00
 
 #ifndef SERIAL
         sts = NF90_OPEN(iflWRFin, IOR(NF90_NOWRITE, NF90_MPIIO), ncid_in, comm = MPI_COMM_WORLD, info = MPI_INFO_NULL)
@@ -959,6 +761,13 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
         sts = NF90_INQ_VARID(ncid_in, "Times", InVarIdRec)
         sts = NF90_INQUIRE_DIMENSION(ncid_in, unlimdimid_in, &
           NAME = InDimNameRec, LEN = InDimLenRec)
+
+        ! For the fixed variable, read only 2 timesteps and not 1 to make sure 
+        ! that it does not take 1st timestep, as it can be read from the forcing files and filled with NaNs
+	IF ( frequency(ifrq) == "fx" ) THEN
+           InDimLenRec=1  ! 
+	END IF
+
         ! with the wrfxtrm minimum and maximum fields, the 1st field per file is
         ! empty, but the last field has already the next day assigned; this 
         ! leads to a plus 1 day time shift in the minimum and maximum data
@@ -966,19 +775,13 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
         ! by 1 in the output writing this is fixed
         ! see "variable to read/write with no additional processing" part
         PRINT *, "number of timesteps in the input data: ", InDimLenRec
-! KGo: not in my data
+        ! KGo: not in my data
         IF ( ( cell_methods(ivar) == "minimum" ) .OR. &
              ( cell_methods(ivar) == "maximum" ) ) THEN
           InDimLenRec = InDimLenRec - 1
           PRINT *, "fixing number of input timesteps for min/max: ", InDimLenRec
         END IF
-! HTr: also "point" cell_methods need to reduced by 1 record
-!       IF ( ( cell_methods(ivar) == "minimum" ) .OR. &
-!            ( cell_methods(ivar) == "maximum" ) .OR. &
-!            ( cell_methods(ivar) == "point" ) ) THEN
-!         InDimLenRec = InDimLenRec - 1
-!         PRINT *, "fixing number of input timesteps: ", InDimLenRec
-!       END IF
+
         ALLOCATE(InVarDataRec(InDimLenRec))
         sts = NF90_GET_VAR(ncid_in, InVarIdRec, InVarDataRec)
         sts = NF90_CLOSE(ncid_in)
@@ -1018,20 +821,20 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
             
         END DO
 
-!-------------------------------------------------------------------------------
-! loop over the individual timesteps in the individual RCM input file
-! this may take some time but it is robust and also extremely large arrays
-! might be used; this leads to many I/O operations, but only small amounts of
-! data, but the tradeoff is robustness, flexibility and still far less I/O 
-! operations as if using script-based solutions (cdo, nco, etc.)
+       !-------------------------------------------------------------------------------
+       ! loop over the individual timesteps in the individual RCM input file
+       ! this may take some time but it is robust and also extremely large arrays
+       ! might be used; this leads to many I/O operations, but only small amounts of
+       ! data, but the tradeoff is robustness, flexibility and still far less I/O 
+       ! operations as if using script-based solutions (cdo, nco, etc.)
 
         DO it = 1, InDimLenRec, 1
   
-! HTr: skip last record for "sum" or "mean" to avoid re-initialisation of next file with nans, if 
-!      the next file is computed in parallel
-! KGo: this does not work with my input data 00-23 per wrfout file
-!      if inputtimesteptruncate=T, then there is a gap in the data, i.e., one timestep
-!      at the end / beginning of new day remains missing
+       ! HTr: skip last record for "sum" or "mean" to avoid re-initialisation of next file with nans, if 
+       !      the next file is computed in parallel
+       ! KGo: this does not work with my input data 00-23 per wrfout file
+       !      if inputtimesteptruncate=T, then there is a gap in the data, i.e., one timestep
+       !      at the end / beginning of new day remains missing
           IF (inputtimesteptruncate) THEN 
             IF ( ( it .EQ. InDimLenRec ) .AND. ( ( cell_methods(ivar) == "mean" ) .OR. &
                  ( cell_methods(ivar) == "sum" ) ) ) THEN
@@ -1047,25 +850,6 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                    InDateTimeYear(it), "-", InDateTimeMonth(it), "-", &
                    InDateTimeDay(it), "_", &
                    InDateTimeHour(it), " ", InDateTimeCombined(it)
-
-!-------------------------------------------------------------------------------
-! performance issue: speed up the tool during subsequent passes, i.e. is the 
-! storage file etc. existing already
-! check whether file exists, highly likely as the RCM outputs usually have a
-! higher frequency (e.g., monthly or daily) than the temporal granularity of the
-! storage files (e.g., annual with the CORDEX protocol)
-! also check whether this is the first pass on a new storage file or a 
-! subsequent pass
-! because data is read with a very fine-grained granularity, it's highly likely,
-! that the file which is supposed to hold the data exists already, e.g., 8760
-! timesteps per year at 1h temporal resolution vs. creation of 1 annual file,
-! the tool checks before any operation whether the same temporal aggregation has
-! been dealt with before (yearly, monthly, individual storage)
-! if the InDateTimeMonthPrev or InDateTimeYearPrev are > 0 all variables are set
-! already also
-! in case of annual and monthly aggregation, the file content of the WRF inputs
-! defines the storage files creation, in case of the individual definition, the
-! opposite is true
 
           IF (aggregation_individually) THEN ! first pass, always needed, file may exist or not
             IF ( prevpass == 0 ) THEN
@@ -1090,21 +874,21 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
   
             PRINT *, "start of processing or new year/month/timespan encountered"
 
-!-------------------------------------------------------------------------------
-! extract the time info from the ref time array which matches the respective
-! file in which data is to be written and thereby matches also the input data
-! ...as there is no "WHERE" the way I need it in F95, use loops
-! this is needed whenever a new netCDF file is to be used and also if
-! this file exists already
-! still working on single variable 'ivar', file 'ifl', and timestep 'it'
-! InDateTimeYear(it), InDateTimeMonth(it), InDateTimeDay(it), InDateTimeHour(it), InDateTimeCombined(it)
-! TimeRefArray, TimeRefArraySubset
-!
-! the time span covered by the storage file is determining the time vector subset
-! to be extracted from the reference time vec which is again spanning the
-! complete experiment; once this reference time vector subset (matching the 
-! storage file) is determined the individual offset may be determined which is 
-! used to sort the individual WRF field in
+            !-------------------------------------------------------------------------------
+            ! extract the time info from the ref time array which matches the respective
+            ! file in which data is to be written and thereby matches also the input data
+            ! ...as there is no "WHERE" the way I need it in F95, use loops
+            ! this is needed whenever a new netCDF file is to be used and also if
+            ! this file exists already
+            ! still working on single variable 'ivar', file 'ifl', and timestep 'it'
+            ! InDateTimeYear(it), InDateTimeMonth(it), InDateTimeDay(it), InDateTimeHour(it), InDateTimeCombined(it)
+            ! TimeRefArray, TimeRefArraySubset
+            !
+            ! the time span covered by the storage file is determining the time vector subset
+            ! to be extracted from the reference time vec which is again spanning the
+            ! complete experiment; once this reference time vector subset (matching the 
+            ! storage file) is determined the individual offset may be determined which is 
+            ! used to sort the individual WRF field in
 
             PRINT *, "subsetting the TimeRefArray"
 
@@ -1117,11 +901,11 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
             DEALLOCATE( TimeRefArraySubsetMean )
             DEALLOCATE( Time_bnds )
             
-!            PRINT *,'SIZE(TimeRefArray, 1)', SIZE(TimeRefArray, 1)
-!            PRINT *,'SHAPE(TimeRefArray, 1)', SHAPE(TimeRefArray, 1)
-!            PRINT *,'TimeRefArray(1,2)', TimeRefArray(1,2)
-!            PRINT *,'TimeRefArray(744,2)', TimeRefArray(744,2)
-!            PRINT *,'InDateTimeYear(it)', InDateTimeYear(it)
+            !PRINT *,'SIZE(TimeRefArray, 1)', SIZE(TimeRefArray, 1)
+            !PRINT *,'SHAPE(TimeRefArray, 1)', SHAPE(TimeRefArray, 1)
+            !PRINT *,'TimeRefArray(1,2)', TimeRefArray(1,2)
+            !PRINT *,'TimeRefArray(744,2)', TimeRefArray(744,2)
+            !PRINT *,'InDateTimeYear(it)', InDateTimeYear(it)
 
             ! only needed for aggregation_individually
             READ( tsact, '(I4,1X,I2,1X,I2,1X,I2,1X,I2,1X,I2)' ) &
@@ -1162,38 +946,16 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               END DO
               PRINT *, "size ipos", SIZE(ipos)
               PRINT *, "counter = ", counter
-              IF ( ( cell_methods(ivar) == "mean" ) .OR. &
-                   ( cell_methods(ivar) == "sum" ) .OR. &
-                   ( cell_methods(ivar) == "minimum" ) .OR. &
-                   ( cell_methods(ivar) == "maximum" ) ) THEN
-                counter = counter - 1
-                ipos = ipos(1:counter)
-                PRINT *, "size ipos", SIZE(ipos)
-                PRINT *, "counter = ", counter
-              END IF     
+              !IF ( ( cell_methods(ivar) == "mean" ) .OR. &
+              !     ( cell_methods(ivar) == "sum" ) .OR. &
+              !     ( cell_methods(ivar) == "minimum" ) .OR. &
+              !     ( cell_methods(ivar) == "maximum" ) ) THEN
+              !  counter = counter - 1
+              !  ipos = ipos(1:counter)
+              !  PRINT *, "size ipos", SIZE(ipos)
+              !  PRINT *, "counter = ", counter
+              !END IF     
 
-!              DO i = 1, SIZE(TimeRefArray, 1), 1
-!                IF ( ( TimeRefArray(i,2) >= tsactYear ) .AND. & 
-!                     ( TimeRefArray(i,2) <= teactYear ) .AND. &
-!                     ( TimeRefArray(i,3) >= tsactMonth ) .AND. &
-!                     ( TimeRefArray(i,3) <= teactMonth ) .AND. &
-!                     ( TimeRefArray(i,4) >= tsactDay ) .AND. &
-!                     ( TimeRefArray(i,4) < teactDay ) ) THEN !.AND. &
-!!                   ( TimeRefArray(i,5) >= tsactHour ) .AND. &
-!!                   ( TimeRefArray(i,5) <= teactHour ) ) THEN ! problem if the end of also 00UTC > then there is no match with the hours
-!                  ! special case, e.g. 20090620_00:00:00 to 20090627_00:00:00 = defined timespan
-!                  ! the last mean field is then 20090627_00:30:00, one less mean fields in the total time span covered
-!                  counter = counter + 1
-!                  ipos = [ipos, i]
-!                END IF
-!              END DO
-!              ! see the problem with the ending, there is one timestep too
-!              ! few in the file if this is not done
-!              ! artifically add a further postion at the very end
-!                  IF ( cell_methods(ivar) == "point" ) THEN ! and then also automatically sub-daily
-!                    ipos = [ipos, ipos(counter)+1] 
-!                    counter = counter + 1
-!                  END IF
             ELSE IF (aggregation_monthly) THEN
               PRINT *, "aggregation_monthly"
               DO i = 1, SIZE(TimeRefArray, 1), 1
@@ -1203,8 +965,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                   ipos = [ipos, i]
                 END IF
               END DO
-              !!ipos = [ipos, ipos(counter)+1] 
-              !!counter = counter + 1
+ 
             ELSE IF (aggregation_yearly) THEN ! default, CORDEX annual files
               PRINT *, "aggregation_annually"
               PRINT *, InDateTimeYear(it)
@@ -1214,40 +975,36 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                   ipos = [ipos, i]
                 END IF
               END DO
-              !!ipos = [ipos, ipos(counter)+1] ! XXXXXXXXXX remove this
-              !!counter = counter + 1
             END IF
+
+            IF ( frequency(ifrq) == "fx" ) THEN
+              counter = 1
+            ELSE
+              counter = counter
+            END IF
+
             PRINT *, "timesteps in the time ref. subset = ", counter
 
-            ALLOCATE( TimeRefArraySubset( counter, 5 ) ) ! index, y, m, d, h
+            ALLOCATE( TimeRefArraySubset( counter, 6 ) ) ! index, y, m, d, h
             ALLOCATE( TimeRefArraySubsetMean( counter ) )
             ALLOCATE( Time_bnds( 2, counter ) )
-
-            ! the TimeRefArraySubset is the time vec of the newly created (or
-            ! already existing) file; it may be any size =< the original ref
-            ! time vec; WRF data will be matched with this time vec
-            ! this time vec is basically created for point data
             DO i = 1, counter, 1
               j = ipos(i)
-              TimeRefArraySubset(i,1:5) = TimeRefArray(j,1:5)
-!              PRINT *, TimeRefArraySubset(i,1:5) ! index, y, m, d, h
+              TimeRefArraySubset(i,1:6) = TimeRefArray(j,1:6)
             END DO
             !PRINT '(F9.3,1X,F5.0,1X,F3.0,1X,F3.0,1X,F3.0)', TRANSPOSE( TimeRefArraySubset(:,:) )
-            !print *, TimeRefArraySubset(0,:)
+            !PRINT *, TimeRefArraySubset(0,:)
+            
+            PRINT *, "Start_year=",TimeRefArraySubset(1,2) ! index, y, m, d, h
+            PRINT *, "End_date=",TimeRefArraySubset(counter,1:6) ! index, y, m, d, h
 
             DEALLOCATE(ipos)
 
-!-------------------------------------------------------------------------------
-! create path- and filenames according to the ruleset of the CORDEX data 
-! protocol: 2 main options here:
-! Non standard:
-! 1. individual time range
-! 2. monthly, determined by input file
-! Standard (storage file is determined by the temporal aggregation):
-! 3. yearly, for anything higher than daily
-! 4. 5-yearly or less, for anything daily
-! 5. 10-yearly or less, for anything monthly or seasonally
-! TODO: not all is implemented as the averaging is not yet implemented
+            !-------------------------------------------------------------------------------
+            ! create path- and filenames according to the ruleset of the CORDEX data 
+            ! protocol: 2 main options here:
+            ! Non standard:
+            ! TODO: not all is implemented as the averaging is not yet implemented
 
             PRINT *, "generate path and filename"
 
@@ -1257,24 +1014,33 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
             ! arbitrary timespan
             IF (aggregation_individually) THEN
 
-              WRITE (tsactYearStr,'(I4.4)') tsactYear
-              WRITE (tsactMonthStr,'(I2.2)') tsactMonth
-              WRITE (tsactDayStr,'(I2.2)') tsactDay
-              WRITE (tsactHourStr,'(I2.2)') tsactHour
-              WRITE (tsactMinuteStr,'(I2.2)') tsactMinute !Josipa: extract start minutes
-              WRITE (teactYearStr,'(I4.4)') teactYear
-              WRITE (teactMonthStr,'(I2.2)') teactMonth
-              WRITE (teactDayStr,'(I2.2)') teactDay
-              WRITE (teactHourStr,'(I2.2)') teactHour 
-              WRITE (teactMinuteStr,'(I2.2)') teactMinute !Josipa: extract end minutes
+              WRITE (tsactYearStr,'(I4.4)') INT(TimeRefArraySubset(1,2))
+              WRITE (tsactMonthStr,'(I2.2)') INT(TimeRefArraySubset(1,3))    
+              WRITE (tsactDayStr,'(I2.2)') INT(TimeRefArraySubset(1,4))   
+              WRITE (teactYearStr,'(I4.4)') INT(TimeRefArraySubset(counter,2))
+              WRITE (teactMonthStr,'(I2.2)') INT(TimeRefArraySubset(counter,3))
+              WRITE (teactDayStr,'(I2.2)') INT(TimeRefArraySubset(counter,4))     
 
               IF ((frequency(ifrq) == '1hr') .OR. &
                   (frequency(ifrq) == '3hr') .OR. &
                   (frequency(ifrq) == '6hr')) THEN
-                                 
-                !Josipa: add minutes to the hourly files to avoid differences in file nameing between cumulative and non-cumulative variabels. 
+                  
+              IF ( (cell_methods(ivar) == "mean") .OR. (cell_methods(ivar) == "sum") ) THEN 
+                WRITE (tsactHourStr,'(I2.2)') INT( FLOOR( ((dtHours/2.)*60.) / 60. ) )
+                WRITE (tsactMinuteStr,'(I2.2)') INT( MOD( (dtHours/2.)*60., 60. ) )
+                WRITE (teactHourStr,'(I2.2)') INT( FLOOR( ( (24.*60.) - (dtHours/2.)*60.)  / 60. ) )
+                WRITE (teactMinuteStr,'(I2.2)') INT( MOD( (24.*60.) - (dtHours/2.)*60., 60. ) )
+              ELSE
+                WRITE (tsactHourStr,'(I2.2)') INT(TimeRefArraySubset(1,5))
+                WRITE (tsactMinuteStr,'(I2.2)') INT(0)
+                WRITE (teactHourStr,'(I2.2)') INT(TimeRefArraySubset(counter,5))
+                WRITE (teactMinuteStr,'(I2.2)') INT(0)
+              END IF
+              
                 FileNameStartDateTime = tsactYearStr//tsactMonthStr//tsactDayStr//tsactHourStr//tsactMinuteStr
-                FileNameEndDateTime = teactYearStr//teactMonthStr//teactDayStr//teactHourStr//teactMinuteStr             
+                FileNameEndDateTime = teactYearStr//teactMonthStr//teactDayStr//teactHourStr//teactMinuteStr
+                PRINT *, "DATE_START == ", FileNameStartDateTime
+                PRINT *, "DATE_END == ", FileNameEndDateTime
 
               ELSE IF (frequency(ifrq) == 'day') THEN
   
@@ -1287,17 +1053,20 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                 FileNameStartDateTime = tsactYearStr//tsactMonthStr
                 FileNameEndDateTime = teactYearStr//teactMonthStr
 
+              ELSE IF (frequency(ifrq) == 'fx') THEN 
+                FileNameStartDateTime = ''
+                FileNameEndDateTime = ''
+
               END IF
 
             ! determined by the date information in the wrf outputs, automatic
             ! monthly aggregation is also special
             ELSE IF ( (aggregation_monthly) .OR. (aggregation_yearly) ) THEN
 
-              !READ( InDateTimeYear(it), '(4A)' ) InDateTimeYearStr
-              !READ( InDateTimeMonth(it), '(2A)' ) InDateTimeMonthStr
               WRITE (InDateTimeYearStr,'(I4.4)') InDateTimeYear(it)
               WRITE (InDateTimeMonthStr,'(I2.2)') InDateTimeMonth(it)              
               WRITE (LastDayStr,'(I2.2)') INT(TimeRefArraySubset(0,5))
+
               IF ( (cell_methods(ivar) == "mean") .OR. (cell_methods(ivar) == "sum") ) THEN 
                 WRITE (FirstHourStr,'(I2.2)') INT( FLOOR( ((dtHours/2.)*60.) / 60. ) )
                 WRITE (FirstMinuteStr,'(I2.2)') INT( MOD( (dtHours/2.)*60., 60. ) )
@@ -1311,6 +1080,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 		FirstMinuteStr = "00"
 		LastMinuteStr = "00"
               END IF
+
               PRINT *, "date/time information for the automatic output path- and filename generation: ", &
                 InDateTimeYearStr, InDateTimeMonthStr, FirstHourStr, LastHourStr, LastDayStr
 
@@ -1340,19 +1110,17 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                   FileNameStartDateTime = InDateTimeYearStr//InDateTimeMonthStr//"01"
                   FileNameEndDateTime = InDateTimeYearStr//InDateTimeMonthStr//LastDayStr
 
+                ELSE IF (frequency(ifrq) == 'fx') THEN 
+                  FileNameStartDateTime = ''
+                  FileNameEndDateTime = ''
+
                 END IF
 
-              ! with the full default, the aggregation in files depends all on 
-              ! the temporal resolution of the data to be stored, see the 
-              ! beginning of this section
-              ! default: either annual, 5 years or 10 years, depending on the 
-              ! aggregation
               ELSE IF (aggregation_yearly) THEN 
 
                 IF ((frequency(ifrq) == '1hr') .OR. &
                     (frequency(ifrq) == '3hr') .OR. &
                     (frequency(ifrq) == '6hr')) THEN
-
                   IF ( (cell_methods(ivar) == "mean") .OR. (cell_methods(ivar) == "sum") ) THEN
                     FileNameStartDateTime = InDateTimeYearStr//"0101"//FirstHourStr//FirstMinuteStr
                     FileNameEndDateTime = InDateTimeYearStr//"1231"//LastHourStr//LastMinuteStr
@@ -1362,112 +1130,82 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                   END IF
 
                 ! TODO: 5 yearly
-                ELSE IF (frequency(ifrq) == 'day') THEN
-  
+                ELSE IF (frequency(ifrq) == 'day') THEN  
                   FileNameStartDateTime = InDateTimeYearStr//"0101"
                   FileNameEndDateTime = InDateTimeYearStr//"1231"
 
                 ! TODO: 10 yearly
                 ELSE IF ((frequency(ifrq) == 'mon') .OR. &
                          (frequency(ifrq) == 'sem')) THEN
-
                   STOP "not yet implemented functionality, monthly/seasonally"
-                !  FileNameStartDateTime = tsactYearStr//tsactMonthStr
-                !  FileNameEndDateTime = teactYearStr//teactMonthStr
+                  !FileNameStartDateTime = tsactYearStr//tsactMonthStr
+                  !FileNameEndDateTime = teactYearStr//teactMonthStr
+
+                ELSE IF (frequency(ifrq) == 'fx') THEN 
+                  FileNameStartDateTime = ''
+                  FileNameEndDateTime = ''
 
                 END IF
-
               END IF
-
             END IF
 
             ! /hpc/shared/int/eva/ramod_WRF_CRPGL/WRFrv021rXXrcc3CpCdx/postpro/
             ! EUR-44/CRPGL/ECMWF-ERAINT/evaluation/r1i1p1/CRPGL-WRFARW331/v1
-            pn_out = TRIM(project_id)                    // "/" // &
-                     TRIM(product)                       // "/" // &
-                     TRIM(CORDEX_domain)                 // "/" // &
-                     TRIM(institute_id)                  // "/" // &
-                     TRIM(driving_model_id)              // "/" // &
-                     TRIM(driving_experiment_name)       // "/" // &
-                     TRIM(driving_model_ensemble_member) // "/" // &
-                     TRIM(model_id)                      // "/" // &
-                     TRIM(rcm_version_id)                // "/" // &
-                     TRIM(frequency(ifrq))               // "/" // &
-                     TRIM(var_cmip(ivar))
+            pn_out = TRIM(project_id)                   // "/" // &
+                     TRIM(mip_era)                      // "/" // &
+                     TRIM(activity_id)                 	// "/" // &
+                     TRIM(domain_id)                  	// "/" // &
+                     TRIM(institution_id)              	// "/" // &
+                     TRIM(driving_source_id)        	// "/" // &
+                     TRIM(driving_experiment_id)    	// "/" // &
+                     TRIM(driving_variant_label)        // "/" // &
+                     TRIM(source_id)                	// "/" // &
+                     TRIM(version_realization)      	// "/" // &
+                     TRIM(frequency(ifrq))             	// "/" // &
+                     TRIM(var_cmip(ivar))		// "/" // &
+                     TRIM(version)
 
-            ! evspsbl_EUR-44_ECMWF-ERAINT_evaluation_r1i1p1_CRPGL-WRFARW331_v1_
-            ! 3hr_1989010100-1989123121
-            fn_out = TRIM(var_cmip(ivar))                // "_" // &
-                     TRIM(CORDEX_domain)                 // "_" // &
-                     TRIM(driving_model_id)              // "_" // &
-                     TRIM(driving_experiment_name)       // "_" // &
-                     TRIM(driving_model_ensemble_member) // "_" // &
-                     TRIM(model_id)                      // "_" // &
-                     TRIM(rcm_version_id)                // "_" // &
+	    IF (frequency(ifrq) == 'fx') THEN
+            	fn_out = TRIM(var_cmip(ivar))            // "_" // &
+                     TRIM(domain_id)                 	 // "_" // &
+                     TRIM(driving_source_id)             // "_" // &
+                     TRIM(driving_experiment_id)         // "_" // &
+                     TRIM(driving_variant_label)         // "_" // &
+                     TRIM(institution_id)                // "_" // &
+                     TRIM(source_id)                     // "_" // &
+                     TRIM(version_realization)           // "_" // &
+                     TRIM(frequency(ifrq))		// &
+                     ".nc"
+            ELSE
+
+            	fn_out = TRIM(var_cmip(ivar))            // "_" // &
+                     TRIM(domain_id)                 	 // "_" // &
+                     TRIM(driving_source_id)             // "_" // &
+                     TRIM(driving_experiment_id)         // "_" // &
+                     TRIM(driving_variant_label)         // "_" // &
+                     TRIM(institution_id)                // "_" // &
+                     TRIM(source_id)                     // "_" // &
+                     TRIM(version_realization)           // "_" // &
                      TRIM(frequency(ifrq))               // "_" // &
                      TRIM(FileNameStartDateTime) // "-" // TRIM(FileNameEndDateTime) // &
                      ".nc"
+            END IF
   
             PRINT *, "CORDEX compliant pathname, pn_out = ", TRIM(pn_out)
             PRINT *, "CORDEX compliant filename, fn_out = ", TRIM(fn_out)
 
-!-------------------------------------------------------------------------------
-! check for existance of the new output file and generate this file if needed
-! could exist already from a previous run of tool and due to multiple months in 
-! a file (i.e. one WRF output file may cover several months)
-! i.e. this could be the first pass of a processing session, but a subsequent 
-! pass over the storage file when continuously adding new data 
-! could exist already from a previous run of tool and due to multiple
-! months in a file (i.e. 1 WRF output file may cover several months)
-
+            PRINT *, "-----------------------------------------------------------------------------"
             PRINT *, "*** CHECK FOR FILE EXISTANCE / CREATE FILE WITH BASIC STRUCTURE + METADATA***"
 
             INQUIRE( FILE=TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) // "/" // TRIM(fn_out), EXIST=FileExists )
 
             IF ( FileExists ) THEN
-
               PRINT *, "++++ path and file exist, continue filling"
-
             ELSE
-
               PRINT *, "++++ path and file do not yet exist, create path and netCDF file first"
               PRINT '(150A)', "path = ", TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out)
 
               CALL SYSTEM("mkdir -p " // TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) )
-
-!-------------------------------------------------------------------------------
-! the SYSTEM call is non-std Fortran95, works for gfortran (fct & subroutine) 
-! and ifort
-! comment lines in the netCDF file global attribute definition
-! turn standard checking in Makefile off
-! trackingID = "xxxxxxxx-xxxx-Mxxx-Nxxx-xxxxxxxxxxxx"
-! creationDate = "YYYY-MM-DD-THH:MM:SSZ"
-! with MPI, avoid same UUID / creation_date for all files and overlaps
-! generate an individual tmp file per MPI rank (=var)
-
-!            IF ( rank == 0 ) THEN
-!              CALL SYSTEM(cmdUUID)
-!            END IF
-!
-!            CALL mpi_barrier(MPI_COMM_WORLD, ierr)
-!            IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
-!              
-!              OPEN(1,FILE="tmpfileUUID",STATUS='old')
-!              READ(1,*) trackingID
-!              CLOSE(1)
-!              PRINT *, "uuidgen externally generated trackingID = ", trackingID
-!
-!            IF ( rank == 0 ) THEN
-!              CALL SYSTEM(cmdDate)
-!            END IF 
-!
-!            CALL mpi_barrier(MPI_COMM_WORLD, ierr)
-!            IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
-!              
-!              OPEN(1,FILE="tmpfileDate",STATUS='old')
-!              READ(1,*) creationDate
-!              CLOSE(1)
-!              PRINT *, "date externally generated creation date = ", creationDate
  
 #ifndef SERIAL
               WRITE(FileNrStr,'(i3)') rank
@@ -1477,7 +1215,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               CLOSE(1)
               PRINT *, "uuidgen externally generated trackingID = ", trackingID
 
-              CALL SYSTEM("date -u +%Y-%m-%d-T%H:%M:%SZ > tmpfileDate"//TRIM(domain)//TRIM(fnNMLvar(ivarnml))//TRIM(ADJUSTL(FileNrStr)))
+              CALL SYSTEM("date -u +%Y-%m-%dT%H:%M:%SZ > tmpfileDate"//TRIM(domain)//TRIM(fnNMLvar(ivarnml))//TRIM(ADJUSTL(FileNrStr)))
               OPEN(1,FILE="tmpfileDate"//TRIM(domain)//TRIM(fnNMLvar(ivarnml))//TRIM(ADJUSTL(FileNrStr)),STATUS='old')
               READ(1,*) creationDate
               CLOSE(1)
@@ -1493,32 +1231,31 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               CLOSE(1)
               PRINT *, "uuidgen externally generated trackingID = ", trackingID
 
-              CALL SYSTEM("date -u +%Y-%m-%d-T%H:%M:%SZ > tmpfileDate"//TRIM(domain)//TRIM(fnNMLvar(ivarnml)))
+              CALL SYSTEM("date -u +%Y-%m-%dT%H:%M:%SZ > tmpfileDate"//TRIM(domain)//TRIM(fnNMLvar(ivarnml)))
               OPEN(1,FILE="tmpfileDate"//TRIM(domain)//TRIM(fnNMLvar(ivarnml)),STATUS='old')
               READ(1,*) creationDate
               CLOSE(1)
               PRINT *, "date externally generated creation date = ", creationDate
 #endif
-             
-!-------------------------------------------------------------------------------
-! create netCDF file, must be NetCDF4 'classic data model' and compression lvl=1
-! NF90_CLASSIC_MODEL = NetCDF4_classic
-! NF90_HDF5 = NetCDF4 based on HDF5
-! NF90_CLOBBER = old netCDF
 
-              !https://www.unidata.ucar.edu/software/netcdf/docs/netcdf-f90/NF90_005fCREATE.html
               PRINT *, "create netCDF file"
               sts = NF90_CREATE(TRIM(DirOutputPostProRoot) // "/" // &
                 TRIM(pn_out) // "/" // TRIM(fn_out), IOR(NF90_NETCDF4, &
                 NF90_CLASSIC_MODEL), ncid)
 
               !-----------------------------------------------------------------
+              ! define time dimension
+              IF (frequency(ifrq) /= 'fx') THEN
+                sts = NF90_DEF_DIM(ncid, "time", NF90_UNLIMITED, rec_dimid)
+                IF ( ( cell_methods(ivar) == "mean" ) .OR. &
+                     ( cell_methods(ivar) == "sum" ) .OR. &
+                     ( cell_methods(ivar) == "minimum" ) .OR. &
+                     ( cell_methods(ivar) == "maximum" ) ) THEN
+                  sts = NF90_DEF_DIM(ncid, "bnds", 2, nb2_dimid)
+                ENDIF
+              END IF
 
-              ! always included define dimensions
-              !sts = NF90_DEF_DIM(ncid, "x", xfocus, x_dimid)
-              !sts = NF90_DEF_DIM(ncid, "y", yfocus, y_dimid)
-              ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
-              ! Josipa: Add projection dependency             
+              ! define horizontal dimensions depending on the projection      
               IF ( projection == "LCC" ) THEN 
                 sts = NF90_DEF_DIM(ncid, "x", xfocus, x_dimid)
                 sts = NF90_DEF_DIM(ncid, "y", yfocus, y_dimid)
@@ -1527,43 +1264,49 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                 sts = NF90_DEF_DIM(ncid, "rlat", yfocus, lat_dimid) 
               END IF
               
-              !Josipa: Redefine condition to indlude 100m wind
+              ! define vertical dimension for near-surface variables      
               IF ( height(ivar) /= -999 ) THEN
-              !IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
                 sts = NF90_DEF_DIM(ncid, "height", 1, height_dimid)
               END IF
               
-              !Josipa: Add dependency to plevel, height > 10.  is not enought for the winds at 100m 
+              ! define vertical dimension for variable on pressure levels    
               IF ( ( plevel(ivar) /= -999 ) ) THEN
-              !IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
                 sts = NF90_DEF_DIM(ncid, "plev", 1, plev_dimid)
               END IF
-              ! special 4D vars, i.e. with real depth dimension
-              ! hardcoding number of depth layers in LSM
-              ! with the nomenclature in the namelist this special case cannot
-              ! be resolved easily, standard does not foresee many 3D vars
+
+              ! define vertical dimension for variable on pressure levels    
+              IF (TRIM(var_cmip(ivar)) == 'mrsos' ) THEN
+                sts = NF90_DEF_DIM(ncid, "sdepth", 1, depth_dimid)
+                sts = NF90_DEF_DIM(ncid, "bnds", 2, nb2_dimid)
+              END IF
+
+              ! define special vertical dimension dimension 4D vars
               IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. &
                   (TRIM(var_cmip(ivar)) == 'tsl')) THEN
-                sts = NF90_DEF_DIM(ncid, "soil_layer", SIZE(DZShc), depth_dimid)
-                sts = NF90_DEF_DIM(ncid, "bnds", 2, nb2_dimid)
-              ENDIF
-              sts = NF90_DEF_DIM(ncid, "time", NF90_UNLIMITED, rec_dimid)
-              IF ( ( cell_methods(ivar) == "mean" ) .OR. &
-                   ( cell_methods(ivar) == "sum" ) .OR. &
-                   ( cell_methods(ivar) == "minimum" ) .OR. &
-                   ( cell_methods(ivar) == "maximum" ) ) THEN
+                sts = NF90_DEF_DIM(ncid, "sdepth", SIZE(DZShc), depth_dimid)
                 sts = NF90_DEF_DIM(ncid, "bnds", 2, nb2_dimid)
               ENDIF
 
-              !-----------------------------------------------------------------
-              ! no rule in CF1.7 standard, for capital letters or not > make a
-              ! rule of my own to have long names start with capital letter
-              ! nice in plots
 
-              ! always included -- longitude field, unrotated
-              !sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ x_dimid, y_dimid /), lon_varid)
-              ! Josipa: add coordinated for LCC projection
+              ! Add coordinates for LCC and rotated grid projections
+
               IF ( projection == "LCC" ) THEN
+              	! included for for lamber conformal projection 
+
+                sts = nf90_def_var(ncid, "x", NF90_DOUBLE, (/ x_dimid /), xlon_varid)
+                sts = nf90_def_var_deflate(ncid, xlon_varid, 1, 1, 1)
+                sts = nf90_put_att(ncid, xlon_varid, "standard_name", "projection_x_coordinate")
+                sts = nf90_put_att(ncid, xlon_varid, "long_name", "X Coordinate Of Projection")
+                sts = nf90_put_att(ncid, xlon_varid, "units", "m")
+                sts = nf90_put_att(ncid, xlon_varid, "axis", "X")
+  
+                sts = nf90_def_var(ncid, "y", NF90_DOUBLE, (/ y_dimid /), ylat_varid)
+                sts = nf90_def_var_deflate(ncid, ylat_varid, 1, 1, 1)
+                sts = nf90_put_att(ncid, ylat_varid, "standard_name", "projection_y_coordinate")
+                sts = nf90_put_att(ncid, ylat_varid, "long_name", "Y Coordinate Of Projection")
+                sts = nf90_put_att(ncid, ylat_varid, "units", "m")
+                sts = nf90_put_att(ncid, ylat_varid, "axis", "Y")
+ 
                 sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ x_dimid, y_dimid /), lon_varid)
                 sts = nf90_def_var_deflate(ncid, lon_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, lon_varid, "standard_name", "longitude")
@@ -1571,7 +1314,6 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                 sts = nf90_put_att(ncid, lon_varid, "units", "degrees_east")
                 sts = nf90_put_att(ncid, lon_varid, "_CoordinateAxisType", "Lon") ! special addon, not needed, but allowed
 
-                ! always included -- latitude field, unrotated
                 sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ x_dimid, y_dimid /), lat_varid)
                 sts = nf90_def_var_deflate(ncid, lat_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, lat_varid, "standard_name", "latitude")
@@ -1579,51 +1321,49 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                 sts = nf90_put_att(ncid, lat_varid, "units", "degrees_north")
                 sts = nf90_put_att(ncid, lat_varid, "_CoordinateAxisType", "Lat") ! special addon, not needed, but allowed
 
-                sts = nf90_def_var(ncid, "lambert_conformal", NF90_CHAR, lambert_varid)
+                sts = nf90_def_var(ncid, "crs", NF90_CHAR, lambert_varid)
                 sts = nf90_put_att(ncid, lambert_varid, "grid_mapping_name", "lambert_conformal_conic")
-                sts = nf90_put_att(ncid, lambert_varid, "standard_parallel", GeoLat1)
+                sts = nf90_put_att(ncid, lambert_varid, "standard_parallel", Std_parallel)
                 sts = nf90_put_att(ncid, lambert_varid, "longitude_of_central_meridian", GeoCenLon)
                 sts = nf90_put_att(ncid, lambert_varid, "latitude_of_projection_origin", GeoCenLat)
-                sts = nf90_put_att(ncid, lambert_varid, "false_easting", "0.f")
-                sts = nf90_put_att(ncid, lambert_varid, "false_northing", "0.f")
+                sts = nf90_put_att(ncid, lambert_varid, "false_easting", "0.")
+                sts = nf90_put_att(ncid, lambert_varid, "false_northing", "0.")
+                sts = nf90_put_att(ncid, lambert_varid, "earth_radius", erad)
                 
-              ELSE                     
-                sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lon_varid)
-                sts = nf90_def_var_deflate(ncid, lon_varid, 1, 1, 1)
-                sts = nf90_put_att(ncid, lon_varid, "standard_name", "longitude")
-                sts = nf90_put_att(ncid, lon_varid, "long_name", "Longitude")
-                sts = nf90_put_att(ncid, lon_varid, "units", "degrees_east")
-                ! (2023-05-18) - HTr: _CoordinateAxisType provokes an annotation, because it should'nt start with an "_"
-                !sts = nf90_put_att(ncid, lon_varid, "_CoordinateAxisType", "Lon") ! special addon, not needed, but allowed
-                ! always included -- latitude field, unrotated
-                !sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ x_dimid, y_dimid /), lat_varid)
-                sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lat_varid)
-                sts = nf90_def_var_deflate(ncid, lat_varid, 1, 1, 1)
-                sts = nf90_put_att(ncid, lat_varid, "standard_name", "latitude")
-                sts = nf90_put_att(ncid, lat_varid, "long_name", "Latitude")
-                sts = nf90_put_att(ncid, lat_varid, "units", "degrees_north")
-                ! (2023-05-18) - HTr: _CoordinateAxisType provokes an annotation, because it should'nt start with an "_"
-                !sts = nf90_put_att(ncid, lat_varid, "_CoordinateAxisType", "Lat") ! special addon, not needed, but allowed
-
-                ! always included -- longitude vector, rotated
-                ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
+              ELSE              
+              	! included for for rotated projection  
                 sts = nf90_def_var(ncid, "rlon", NF90_DOUBLE, (/ lon_dimid /), rlon_varid)
-                !sts = nf90_def_var(ncid, "rlon", NF90_DOUBLE, (/ x_dimid /), rlon_varid)
                 sts = nf90_def_var_deflate(ncid, rlon_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, rlon_varid, "standard_name", "grid_longitude")
                 sts = nf90_put_att(ncid, rlon_varid, "long_name", "Longitude in rotated pole grid")
                 sts = nf90_put_att(ncid, rlon_varid, "units", "degrees")
                 sts = nf90_put_att(ncid, rlon_varid, "axis", "X")
   
-                ! always included -- latitude vector, rotated
-                ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
                 sts = nf90_def_var(ncid, "rlat", NF90_DOUBLE, (/ lat_dimid /), rlat_varid)
-                !sts = nf90_def_var(ncid, "rlat", NF90_DOUBLE, (/ y_dimid /), rlat_varid)
                 sts = nf90_def_var_deflate(ncid, rlat_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, rlat_varid, "standard_name", "grid_latitude")
                 sts = nf90_put_att(ncid, rlat_varid, "long_name", "Latitude in rotated pole grid")
                 sts = nf90_put_att(ncid, rlat_varid, "units", "degrees")
                 sts = nf90_put_att(ncid, rlat_varid, "axis", "Y")
+
+                sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lon_varid)
+                sts = nf90_def_var_deflate(ncid, lon_varid, 1, 1, 1)
+                sts = nf90_put_att(ncid, lon_varid, "standard_name", "longitude")
+                sts = nf90_put_att(ncid, lon_varid, "long_name", "Longitude")
+                sts = nf90_put_att(ncid, lon_varid, "units", "degrees_east")
+
+                sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lat_varid)
+                sts = nf90_def_var_deflate(ncid, lat_varid, 1, 1, 1)
+                sts = nf90_put_att(ncid, lat_varid, "standard_name", "latitude")
+                sts = nf90_put_att(ncid, lat_varid, "long_name", "Latitude")
+                sts = nf90_put_att(ncid, lat_varid, "units", "degrees_north") 
+
+		sts = nf90_def_var(ncid, "crs", NF90_CHAR, rotated_pole_varid)
+		!sts = nf90_put_att(ncid, rotated_pole_varid, "long_name", "Coordinates of the rotated North Pole")
+		sts = nf90_put_att(ncid, rotated_pole_varid, "grid_mapping_name", "rotated_latitude_longitude")
+		sts = nf90_put_att(ncid, rotated_pole_varid, "grid_north_pole_latitude", GeoNPLat)
+		sts = nf90_put_att(ncid, rotated_pole_varid, "grid_north_pole_longitude", GeoNPLon)
+                sts = nf90_put_att(ncid, rotated_pole_varid, "earth_radius", erad)
 
 		! additional and useful
 		! important for remapping with cdo (conservative remapping only 
@@ -1633,39 +1373,23 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 		!                lat_vertices:units = "degrees_north" ;
 		!        float lon_vertices(rlat, rlon, vertices) ;
 		!                lon_vertices:units = "degrees_east" ;
-
-		! always included, restriction to one domain only
-		sts = nf90_def_var(ncid, "rotated_pole", NF90_CHAR, rotated_pole_varid)
-		sts = nf90_put_att(ncid, rotated_pole_varid, "long_name", "Coordinates of the rotated North Pole")
-		sts = nf90_put_att(ncid, rotated_pole_varid, "grid_mapping_name", "rotated_latitude_longitude")
-		sts = nf90_put_att(ncid, rotated_pole_varid, "grid_north_pole_latitude", GeoNPLat)
-		sts = nf90_put_att(ncid, rotated_pole_varid, "grid_north_pole_longitude", GeoNPLon)
             
               END IF
-  
-              ! depends whether height is set in the nml, all between 1.5 and 10m
-              ! Josipa: Redefine condition to include 100m wind
+
+              ! included for near surface variables at some height
               IF ( height(ivar) /= -999 ) THEN
-              !IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
                 sts = nf90_def_var(ncid, "height", NF90_DOUBLE, (/ height_dimid /), height_varid)
                 sts = nf90_put_att(ncid, height_varid, "standard_name", "height")
-                ! (2023-05-18) - HTr: "Height" --> "height"                
-                !sts = nf90_put_att(ncid, height_varid, "long_name", "Height")
                 sts = nf90_put_att(ncid, height_varid, "long_name", "height")
                 sts = nf90_put_att(ncid, height_varid, "units", "m")
                 sts = nf90_put_att(ncid, height_varid, "positive", "up")
                 sts = nf90_put_att(ncid, height_varid, "axis", "Z")
               END IF
-  
-              ! just level definition, single number, like height
-              ! there is no distinction between height and plev in the nml file
-              !Josipa: Add dependency to plevel, height > 10.  is not enought for the winds at 100m 
+
+              ! included for variables on some pressure level
               IF ( plevel(ivar) /= -999 ) THEN
-              !IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
                 sts = nf90_def_var(ncid, "plev", NF90_DOUBLE, (/ plev_dimid /), plev_varid)
                 sts = nf90_put_att(ncid, plev_varid, "standard_name", "air_pressure")
-                ! (2023-05-18) - HTr: "Pressure" --> "pressure"                
-                !sts = nf90_put_att(ncid, plev_varid, "long_name", "Pressure")
                 sts = nf90_put_att(ncid, plev_varid, "long_name", "pressure")
                 sts = nf90_put_att(ncid, plev_varid, "units", "Pa")
                 sts = nf90_put_att(ncid, plev_varid, "positive", "down")
@@ -1675,142 +1399,106 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                 END IF
               END IF
 
-              ! special case of 3D vars
-              ! what we enter here is the thickness, but not the actual depth
-              ! neither staggered nor upper and lower bounds
-              ! as defined in ancilliary document
+              ! included for soil moisture and soil temperature at all levels   
               IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. &
                   (TRIM(var_cmip(ivar)) == 'tsl')) THEN
-                sts = nf90_def_var(ncid, "soil_layer", NF90_DOUBLE, (/ depth_dimid /), depth_varid)
+                sts = nf90_def_var(ncid, "sdepth", NF90_DOUBLE, (/ depth_dimid /), depth_varid)
                 sts = nf90_put_att(ncid, depth_varid, "standard_name", "depth")
                 sts = nf90_put_att(ncid, depth_varid, "long_name", "Soil layer depth")
                 sts = nf90_put_att(ncid, depth_varid, "units", "m")
                 sts = nf90_put_att(ncid, depth_varid, "positive", "down")
                 sts = nf90_put_att(ncid, depth_varid, "axis", "Z")
-                sts = nf90_put_att(ncid, depth_varid, "bounds", "soil_layer_bnds")
-
-                ! 1st version has correct shape but it empty due to sorting
-                ! 2nd version ha sincorrect shape and is filled form sorting
-                ! -> fix the sorting
-                sts = nf90_def_var(ncid, "soil_layer_bnds", NF90_DOUBLE, (/ nb2_dimid, depth_dimid /), soillayerbnds_varid)
-                !sts = nf90_def_var(ncid, "soil_layer_bnds", NF90_DOUBLE, (/ depth_dimid, nb2_dimid/), soillayerbnds_varid)
+                sts = nf90_put_att(ncid, depth_varid, "bounds", "sdepth_bnds")
+                sts = nf90_def_var(ncid, "sdepth_bnds", NF90_DOUBLE, (/ nb2_dimid, depth_dimid /), soillayerbnds_varid)
               ENDIF
-
-              ! for vertically averaged variables need the plev bounds
-              ! plev_bnds(2), always just single field per file: this is just two numbers 
+ 
+              ! included variabels averaged between levels  
               IF ( cell_methods(ivar) == "vmean" ) THEN
                 sts = nf90_def_var(ncid, "plev_bnds", NF90_DOUBLE, (/ nb2_dimid /), plevbnds_varid)
               END IF
   
-              ! always included
-              sts = nf90_def_var(ncid, "time", NF90_DOUBLE, (/ rec_dimid /), rec_varid)
-              sts = nf90_put_att(ncid, rec_varid, "standard_name", "time")
-              sts = nf90_put_att(ncid, rec_varid, "long_name", "Time")
-              sts = nf90_put_att(ncid, rec_varid, "units", "days since " // tstot(1:10) // "T" // tstot(12:19) // "Z" )
-              sts = nf90_put_att(ncid, rec_varid, "calendar", "standard")
-              sts = nf90_put_att(ncid, rec_varid, "axis", "T")
-              IF ( ( cell_methods(ivar) == "mean" ) .OR. &
-                   ( cell_methods(ivar) == "sum" ) .OR. &
-                   ( cell_methods(ivar) == "minimum" ) .OR. &
-                   ( cell_methods(ivar) == "maximum" ) ) THEN
-                sts = nf90_put_att(ncid, rec_varid, "bounds", "time_bnds")
-              END IF
+              ! included always
+              IF (frequency(ifrq) /= 'fx') THEN
+                sts = nf90_def_var(ncid, "time", NF90_DOUBLE, (/ rec_dimid /), rec_varid)
+                sts = nf90_put_att(ncid, rec_varid, "standard_name", "time")
+                sts = nf90_put_att(ncid, rec_varid, "long_name", "Time")
+                sts = nf90_put_att(ncid, rec_varid, "units", "days since " // tstot(1:10) // "T" // tstot(12:19) // "Z" )
+                sts = nf90_put_att(ncid, rec_varid, "calendar", calendar)
+                sts = nf90_put_att(ncid, rec_varid, "axis", "T")
+                IF ( ( cell_methods(ivar) == "mean" ) .OR. &
+                     ( cell_methods(ivar) == "sum" ) .OR. &
+                     ( cell_methods(ivar) == "minimum" ) .OR. &
+                     ( cell_methods(ivar) == "maximum" ) ) THEN
+                  sts = nf90_put_att(ncid, rec_varid, "bounds", "time_bnds")
+                END IF
   
-              ! for mean variables need the time bounds
-              ! no further attributes, like plev_bnds > confirmed
-              IF ( ( cell_methods(ivar) == "mean" ) .OR. &
-                   ( cell_methods(ivar) == "sum" ) .OR. &
-                   ( cell_methods(ivar) == "minimum" ) .OR. &
-                   ( cell_methods(ivar) == "maximum" ) ) THEN
-                sts = nf90_def_var(ncid, "time_bnds", NF90_DOUBLE, (/ nb2_dimid, rec_dimid /), recbnds_varid)
-              END IF
+                IF ( ( cell_methods(ivar) == "mean" ) .OR. &
+                     ( cell_methods(ivar) == "sum" ) .OR. &
+                     ( cell_methods(ivar) == "minimum" ) .OR. &
+                     ( cell_methods(ivar) == "maximum" ) ) THEN
+                  sts = nf90_def_var(ncid, "time_bnds", NF90_DOUBLE, (/ nb2_dimid, rec_dimid /), recbnds_varid)
+                END IF
+              END IF        
 
-              !-----------------------------------------------------------------
-              
-              ! always included -- global attributes
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "Conventions", Conventions)
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "conventionsURL", conventionsURL)
+              !-----------------------------------------------------------------              
+              ! global attributes always included
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "activity_id", activity_id)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "contact", contact)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "Conventions", Conventions)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "creation_date", creationDate)
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "experiment", experiment)
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "experiment_id", experiment_id)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "domain", att_domain)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "domain_id", domain_id)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "driving_experiment", driving_experiment)
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "driving_model_id", driving_model_id)
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "driving_model_ensemble_member", driving_model_ensemble_member)
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "driving_experiment_name", driving_experiment_name)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "driving_experiment_id", driving_experiment_id)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "driving_institution_id", driving_institution_id)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "driving_source_id", driving_source_id)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "driving_variant_label", driving_variant_label)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "frequency", frequency(ifrq))
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "grid", grid)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "institution", institution)
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "institute_id", institute_id)
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "model_id", model_id)
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "rcm_version_id", rcm_version_id)
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "project_id", project_id)
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "CORDEX_domain", CORDEX_domain)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "institution_id", institution_id)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "license", license)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "mip_era", mip_era)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "product", product)
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "references", references)
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "tracking_id", trackingID)
-             
-              ! optional global variables
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "title", title)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "project_id", project_id)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "references", references)                    
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "source", source)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "source_id", source_id)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "source_type", source_type)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "tracking_id","hdl:21.14103/" //trackingID)
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "variable_id", var_cmip(ivar))
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "comment", comment)
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "institute_run_id", institute_run_id)
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "nesting_levels", nesting_levels)
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "comment_nesting", comment_nesting)
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "comment_1nest", comment_1nest)
-              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "comment_2nest", comment_2nest)
+              !sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "version_realization", version_realization)
 
               !-----------------------------------------------------------------
               ! always included -- definition of the individual variable
               ! compression is always on variable level, use compression with 
               ! level = 1 (=> CORDEX protocol),  
-              ! REAL PERFORMANCE ISSUES: shuffling and chunking
-              ! https://earthscience.stackexchange.com/questions/12527/regarding-compression-shuffle-filter-of-netcdf4
-              ! https://www.unidata.ucar.edu/software/netcdf/netcdf-4/newdocs/netcdf-f90.html#Variables
-              ! https://www.unidata.ucar.edu/software/netcdf/workshops/2011/nc4chunking/index.html
-              ! https://www.unidata.ucar.edu/software/netcdf/docs/netcdf_perf_chunking.html
               ! compression on/off: 19MB->12MB, 0.1s->0.5s
               ! chunking: needs some careful considerations
-
-              ! not sure whether the height/plev dimension this is needed
-              ! with CORDEX only one layer always per variable, see the
-              ! coordinates attribute which makes the association
-              ! this is also better for coding and data reading
-              !IF ( height(ivar) /= -999 ) THEN
-              ! HTr: only 2nd option
-              
-              ! Josipa: redefine spatial dimensions for the LCC projection
+              ! nf90_def_var_deflate(ncid, varid, shuffle, deflate, deflate_level)
+              sts = nf90_def_var_deflate(ncid, x_varid, 1, 1, 1)
+             
+              ! Define dimensions for the LCC and ROT projections
               IF ( projection == "LCC" ) THEN
                 IF ((var_cmip(ivar) == "mrsol") .OR. (var_cmip(ivar) == "tsl")) THEN
                   sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid, depth_dimid, rec_dimid /), x_varid)
+                ELSE IF (frequency(ifrq) == 'fx') THEN
+                  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid/), x_varid)
                 ELSE
                   sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid, rec_dimid /), x_varid)
                 END IF                 
               ELSE
                 IF ((var_cmip(ivar) == "mrsol") .OR. (var_cmip(ivar) == "tsl")) THEN
-                  ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
                   sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, depth_dimid, rec_dimid /), x_varid)
-                  !sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid, depth_dimid, rec_dimid /), x_varid)
-                  !sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, depth_dimid, rec_dimid /), x_varid, chunksizes = (/10, 10, 1, 8/), shuffle = .TRUE., fletcher32 = .FALSE., endianness = nf90_endian_little, deflate_level = 1)
+                ELSE IF (frequency(ifrq) == 'fx') THEN
+                  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid/), x_varid)
                 ELSE
-                  ! (2023-05-18) - HTr: dimensions "rlon", "rlat" are not allowed
                   sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, rec_dimid /), x_varid)
-                  !sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid, rec_dimid /), x_varid)
-                  !sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, rec_dimid /), x_varid, chunksizes = (/10, 10, 8/), shuffle = .TRUE., fletcher32 = .FALSE., endianness = nf90_endian_little, deflate_level = 1)
                 END IF
-              END IF
-              
+              END IF            
 
-              ! TODO -> determine chunksizes vector beforehand otherwise
-              ! this can only make it worse
-              ! see https://www.unidata.ucar.edu/blogs/developer/en/entry/chunking_data_why_it_matters
-              !sts = nf90_def_var_chunking(ncid, x_varid, NF90_CHUNKED, XXXchunksizesXXX) 
-              ! fill up with missing values, despite unlimited dim.
-              ! not needed, at this point the unlimited time dim is not filled
-              !sts = nf90_def_var_fill(ncid, x_varid, 0, mv) 
-              ! shuffle ON, deflate ON, deflate_level lowest
-              sts = nf90_def_var_deflate(ncid, x_varid, 1, 1, 1)
-              ! default, change with care
-              !sts = nf90_def_var_endian(ncid, x_varid, NF90_ENDIAN_NATIVE)
-                            
+              ! Define variable metadata         
               sts = nf90_put_att(ncid, x_varid, "standard_name", standard_name(ivar))
               sts = nf90_put_att(ncid, x_varid, "long_name", long_name(ivar))
               sts = nf90_put_att(ncid, x_varid, "units", units(ivar))
@@ -1818,34 +1506,30 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                 sts = nf90_put_att(ncid, x_varid, "positive", positive(ivar))
               END IF
               
-              ! (2023-05-15) HTr - add expected cell_method string for certain variables - see CORDEX_variables_requirement_table.csv
               IF ( ( var_cmip(ivar) == "mrro" ) .OR. ( var_cmip(ivar) == "mrros" ) ) THEN
                 sts = nf90_put_att(ncid, x_varid, "cell_methods", "time: "//TRIM(cell_methods(ivar))//" area: "//TRIM(cell_methods(ivar))//" where land")
               ELSE
                 sts = nf90_put_att(ncid, x_varid, "cell_methods", "time: "//TRIM(cell_methods(ivar)))
               END IF
               
-              !Josipa: Redefine condition to include 100m wind
               IF ( height(ivar) /= -999 ) THEN
-              !IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "height lat lon")
-              !Josipa: Redefine condition for pressure levels
               ELSE IF ( plevel(ivar) /= -999 ) THEN 
-              !ELSE IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "plev lat lon") 
-              ELSE IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. &
-                (TRIM(var_cmip(ivar)) == 'tsl')) THEN
-                !sts = nf90_put_att(ncid, x_varid, "coordinates", "lon lat soil_layer") 
-                sts = nf90_put_att(ncid, x_varid, "coordinates", "lat lon") 
+              ELSE IF ( (TRIM(var_cmip(ivar)) == 'mrsol')   .OR. &
+                	(TRIM(var_cmip(ivar)) == 'tsl'  ) ) THEN
+                sts = nf90_put_att(ncid, x_varid, "coordinates", "sdepth lat lon") 
               ELSE
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "lat lon")
               END IF
+
               IF ( projection == "LCC" ) THEN
-                sts = nf90_put_att(ncid, x_varid, "grid_mapping", "lambert_conformal")              
+                sts = nf90_put_att(ncid, x_varid, "grid_mapping", "crs")              
               ELSE
-                sts = nf90_put_att(ncid, x_varid, "grid_mapping", "rotated_pole")
+                sts = nf90_put_att(ncid, x_varid, "grid_mapping", "crs")
               END IF
-              ! (2023-05-15) HTr - "missing_value" is depreciated in CF-1.4
+
+              ! Set missing value and fill_value for the variable
               sts = nf90_put_att(ncid, x_varid, "missing_value", mv)
               sts = nf90_put_att(ncid, x_varid, "_FillValue", mv)
 
@@ -1853,48 +1537,24 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
   
               sts = NF90_ENDDEF(ncid)
 
-              !-----------------------------------------------------------------  
-              ! SUPER IMPORTANT: write time information, the complete time vec
-              ! for the respective file
-              ! this is a bit of a trick, although time informaiton in used to 
-              ! sort in the data, the time vector is only derived from that 
-              ! subset time vector, one could base the complete tool entirely
-              ! very strictly on time and time_bnds information > v2 idea
-
-              IF ( cell_methods(ivar) == "point" ) THEN
-  
-                PRINT *, 'cell_methods:', cell_methods(ivar)
-                PRINT *, TimeRefArraySubset(:,1)
+              !-----------------------------------------------------------------
+              ! Fill time dimension for instantaneous variables
+              IF ( cell_methods(ivar) == "point" ) THEN  
                 sts = NF90_PUT_VAR(ncid, rec_varid, TimeRefArraySubset(:,1) )
-
               END IF
 
+              ! Fill time dimension for averaged variables                          
               IF ( ( cell_methods(ivar) == "mean" ) .OR. &
                    ( cell_methods(ivar) == "sum" ) .OR. &
                    ( cell_methods(ivar) == "minimum" ) .OR. &
                    ( cell_methods(ivar) == "maximum" ) ) THEN
-
-                ! problem
-                ! https://www.unidata.ucar.edu/mailing_lists/archives/netcdfgroup/2015/msg00071.html
-                ! use the old scheme for the time_bnds
-                ! mid-point of time interval [decimal days]
                 TimeRefArraySubsetMean (:) = TimeRefArraySubset(:,1) + ( 0.5_8 * (1._8 / (24._8/dtHours) ) )
-                PRINT *, "cell_methods:", cell_methods(ivar)
-                PRINT *, "dtHours",  dtHours, dtHours/2.
-                PRINT *, "TimeRefArraySubset", TimeRefArraySubset(:,1)
-                PRINT *, "TimeRefArraySubsetMean, mid-points of time intervals: ", TimeRefArraySubsetMean(:)
-                sts = NF90_PUT_VAR(ncid, rec_varid, TimeRefArraySubsetMean(:) )
-                PRINT *, 'sts NF90_PUT_VAR time', sts
-    
+                sts = NF90_PUT_VAR(ncid, rec_varid, TimeRefArraySubsetMean(:) )                 
                 Time_bnds(1,:) = TimeRefArraySubset(:,1)
                 Time_bnds(2,:) = TimeRefArraySubset(:,1) + ( 1._8 * (1._8 / (24._8/dtHours) )) 
-                PRINT *, "time bnds lower", Time_bnds(1,:)
-                PRINT *, "time bnds upper", Time_bnds(2,:)
                 sts = NF90_PUT_VAR(ncid, recbnds_varid, Time_bnds(:,:), START = (/ 1, 1 /) , COUNT = (/ 2, SIZE(Time_bnds(1,:)) /) )
-                PRINT *, 'sts NF90_PUT_VAR time bnds', sts
-  
               END IF
-              !print *,'TimeRefArraySubset(:,1)', TimeRefArraySubset(:,1)
+              
 
               ! TODO
               ! define plev_bnds, needed mainly for clh clm cli
@@ -1902,55 +1562,34 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               !-----------------------------------------------------------------
               ! write coordinates and height/level information
               
-              ! add non-rotated coordinate fields
               sts = NF90_PUT_VAR(ncid, lon_varid, GeoInLonLat(:,:,1), &
                 START = (/ 1, 1, 1 /), COUNT = (/ xfocus, yfocus, 1 /) )
               sts = NF90_PUT_VAR(ncid, lat_varid, GeoInLonLat(:,:,2), &
                 START = (/ 1, 1, 2 /), COUNT = (/ xfocus, yfocus, 1 /) )
 
-              ! add rotated coordinates
-              ! Josipa: Add if not ""
-              IF ( projection == "ROT" ) THEN
+
+              IF ( projection == "LCC" ) THEN     
+                sts = NF90_PUT_VAR(ncid, xlon_varid, GeoInXLon )
+                sts = NF90_PUT_VAR(ncid, ylat_varid, GeoInYLat )
+              ELSE 
                 sts = NF90_PUT_VAR(ncid, rlon_varid, GeoInRLon )
                 sts = NF90_PUT_VAR(ncid, rlat_varid, GeoInRLat )
-              END IF
-    
-              ! add height from NML
-              !Josipa: Redefine condition to include 100m wind
+              END IF  
+
               IF ( height(ivar) /= -999 ) THEN
-              !IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) <= 10. ) ) THEN
                 sts = NF90_PUT_VAR(ncid, height_varid, height(ivar) )
               END IF
 
-              ! add plev from NML, [hPa] -> [Pa]
-              !Josipa: Redefine condition to exclude 100m wind and include plevel
               IF ( plevel(ivar) /= -999 ) THEN
-              !IF ( ( height(ivar) /= -999 ) .AND. ( height(ivar) > 10. ) ) THEN
-                !sts = NF90_PUT_VAR(ncid, plev_varid, height(ivar)*100. )
-                !Josipa: Read plevel instead of height
                 sts = NF90_PUT_VAR(ncid, plev_varid, plevel(ivar)*100. )
               END IF
 
-              ! total with Noah LSM 2m depth thickness of the layers in Noahi LSM / 0.1D0, 0.3D0, 0.6D0, 1.0D0 /
-              ! add the center points of the depth layers, the bnds gives then the info on the actual thickness
+              IF (TRIM(var_cmip(ivar)) == 'mrsos') THEN
+                sts = NF90_PUT_VAR(ncid, depth_varid, (/ 0.05D0 /) ) 
+                sts = NF90_PUT_VAR(ncid, soillayerbnds_varid, RESHAPE((/ 0.0D0, 0.1D0/), (/2,1/)))
+              END IF
+
               IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. (TRIM(var_cmip(ivar)) == 'tsl')) THEN
-!                ALLOCATE(DZSmp(SIZE(DZShc)))
-!                ALLOCATE(soillayer_bnds(SIZE(DZShc),2))
-!                PRINT *, 'soil layer calc'
-!                DO i=1,SIZE(DZShc)
-!                  soillayer_bnds(1,i) = SUM(DZShc(1:i))-DZShc(i)
-!                  soillayer_bnds(2,i) = SUM(DZShc(1:i))
-!                  PRINT '(2(1X,F4.2))', soillayer_bnds(:,i)
-!                  DZSmp(i) = soillayer_bnds(1,i) + DZShc(i)/2
-!                  PRINT '(1X,F4.2)', DZSmp(i)
-!                END DO
-!                PRINT *, 'shape soillayer_bnds', SHAPE(soillayer_bnds)
-!                ! depth (mid-point) of the layers, orientation: Z down
-!                sts = NF90_PUT_VAR(ncid, soillayerbnds_varid, soillayer_bnds(:,:))
-!                ! upper and lower bound of the layers
-!                sts = NF90_PUT_VAR(ncid, depth_varid, DZSmp(:))
-!                ! alternatively hardcode here
-                !sts = NF90_PUT_VAR(ncid, depth_varid, (/ 0.1D0, 0.3D0, 0.6D0, 1.0D0 /) ) ! wrong
                 sts = NF90_PUT_VAR(ncid, depth_varid, (/ 0.05D0, 0.25D0, 0.7D0, 1.5D0 /) ) ! center points of the depth layers, hardcoded
                 sts = NF90_PUT_VAR(ncid, soillayerbnds_varid, RESHAPE((/ 0.0D0, 0.1D0, 0.1D0, 0.4D0, 0.4D0, 1.0D0, 1.0D0, 2.0D0 /), (/2,4/))) ! bnds hardcoded
               END IF 
@@ -1963,23 +1602,11 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
   
             END IF ! file exists y/n
 
-!-------------------------------------------------------------------------------
+          !-------------------------------------------------------------------------------
   
           ELSE ! checking whether this is the first pass or previously run
-
-            PRINT *, "this is a subsequent pass, just read, procecess and sort in stuff"
-
+            PRINT *, "This is a subsequent pass, continue filling: read, procecess and sort data"
           END IF
-
-!-------------------------------------------------------------------------------
-! match timestep 'it' of WRFin with the subset of the ref time vec which belongs
-! to the netCDF file of the year/month/arbitrary timespan currently open to
-! receive data
-! counter = offset in the netCDF file
-! this is done once for the 1h/3h/6h input (point/mean) AND daily data (min/max)
-! this match 'translates' the way WRF stores variables temporally to ESGF
-! e.g. in the wrfxtrm files the min/max are for day1 are stored in 00UTC field
-! of day2
   
           PRINT *, "reading WRF sim. res. = ", TRIM(InVarDataRec(it)), it
           !PRINT *, SIZE(TimeRefArraySubset,1)
@@ -1988,10 +1615,8 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
   
           counter = 0
           time_match = .FALSE.
-          DO i = 1, SIZE(TimeRefArraySubset,1),1 ! time content of the WRF file
-  
-            counter = counter + 1
-  
+          DO i = 1, SIZE(TimeRefArraySubset,1),1 ! time content of the WRF file  
+            counter = counter + 1  
             !PRINT '(F9.3,1X,F5.0,1X,F3.0,1X,F3.0,1X,F3.0)',TimeRefArraySubset(i,1),TimeRefArraySubset(i,2),TimeRefArraySubset(i,3),TimeRefArraySubset(i,4),TimeRefArraySubset(i,5)
   
             IF ( ( TimeRefArraySubset(i,2) == InDateTimeYear(it)  ) .AND. &
@@ -2000,8 +1625,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                  ( TimeRefArraySubset(i,5) == InDateTimeHour(it)  ) ) THEN
               time_match = .TRUE.
               EXIT
-            END IF
-  
+            END IF  
           END DO
 
           ! in case the aggregation_individually is set and the desired file
@@ -2014,151 +1638,116 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
           ! there is a check whether a storage file exists
           IF (time_match) THEN
   
-          PRINT *, "index, single number, where in the NC file the WRF data is sorted in = ", &
-            counter
+            PRINT *, "index, where the WRF data will be located in the nc file = ", counter
   
-!-------------------------------------------------------------------------------
-! read orig WRF outputs
-! there is always a corresponding time-slot in the NC file
-! extracted time from above
-! "it" controls it all: timestep in the individual WRF file
-! there is only one variable at a time under processing
+          !-------------------------------------------------------------------------------
+          ! read orig WRF outputs
+          ! there is always a corresponding time-slot in the NC file
+          ! extracted time from above
+          ! "it" controls it all: timestep in the individual WRF file
+          ! there is only one variable at a time under processing
 
-          PRINT *, "*** SOME VARS ALWAYS HAVE TO BE READ: (T00), P00 ***"
+            PRINT *, "*** SOME VARS ALWAYS HAVE TO BE READ: (T00), P00 ***"
   
-          sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin)
-  
-          ! HTr: read actual value of base state temperature T00
-          ! vector, 1 value /timestep, usually constant
-          ! default changed over time with WRF versions, was 290K, is 300K
-          ! but for DA: checked with registry and namelist -> 290 is used
-                    
-          sts = NF90_INQ_VARID(ncidin, "T00", t00_varid)
-          IF ( sts /= NF90_NOERR ) THEN
-            T00(1) = 290.0 !300.0
-          ELSE
-            sts = NF90_GET_VAR(ncidin, t00_varid, T00(:), &
+	    ! Open the file
+            sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin) 
+     
+            ! Read the variables                   
+            sts = NF90_INQ_VARID(ncidin, "T00", t00_varid)
+            IF ( sts /= NF90_NOERR ) THEN
+              T00(1) = 290.0 !300.0
+            ELSE
+              sts = NF90_GET_VAR(ncidin, t00_varid, T00(:), &
               START = (/ it /), COUNT = (/ 1 /) )
-          END IF
+            END IF
   
-          ! HTr: use actual value of base state pressure P00, if possible
-          sts = NF90_INQ_VARID(ncidin, "P00", p00_varid)
-          IF ( sts /= NF90_NOERR ) THEN
-            P00(1) = 100000.
-          ELSE
-            sts = NF90_GET_VAR(ncidin, p00_varid, P00(:), &
+            ! HTr: use actual value of base state pressure P00, if possible
+            sts = NF90_INQ_VARID(ncidin, "P00", p00_varid)
+            IF ( sts /= NF90_NOERR ) THEN
+              P00(1) = 100000.
+            ELSE
+              sts = NF90_GET_VAR(ncidin, p00_varid, P00(:), &
               START = (/ it /), COUNT = (/ 1 /) )
-          END IF
+            END IF
           
-          PRINT *, T00(1), P00(1)
+            PRINT *, T00(1), P00(1)
 
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! data handling here is inefficient
-! read too many variables
-! read all vertical levels
+            !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-          PRINT *, "*** READING OF VARIABLES ***"
-          PRINT *, "variable to work on = ", TRIM(var_cmip(ivar))
+            PRINT *, "*** READING OF VARIABLES ***"
+            PRINT *, "variable to work on = ", TRIM(var_cmip(ivar))
 
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! psl [Pa] i Sea Level Pressure
-! select via height:
-!  ua [m s-1] i Eastward Wind
-!  va [m s-1] i Northward Wind
-!  wa
-!  ta [K] i Air Temperature
-!  hus [1] i Specific Humidity
-!  zg
-! prw [kg m-2] i Water Vapor Path
-! clwvi [kg m-2] i Condensed Water Path  
-! clwvi [kg m-2] i Condensed Water Path  
-! cape [J kg-1] i 2-D Maximum convective available potential energy
-! cin [J kg-1] i 2-D Maximum convective inhibition
-! CONSIDER GRID STAGGERING
-! keeping the code compact and avoiding unnecessary allocations is sometimes 
-! tricky and may lead to unallocated variables during processing
-! if changes are made here, it must be tested with each variable seperate (all 
-! others OFF in the variable namelist) whether it works, otherwise the 
-! allocation may still persist from a previous pass of the code with a different
-! variable
+	    !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+	    ! psl [Pa] i Sea Level Pressure
+	    ! select via height:
+	    !  ua [m s-1] i Eastward Wind
+	    !  va [m s-1] i Northward Wind
+	    !  wa
+	    !  ta [K] i Air Temperature
+	    !  hus [1] i Specific Humidity
+	    !  zg
+	    ! prw [kg m-2] i Water Vapor Path
+	    ! clwvi [kg m-2] i Condensed Water Path  
+	    ! clwvi [kg m-2] i Condensed Water Path  
+	    ! cape [J kg-1] i 2-D Maximum convective available potential energy
+	    ! cin [J kg-1] i 2-D Maximum convective inhibition
+	    ! CONSIDER GRID STAGGERING
+	    ! keeping the code compact and avoiding unnecessary allocations is sometimes 
+	    ! tricky and may lead to unallocated variables during processing
+	    ! if changes are made here, it must be tested with each variable seperate (all 
+	    ! others OFF in the variable namelist) whether it works, otherwise the 
+	    ! allocation may still persist from a previous pass of the code with a different
+	    ! variable
 
-          IF ( (var_cmip(ivar) == "psl") &
-                !.OR. (height(ivar) == 1000) &
-                !.OR. (height(ivar) == 925) &
-                !.OR. (height(ivar) == 850) &
-                !.OR. (height(ivar) == 700) &
-                !.OR. (height(ivar) == 500) &
-                !.OR. (height(ivar) == 200) &
-                !Josipa: read plevel for pressure levels instead of height
-                .OR. ( (plevel(ivar) /= -999) .AND. ( filetype(ivar) == "s") ) &
-                .OR. (var_cmip(ivar) == "prw") &
-                .OR. (var_cmip(ivar) == "clwvi") &
-                .OR. (var_cmip(ivar) == "clivi") &
-                .OR. (var_cmip(ivar) == "cape") &
-                .OR. (var_cmip(ivar) == "cin") ) THEN
+            IF ( (var_cmip(ivar) == "psl") &
+                .OR.  (var_cmip(ivar) == "prw") &
+                .OR.  (var_cmip(ivar) == "clwvi") &
+                .OR.  (var_cmip(ivar) == "clivi") &
+                .OR.  (var_cmip(ivar) == "cape") &
+                .OR.  (var_cmip(ivar) == "cin") &
+                .OR.  ( (plevel(ivar) /= -999) &
+                        .AND. (filetype(ivar) == "s") ) ) THEN
 
-            PRINT *,'read 3D vars'
+              PRINT *,'read 3D vars'
 
-            !-------------------------------------------------------------------
-            ! internal vars needed in the pressure level / 3D processing section
+              !-------------------------------------------------------------------
+              ! internal vars needed in the pressure level / 3D processing section
 
-            PRINT *, "allocate p_in, t_in, ph_fl" 
-            IF (.not. ALLOCATED(p_in)) ALLOCATE( p_in( xfocus, yfocus, nz ), STAT=sts ) ! always needed
-            IF (.not. ALLOCATED(t_in)) ALLOCATE( t_in( xfocus, yfocus, nz ), STAT=sts )
-            IF (.not. ALLOCATED(ph_fl)) ALLOCATE( ph_fl( xfocus, yfocus, nz ), STAT=sts )
+              ! always needed
+              PRINT *, "allocate p_in, t_in, ph_fl" 
+              IF (.not. ALLOCATED(p_in))  ALLOCATE( p_in( xfocus, yfocus, nz ), STAT=sts ) 
+              IF (.not. ALLOCATED(t_in))  ALLOCATE( t_in( xfocus, yfocus, nz ), STAT=sts )
+              IF (.not. ALLOCATED(ph_fl)) ALLOCATE( ph_fl( xfocus, yfocus, nz ), STAT=sts )
 
-            IF ( var_cmip(ivar) == "prw" ) THEN
-              IF (.not. ALLOCATED(prw)) ALLOCATE( prw( xfocus, yfocus ), STAT=sts )
-            END IF
+              IF ( var_cmip(ivar) == "prw" ) THEN
+                IF (.not. ALLOCATED(prw)) ALLOCATE( prw( xfocus, yfocus ), STAT=sts )
+              END IF
 
-            IF ( var_cmip(ivar) == "psl" ) THEN
-              IF (.not. ALLOCATED(psl_in)) ALLOCATE( psl_in ( xfocus, yfocus ), STAT=sts )
-            END IF
+              IF ( var_cmip(ivar) == "psl" ) THEN
+                IF (.not. ALLOCATED(psl_in)) ALLOCATE( psl_in ( xfocus, yfocus ), STAT=sts )
+              END IF
 
-            IF ( (var_cmip(ivar) == "cape" ) .OR. (var_cmip(ivar) == "cin" ) ) THEN
-              IF (.not. ALLOCATED(cape)) ALLOCATE( cape( xfocus, yfocus ), STAT=sts )
-              IF (.not. ALLOCATED(cin)) ALLOCATE( cin( xfocus, yfocus ), STAT=sts )
-              IF (.not. ALLOCATED(t_p)) ALLOCATE( t_p( xfocus, yfocus, nz ), STAT=sts )
-              IF (.not. ALLOCATED(qvs)) ALLOCATE( qvs( xfocus, yfocus, nz ), STAT=sts )
-              IF (.not. ALLOCATED(lcl)) ALLOCATE( lcl( xfocus, yfocus ), STAT=sts )
-              IF (.not. ALLOCATED(lfc)) ALLOCATE( lfc( xfocus, yfocus ), STAT=sts )
-            END IF
+              IF ( (var_cmip(ivar) == "cape" ) .OR. (var_cmip(ivar) == "cin" ) ) THEN
+                IF (.not. ALLOCATED(t_p))  ALLOCATE( t_p( xfocus, yfocus, nz ), STAT=sts )
+                IF (.not. ALLOCATED(qvs))  ALLOCATE( qvs( xfocus, yfocus, nz ), STAT=sts )
+                IF (.not. ALLOCATED(cape)) ALLOCATE( cape( xfocus, yfocus ), STAT=sts )
+                IF (.not. ALLOCATED(cin))  ALLOCATE( cin( xfocus, yfocus ), STAT=sts )
+                IF (.not. ALLOCATED(lcl))  ALLOCATE( lcl( xfocus, yfocus ), STAT=sts )
+                IF (.not. ALLOCATED(lfc))  ALLOCATE( lfc( xfocus, yfocus ), STAT=sts )
+              END IF
 
-            IF ( var_cmip(ivar) == "clwvi" ) THEN
-              IF (.not. ALLOCATED(clwvi)) ALLOCATE( clwvi( xfocus, yfocus ), STAT=sts )
-            ENDIF
+              IF ( var_cmip(ivar) == "clwvi" ) THEN
+                IF (.not. ALLOCATED(clwvi)) ALLOCATE( clwvi( xfocus, yfocus ), STAT=sts )
+              ENDIF
 
-            IF ( var_cmip(ivar) == "clivi" ) THEN
-              IF (.not. ALLOCATED(clivi)) ALLOCATE( clivi( xfocus, yfocus ), STAT=sts )
-            END IF
+              IF ( var_cmip(ivar) == "clivi" ) THEN
+                IF (.not. ALLOCATED(clivi)) ALLOCATE( clivi( xfocus, yfocus ), STAT=sts )
+              END IF
 
-            ! PROBLEM to make this efficient: selection of vars via height
-            ! is not really efficient; if one defines a list of concrete
-            ! variable names this list has to always be expanded if a new 
-            ! variable is needed
-            IF ( height(ivar) > 10 ) THEN
-              PRINT *, "prep. int. 3D pres. level vars"
-              ! IF (.not. ALLOCATED(var_pl)) ALLOCATE( var_pl( xfocus, yfocus, 6 ), STAT=sts ) ! working on one variable at a time
-              !!IF (.not. ALLOCATED(var_pl)) ALLOCATE( var_pl( xfocus, yfocus ), STAT=sts ) ! get completely rid of this thing
-              ! var_pl(:,:,:) = mv
-              !!var_pl(:,:) = mv
-              IF (.not. ALLOCATED(var3d_in)) ALLOCATE( var3d_in( xfocus, yfocus, nz ), STAT=sts )
-              !!!IF (.not. ALLOCATED(pout)) ALLOCATE( pout( SIZE(pout) ), STAT=sts ) ! # pressure levels can be removed
-            END IF
-
-            !-------------------------------------------------------------------
-            ! read data as needed
-            ! these 5 vars are always calculated
-
-            IF ( ( var_cmip(ivar) == "prw" )   .OR. &
-                 ( var_cmip(ivar) == "psl" )   .OR. &
-                 !Josipa: read plevel for pressure level instead of height
-                 ( (plevel(ivar) /= -999) .AND. ( filetype(ivar) == "s") ) .OR. &
-                 !( height(ivar) > 10  )        .OR. &
-                 ( var_cmip(ivar) == "clwvi" ) .OR. &
-                 ( var_cmip(ivar) == "clivi" ) .OR. &
-                 ( var_cmip(ivar) == "cape" )  .OR. &
-                 ( var_cmip(ivar) == "cin" ) ) THEN
+              IF ( (plevel(ivar) /= -999) .AND. ( filetype(ivar) == "s") ) THEN
+                PRINT *, "prep. int. 3D pres. level vars"
+                IF (.not. ALLOCATED(var3d_in)) ALLOCATE( var3d_in( xfocus, yfocus, nz ), STAT=sts )
+              END IF
 
               PRINT *, "read P"
               IF (.not. ALLOCATED(pp_in)) ALLOCATE( pp_in( xfocus, yfocus, nz ), STAT=sts )
@@ -2189,104 +1778,85 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               sts = NF90_INQ_VARID(ncidin, "T", theta_varid)
               sts = NF90_GET_VAR(ncidin, theta_varid, theta_in(:,:,:), &
                 START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
-
-            END IF
-
             !-------------------------------------------------------------------
 
-            IF ( ( var_cmip(ivar) == "prw" ) .OR. ( var_cmip(ivar) == "psl" ) .OR. &
-                 ( SCAN(var_cmip(ivar),"hus") == 1 ) .OR. ( var_cmip(ivar) == "cape" ) .OR. &
-                 ( var_cmip(ivar) == "cin" ) ) THEN
-              PRINT *, "read QVAPOR"
-              IF (.not. ALLOCATED(qv_in)) ALLOCATE( qv_in( xfocus, yfocus, nz  ), STAT=sts )
-              sts = NF90_INQ_VARID(ncidin, "QVAPOR", qv_varid)
-              sts = NF90_GET_VAR(ncidin, qv_varid, qv_in(:,:,:), &
-                START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
-            END IF  
+              IF ( ( var_cmip(ivar) == "prw" ) &
+                 .OR. ( var_cmip(ivar) == "psl" ) &
+                 .OR. ( SCAN(var_cmip(ivar),"hus") == 1 ) &
+                 .OR. ( var_cmip(ivar) == "cape" ) &
+                 .OR. ( var_cmip(ivar) == "cin" ) ) THEN
+                PRINT *, "read QVAPOR"
+                IF (.not. ALLOCATED(qv_in)) ALLOCATE( qv_in( xfocus, yfocus, nz  ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "QVAPOR", qv_varid)
+                sts = NF90_GET_VAR(ncidin, qv_varid, qv_in(:,:,:), &
+                  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
+              END IF  
 
-            IF ( var_cmip(ivar) == "clwvi" ) THEN
-              PRINT *, "read QCLOUD"
-              IF (.not. ALLOCATED(qc_in)) ALLOCATE( qc_in( xfocus, yfocus, nz  ), STAT=sts )
-              sts = NF90_INQ_VARID(ncidin, "QCLOUD", qc_varid)
-              sts = NF90_GET_VAR(ncidin, qc_varid, qc_in(:,:,:), &
-                START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
-            END IF
+              IF ( var_cmip(ivar) == "clwvi" ) THEN
+                PRINT *, "read QCLOUD"
+                IF (.not. ALLOCATED(qc_in)) ALLOCATE( qc_in( xfocus, yfocus, nz  ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "QCLOUD", qc_varid)
+                sts = NF90_GET_VAR(ncidin, qc_varid, qc_in(:,:,:), &
+                  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
+              END IF
 
-            IF ( ( var_cmip(ivar) == "clwvi" ) .OR. ( var_cmip(ivar) == "clivi" ) ) THEN
-              PRINT *, "read QICE"
-              IF (.not. ALLOCATED(qi_in)) ALLOCATE( qi_in( xfocus, yfocus, nz  ), STAT=sts )
-              sts = NF90_INQ_VARID(ncidin, "QICE", qi_varid)
-              sts = NF90_GET_VAR(ncidin, qi_varid, qi_in(:,:,:), &
-                START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
-            END IF
+              IF ( ( var_cmip(ivar) == "clwvi" ) .OR. ( var_cmip(ivar) == "clivi" ) ) THEN
+                PRINT *, "read QICE"
+                IF (.not. ALLOCATED(qi_in)) ALLOCATE( qi_in( xfocus, yfocus, nz  ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "QICE", qi_varid)
+                sts = NF90_GET_VAR(ncidin, qi_varid, qi_in(:,:,:), &
+                  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
+              END IF
 
-            IF ( var_cmip(ivar) == "clwvi" ) THEN
-              PRINT *, "read QRAIN"
-              IF (.not. ALLOCATED(qr_in)) ALLOCATE( qr_in( xfocus, yfocus, nz  ), STAT=sts )
-              sts = NF90_INQ_VARID(ncidin, "QRAIN", qr_varid)
-              sts = NF90_GET_VAR(ncidin, qr_varid, qr_in(:,:,:), &
-                START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
-            END IF
+              IF ( var_cmip(ivar) == "clwvi" ) THEN
+                PRINT *, "read QRAIN"
+                IF (.not. ALLOCATED(qr_in)) ALLOCATE( qr_in( xfocus, yfocus, nz  ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "QRAIN", qr_varid)
+                sts = NF90_GET_VAR(ncidin, qr_varid, qr_in(:,:,:), &
+                  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
+              END IF
   
-            IF ( ( var_cmip(ivar) == "clwvi" ) .OR. ( var_cmip(ivar) == "clivi" ) ) THEN
-              PRINT *, "read QSNOW"
-              IF (.not. ALLOCATED(qs_in)) ALLOCATE( qs_in( xfocus, yfocus, nz  ), STAT=sts )
-              sts = NF90_INQ_VARID(ncidin, "QSNOW", qs_varid)
-              sts = NF90_GET_VAR(ncidin, qs_varid, qs_in(:,:,:), &
-                START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
-            END IF
+              IF ( ( var_cmip(ivar) == "clwvi" ) &
+                 .OR. ( var_cmip(ivar) == "clivi" ) ) THEN
+                PRINT *, "read QSNOW"
+                IF (.not. ALLOCATED(qs_in)) ALLOCATE( qs_in( xfocus, yfocus, nz  ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "QSNOW", qs_varid)
+                sts = NF90_GET_VAR(ncidin, qs_varid, qs_in(:,:,:), &
+                  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
+              END IF
 
-            IF ( (SCAN(var_cmip(ivar),"ua") == 1) .OR. (SCAN(var_cmip(ivar),"va") == 1) ) THEN
-              PRINT *, "read U"
-              IF (.not. ALLOCATED(u_in)) ALLOCATE( u_in( xfocus+1, yfocus, nz ), STAT=sts )
-              sts = NF90_INQ_VARID(ncidin, "U", u_varid)
-              sts = NF90_GET_VAR(ncidin, u_varid, u_in(:,:,:), &
-                START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus+1, yfocus, nz, 1 /) )
-            END IF
+              IF ( (SCAN(var_cmip(ivar),"ua") == 1) .OR. (SCAN(var_cmip(ivar),"va") == 1) ) THEN
+                PRINT *, "read U"
+                IF (.not. ALLOCATED(u_in)) ALLOCATE( u_in( xfocus+1, yfocus, nz ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "U", u_varid)
+                sts = NF90_GET_VAR(ncidin, u_varid, u_in(:,:,:), &
+                  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus+1, yfocus, nz, 1 /) )
   
-            IF ( (SCAN(var_cmip(ivar),"ua") == 1) .OR. (SCAN(var_cmip(ivar),"va") == 1) ) THEN
-              PRINT *, "read V"
-              IF (.not. ALLOCATED(v_in)) ALLOCATE( v_in( xfocus, yfocus+1, nz ), STAT=sts )
-              sts = NF90_INQ_VARID(ncidin, "V", v_varid)
-              sts = NF90_GET_VAR(ncidin, v_varid, v_in(:,:,:), &
-                START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus+1, nz, 1 /) )
-            END IF
+                PRINT *, "read V"
+                IF (.not. ALLOCATED(v_in)) ALLOCATE( v_in( xfocus, yfocus+1, nz ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "V", v_varid)
+                sts = NF90_GET_VAR(ncidin, v_varid, v_in(:,:,:), &
+                  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus+1, nz, 1 /) )
+              END IF
             
-            IF ( (SCAN(var_cmip(ivar),"wa") == 1) ) THEN
-              PRINT *, "read W"
-              IF (.not. ALLOCATED(w_in)) ALLOCATE( w_in( xfocus, yfocus, nz+1 ), STAT=sts )
-              sts = NF90_INQ_VARID(ncidin, "W", w_varid)
-              sts = NF90_GET_VAR(ncidin, w_varid, w_in(:,:,:), &
-                START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz+1, 1 /) )
-            END IF
-
-            IF ( (SCAN(var_cmip(ivar),"ua") == 1) .OR. (SCAN(var_cmip(ivar),"va") == 1) ) THEN
-              PRINT *, "read SINALPHA"
-              IF (.not. ALLOCATED(sinalpha_in)) ALLOCATE( sinalpha_in( xfocus, yfocus ), STAT=sts )
-              sts = NF90_INQ_VARID(ncidin, "SINALPHA", sinalpha_varid)
-              sts = NF90_GET_VAR(ncidin, sinalpha_varid, sinalpha_in(:,:), &
-                START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-            END IF
+              IF ( (SCAN(var_cmip(ivar),"wa") == 1) ) THEN
+                PRINT *, "read W"
+                IF (.not. ALLOCATED(w_in)) ALLOCATE( w_in( xfocus, yfocus, nz+1 ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "W", w_varid)
+                sts = NF90_GET_VAR(ncidin, w_varid, w_in(:,:,:), &
+                  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz+1, 1 /) )
+              END IF
   
-            IF ( (SCAN(var_cmip(ivar),"ua") == 1) .OR. (SCAN(var_cmip(ivar),"va") == 1) ) THEN
-              PRINT *, "read COSALPHA"
-              IF (.not. ALLOCATED(cosalpha_in)) ALLOCATE( cosalpha_in( xfocus, yfocus ), STAT=sts )
-              sts = NF90_INQ_VARID(ncidin, "COSALPHA", cosalpha_varid)
-              sts = NF90_GET_VAR(ncidin, cosalpha_varid, cosalpha_in(:,:), &
-                START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-            END IF
-  
-            IF ( var_cmip(ivar) == "psl" ) THEN
-              PRINT *, "read PSFC"
-              IF (.not. ALLOCATED(psfc_in)) ALLOCATE( psfc_in( xfocus, yfocus ), STAT=sts )
-              sts = NF90_INQ_VARID(ncidin, "PSFC", psfc_varid)
-              sts = NF90_GET_VAR(ncidin, psfc_varid, psfc_in(:,:), &
-                START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-            END IF
+              IF ( var_cmip(ivar) == "psl" ) THEN
+                PRINT *, "read PSFC"
+                IF (.not. ALLOCATED(psfc_in)) ALLOCATE( psfc_in( xfocus, yfocus ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "PSFC", psfc_varid)
+                sts = NF90_GET_VAR(ncidin, psfc_varid, psfc_in(:,:), &
+                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+              END IF
             
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! Josipa: Pressure level variables read from wrfpress
-
+            !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+            ! Reading data from wrfpress files
             ELSE IF ( filetype(ivar) == "p" )  THEN
               sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "P_LEV_MISSING", p_miss)
               IF ( SCAN(var_cmip(ivar),"hus") == 1 ) THEN
@@ -2297,6 +1867,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                   START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, npl, 1 /) )
                   WHERE (pl_in < -900.) pl_in = mv
               END IF
+
               IF ( SCAN(var_cmip(ivar),"ta") == 1 ) THEN
                 PRINT *, "read T_PL"
                 IF (.not. ALLOCATED(pl_in)) ALLOCATE( pl_in( xfocus, yfocus, npl  ), STAT=sts )
@@ -2305,6 +1876,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                   START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, npl, 1 /) )
                   WHERE  (pl_in < -900.) pl_in(:,:,:) = mv
               END IF
+
               IF ( SCAN(var_cmip(ivar),"zg") == 1 ) THEN
                 PRINT *, "read GHT_PL"
                 IF (.not. ALLOCATED(pl_in)) ALLOCATE( pl_in( xfocus, yfocus, npl  ), STAT=sts )
@@ -2313,8 +1885,8 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                   START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, npl, 1 /) )
                   WHERE (pl_in < -900.) pl_in = mv
               END IF
-              IF ( SCAN(var_cmip(ivar),"ua") == 1 ) THEN !.OR. &
-                 !  ( ( plevel(ivar) /= -999 ) .AND. ( SCAN(var_cmip(ivar),"va") == 1 ) ) ) THEN
+
+              IF ( (SCAN(var_cmip(ivar),"ua") == 1 ) .OR. ( SCAN(var_cmip(ivar),"va") == 1) ) THEN
                 PRINT *, "read U_PL"
                 IF (.not. ALLOCATED(pl_in_u)) ALLOCATE( pl_in_u( xfocus, yfocus, npl  ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, "U_PL", pl_varid_u)
@@ -2329,255 +1901,213 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                   WHERE (pl_in_v < -900.) pl_in_v = mv
               END IF
 
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! Josipa: ua and va at height > 10m [ms-1] wind components at heights higher then 10m 
+              !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+              ! Josipa: ua and va at height > 10m [ms-1] wind components at heights higher then 10m 
 
-						ELSE IF ( ( height(ivar) > 10. ) .AND. &
-							( (SCAN(var_cmip(ivar),"ua") == 1 ) .OR.  (SCAN(var_cmip(ivar),"va") == 1 ) ) ) THEN
+              ELSE IF ( ( height(ivar) > 10. ) .AND. &
+			( (SCAN(var_cmip(ivar),"ua") == 1 ) .OR.  (SCAN(var_cmip(ivar),"va") == 1 ) ) ) THEN
 
-							PRINT *, "alocating 2D and 3D variables"
-							IF (.not. ALLOCATED(hgt_in)) ALLOCATE( hgt_in( xfocus, yfocus ), STAT=sts )
-							IF (.not. ALLOCATED(ph_in))  ALLOCATE( ph_in( xfocus, yfocus, nz_lowest + 1 ), STAT=sts )
-							IF (.not. ALLOCATED(phb_in)) ALLOCATE( phb_in( xfocus, yfocus, nz_lowest + 1 ), STAT=sts )
-							IF (.not. ALLOCATED(ph_fl))  ALLOCATE( ph_fl( xfocus, yfocus, nz_lowest ), STAT=sts )
-							IF (.not. ALLOCATED(u_in))   ALLOCATE( u_in( xfocus+1, yfocus, nz_lowest ), STAT=sts )
-							IF (.not. ALLOCATED(v_in))   ALLOCATE( v_in( xfocus, yfocus+1, nz_lowest ), STAT=sts )
-							IF (.not. ALLOCATED(u10_in)) ALLOCATE( u10_in ( xfocus, yfocus ), STAT=sts )
-							IF (.not. ALLOCATED(v10_in)) ALLOCATE( v10_in ( xfocus, yfocus ), STAT=sts ) 
-							IF (.not. ALLOCATED(var3d_in_u)) ALLOCATE( var3d_in_u ( xfocus, yfocus, nz_lowest), STAT=sts )
-							IF (.not. ALLOCATED(var3d_in_v)) ALLOCATE( var3d_in_v ( xfocus, yfocus, nz_lowest), STAT=sts )
-							IF (.not. ALLOCATED(sinalpha_in)) ALLOCATE( sinalpha_in( xfocus, yfocus ), STAT=sts )
-							IF (.not. ALLOCATED(cosalpha_in)) ALLOCATE( cosalpha_in( xfocus, yfocus ), STAT=sts )
-							IF (.not. ALLOCATED(var2d_u)) ALLOCATE( var2d_u( xfocus, yfocus ), STAT=sts )
-							IF (.not. ALLOCATED(var2d_v)) ALLOCATE( var2d_v( xfocus, yfocus ), STAT=sts )
+		PRINT *, "alocating 2D and 3D variables"
+		IF (.not. ALLOCATED(hgt_in)) ALLOCATE( hgt_in( xfocus, yfocus ), STAT=sts )
+		IF (.not. ALLOCATED(ph_in))  ALLOCATE( ph_in( xfocus, yfocus, nz_lowest + 1 ), STAT=sts )
+		IF (.not. ALLOCATED(phb_in)) ALLOCATE( phb_in( xfocus, yfocus, nz_lowest + 1 ), STAT=sts )
+		IF (.not. ALLOCATED(ph_fl))  ALLOCATE( ph_fl( xfocus, yfocus, nz_lowest ), STAT=sts )
+		IF (.not. ALLOCATED(u_in))   ALLOCATE( u_in( xfocus+1, yfocus, nz_lowest ), STAT=sts )
+		IF (.not. ALLOCATED(v_in))   ALLOCATE( v_in( xfocus, yfocus+1, nz_lowest ), STAT=sts )
+		IF (.not. ALLOCATED(u10_in)) ALLOCATE( u10_in ( xfocus, yfocus ), STAT=sts )
+		IF (.not. ALLOCATED(v10_in)) ALLOCATE( v10_in ( xfocus, yfocus ), STAT=sts ) 
+		IF (.not. ALLOCATED(var3d_in_u))  ALLOCATE( var3d_in_u ( xfocus, yfocus, nz_lowest), STAT=sts )
+		IF (.not. ALLOCATED(var3d_in_v))  ALLOCATE( var3d_in_v ( xfocus, yfocus, nz_lowest), STAT=sts )
+		IF (.not. ALLOCATED(sinalpha_in)) ALLOCATE( sinalpha_in( xfocus, yfocus ), STAT=sts )
+		IF (.not. ALLOCATED(cosalpha_in)) ALLOCATE( cosalpha_in( xfocus, yfocus ), STAT=sts )
+		IF (.not. ALLOCATED(var2d_u)) ALLOCATE( var2d_u( xfocus, yfocus ), STAT=sts )
+		IF (.not. ALLOCATED(var2d_v)) ALLOCATE( var2d_v( xfocus, yfocus ), STAT=sts )
 
-							PRINT *, "read HGT"
-							sts = NF90_INQ_VARID(ncidin, "HGT", hgt_varid)
-							sts = NF90_GET_VAR(ncidin, hgt_varid, hgt_in(:,:), &
-								START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-							PRINT *, "read PH"
-							sts = NF90_INQ_VARID(ncidin, "PH", ph_varid)
-							sts = NF90_GET_VAR(ncidin, ph_varid, ph_in(:,:,:), &
-								START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz_lowest+1, 1 /) )
-							PRINT *, "read PHB"
-							sts = NF90_INQ_VARID(ncidin, "PHB", phb_varid)
-							sts = NF90_GET_VAR(ncidin, phb_varid, phb_in(:,:,:), &
-								START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz_lowest+1, 1 /) )
-	            PRINT *, "read U"
-	            sts = NF90_INQ_VARID(ncidin, "U", u_varid)
-	            sts = NF90_GET_VAR(ncidin, u_varid, u_in(:,:,:), &
-	              START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus+1, yfocus, nz_lowest, 1 /) )
-	            PRINT *, "read V"
-	            sts = NF90_INQ_VARID(ncidin, "V", v_varid)
-	            sts = NF90_GET_VAR(ncidin, v_varid, v_in(:,:,:), &
-	              START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus+1, nz_lowest, 1 /) )
-	            PRINT *, "read U10"
-	            sts = NF90_INQ_VARID(ncidin, "U10", u10_varid)
-	            sts = NF90_GET_VAR(ncidin, u10_varid, u10_in(:,:), &
-	               START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-	            PRINT *, "read V10"
-	            sts = NF90_INQ_VARID(ncidin, "V10", v10_varid)  
-	            sts = NF90_GET_VAR(ncidin, v10_varid, v10_in(:,:), &
-	               START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )                        
-	            PRINT *, "read SINALPHA"              
-	            sts = NF90_INQ_VARID(ncidin, "SINALPHA", sinalpha_varid)
-	            sts = NF90_GET_VAR(ncidin, sinalpha_varid, sinalpha_in(:,:), &
-	              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-	            PRINT *, "read COSALPHA"              
-	            sts = NF90_INQ_VARID(ncidin, "COSALPHA", cosalpha_varid)
-	            sts = NF90_GET_VAR(ncidin, cosalpha_varid, cosalpha_in(:,:), &
-	              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )      				
+		PRINT *, "read HGT"
+		sts = NF90_INQ_VARID(ncidin, "HGT", hgt_varid)
+		sts = NF90_GET_VAR(ncidin, hgt_varid, hgt_in(:,:), &
+		  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+		PRINT *, "read PH"
+		sts = NF90_INQ_VARID(ncidin, "PH", ph_varid)
+		sts = NF90_GET_VAR(ncidin, ph_varid, ph_in(:,:,:), &
+		  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz_lowest+1, 1 /) )
+		PRINT *, "read PHB"
+		sts = NF90_INQ_VARID(ncidin, "PHB", phb_varid)
+		sts = NF90_GET_VAR(ncidin, phb_varid, phb_in(:,:,:), &
+		  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz_lowest+1, 1 /) )
+            	PRINT *, "read U"
+            	sts = NF90_INQ_VARID(ncidin, "U", u_varid)
+            	sts = NF90_GET_VAR(ncidin, u_varid, u_in(:,:,:), &
+              	  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus+1, yfocus, nz_lowest, 1 /) )
+            	PRINT *, "read V"
+            	sts = NF90_INQ_VARID(ncidin, "V", v_varid)
+            	sts = NF90_GET_VAR(ncidin, v_varid, v_in(:,:,:), &
+              	  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus+1, nz_lowest, 1 /) )
+            	PRINT *, "read U10"
+            	sts = NF90_INQ_VARID(ncidin, "U10", u10_varid)
+            	sts = NF90_GET_VAR(ncidin, u10_varid, u10_in(:,:), &
+                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+            	PRINT *, "read V10"
+            	sts = NF90_INQ_VARID(ncidin, "V10", v10_varid)  
+            	sts = NF90_GET_VAR(ncidin, v10_varid, v10_in(:,:), &
+                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )                           				
       				
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! clt [%] a Total Cloud Fraction
+	    !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+            ! clt [%] a Total Cloud Fraction
   
-          ELSE IF ( var_cmip(ivar) == "clt" ) THEN
+            ELSE IF ( var_cmip(ivar) == "clt" ) THEN
 
-            IF (.not. ALLOCATED(cldfra_in)) ALLOCATE( cldfra_in( xfocus, yfocus, nz, 2 ), STAT=sts )   
-  
-            IF (it /= InDimLenRec) THEN
-
+              IF (.not. ALLOCATED(cldfra_in)) ALLOCATE( cldfra_in( xfocus, yfocus, nz, 2 ), STAT=sts )  
+              IF (it /= InDimLenRec) THEN
               sts = NF90_INQ_VARID(ncidin, "CLDFRA", varid)
               sts = NF90_GET_VAR(ncidin, varid, cldfra_in(:,:,:,:), &
                 START = (/ xoffset, yoffset, 1, it /), &
                 COUNT = (/ xfocus, yfocus, nz, 2 /) )
   
-            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
-
-              sts = NF90_INQ_VARID(ncidin, "CLDFRA", varid)
-              sts = NF90_GET_VAR(ncidin, varid, cldfra_in(:,:,:,1), &
-                START = (/ xoffset, yoffset, 1, it /), &
-                COUNT = (/ xfocus, yfocus, nz, 1 /) )
+              ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
+                sts = NF90_INQ_VARID(ncidin, "CLDFRA", varid)
+                sts = NF90_GET_VAR(ncidin, varid, cldfra_in(:,:,:,1), &
+                  START = (/ xoffset, yoffset, 1, it /), &
+                  COUNT = (/ xfocus, yfocus, nz, 1 /) )  
+                iflWRFin = fl_input(ifl+1) ! if not the first set to the previous wrfoutfile 
+                                             
+                sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
+                sts = NF90_INQ_VARID(ncidin0, "CLDFRA", varid)
+                sts = NF90_GET_VAR(ncidin0, varid, cldfra_in(:,:,:,2), &
+                  START = (/ xoffset, yoffset, 1, 1 /), &
+                  COUNT = (/ xfocus, yfocus, nz, 1 /) )
   
-              iflWRFin = fl_input(ifl+1) ! set to the previous wrfoutfile 
-                                          ! if it is not the first
-  
-              sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
-
-              sts = NF90_INQ_VARID(ncidin0, "CLDFRA", varid)
-              sts = NF90_GET_VAR(ncidin0, varid, cldfra_in(:,:,:,2), &
-                START = (/ xoffset, yoffset, 1, 1 /), &
-                COUNT = (/ xfocus, yfocus, nz, 1 /) )
-  
-              sts = NF90_CLOSE(ncidin0)
-  
-              iflWRFin = fl_input(ifl)  !set to the current wrfout file again
-
-            ELSE
-
-              PRINT *, "no data available for average calculation any more"
-
-              calc = .FALSE.
-
-            END IF
+                sts = NF90_CLOSE(ncidin0)  
+                iflWRFin = fl_input(ifl)  !set to the current wrfout file again
+              ELSE
+                PRINT *, "no data available for average calculation any more"
+                calc = .FALSE.
+              END IF
   
 
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! pr [kg m-2 s-1] a Precipitation 
-! EURO-CORDEX Jan/2018 meeting, conv+incl. snow graupel, hail, etc.
-! TODO CHECK !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! always need two adjacent output intervals to calculate the amount of precip
-! between dates and consider whether the bucket_mm has been used:
-! http://www2.mmm.ucar.edu/wrf/users/docs/user_guide_V3.8/users_guide_chap5.htm#bucket
-  
-          ELSE IF (var_cmip(ivar) == "pr") THEN 
+            !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+            ! pr [kg m-2 s-1] a Precipitation 
+   
+            ELSE IF (var_cmip(ivar) == "pr") THEN 
              
-            PRINT *, "read iflWRFin " , iflWRFin
-            PRINT *, "it = ", it
-            PRINT *, "inDimLenRec, number of output times in input = ", InDimLenRec
+              PRINT *, "read iflWRFin " , iflWRFin
+              PRINT *, "it = ", it
+              PRINT *, "inDimLenRec, number of output times in input = ", InDimLenRec
 
-            ! e.g. it=1..24, 00UTC-23UTC, #24 fields/file > only 23 average fields
-            ! 00-01UTC -> 00:30UTC average 
-            ! try to read if 23UTC the 00UTC from next file
-            ! this is all independent of bucket or not
-            ! if 00-day1 to 00-day2, then the last search finds 00UTC-day2 as a match
-            ! for 24UTC from day1 > will be written to 00:30 from day2 > no problem
-            IF (it < InDimLenRec) THEN 
-
-              PRINT *, "read rainc and rainnc two dates from the same file"
-
-              IF (.not. ALLOCATED(rainnc_in)) ALLOCATE( rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
-              sts = NF90_INQ_VARID(ncidin, "RAINNC", rainnc_varid)
-              sts = NF90_GET_VAR(ncidin, rainnc_varid, rainnc_in(:,:,:), &
-                START = (/ xoffset, yoffset, it /), &
-                COUNT = (/ xfocus, yfocus, 2 /) )
-
-              IF (.not. ALLOCATED(rainc_in)) ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
-              sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)  
-              sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
-                START = (/ xoffset, yoffset, it /), &
-                COUNT = (/ xfocus, yfocus, 2 /) )
-
-              sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_MM", bucket_mm)
-              IF ( bucket_mm > 0. ) THEN
-                IF (.not. ALLOCATED(i_rainnc_in)) ALLOCATE( i_rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
-                sts = NF90_INQ_VARID(ncidin, "I_RAINNC", varid)
-                sts = NF90_GET_VAR(ncidin, varid, i_rainnc_in(:,:,:), &
-                  START = (/ xoffset, yoffset, it /), &
-                  COUNT = (/ xfocus, yfocus, 2 /) )   
-                IF (.not. ALLOCATED(i_rainc_in)) ALLOCATE( i_rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
-                sts = NF90_INQ_VARID(ncidin, "I_RAINC", varid)
-                sts = NF90_GET_VAR(ncidin, varid, i_rainc_in(:,:,:), &
+              IF (it < InDimLenRec) THEN 
+                PRINT *, "read rainc and rainnc two dates from the same file"
+                IF (.not. ALLOCATED(rainnc_in)) ALLOCATE( rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "RAINNC", rainnc_varid)
+                sts = NF90_GET_VAR(ncidin, rainnc_varid, rainnc_in(:,:,:), &
                   START = (/ xoffset, yoffset, it /), &
                   COUNT = (/ xfocus, yfocus, 2 /) )
+
+                IF (.not. ALLOCATED(rainc_in)) ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)  
+                sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
+                  START = (/ xoffset, yoffset, it /), &
+                  COUNT = (/ xfocus, yfocus, 2 /) )
+
+                sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_MM", bucket_mm)
+                IF ( bucket_mm > 0. ) THEN
+                  IF (.not. ALLOCATED(i_rainnc_in)) ALLOCATE( i_rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
+                  sts = NF90_INQ_VARID(ncidin, "I_RAINNC", varid)
+                  sts = NF90_GET_VAR(ncidin, varid, i_rainnc_in(:,:,:), &
+                    START = (/ xoffset, yoffset, it /), &
+                    COUNT = (/ xfocus, yfocus, 2 /) )   
+                  IF (.not. ALLOCATED(i_rainc_in)) ALLOCATE( i_rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+                  sts = NF90_INQ_VARID(ncidin, "I_RAINC", varid)
+                  sts = NF90_GET_VAR(ncidin, varid, i_rainc_in(:,:,:), &
+                    START = (/ xoffset, yoffset, it /), &
+                    COUNT = (/ xfocus, yfocus, 2 /) )
+                END IF
+
+              ! get the last available field from the current input file
+              ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
+                PRINT *, "read rainc and rainnc from the current and the subsequent file"
+                IF (.not. ALLOCATED(rainnc_in)) ALLOCATE( rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )        
+                sts = NF90_INQ_VARID(ncidin, "RAINNC", rainnc_varid)
+                sts = NF90_GET_VAR(ncidin, rainnc_varid, rainnc_in(:,:,1), &
+                  START = (/ xoffset, yoffset, it /), &
+                  COUNT = (/ xfocus,yfocus, 1 /) )
+
+                IF (.not. ALLOCATED(rainc_in)) ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
+                sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,1), &
+                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+
+                sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_MM", bucket_mm)
+                IF ( bucket_mm > 0. ) THEN
+                  IF (.not. ALLOCATED(i_rainnc_in)) ALLOCATE( i_rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
+                  sts = NF90_INQ_VARID(ncidin, "I_RAINNC", varid)
+                  sts = NF90_GET_VAR(ncidin, varid, i_rainnc_in(:,:,1), &
+                    START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )   
+                  IF (.not. ALLOCATED(i_rainc_in)) ALLOCATE( i_rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+                  sts = NF90_INQ_VARID(ncidin, "I_RAINC", varid)
+                  sts = NF90_GET_VAR(ncidin, varid, i_rainc_in(:,:,1), &
+                    START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+                END IF
+
+                ! read the first timestep of the subsequent wrfout file
+                iflWRFin = fl_input(ifl+1)  
+                sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
+  
+                sts = NF90_INQ_VARID(ncidin0, "RAINNC", rainnc_varid)
+                sts = NF90_GET_VAR(ncidin0, rainnc_varid, rainnc_in(:,:,2), &
+                  START = (/ xoffset, yoffset, 1 /), &
+                  COUNT = (/ xfocus, yfocus,1 /) )
+
+                sts = NF90_INQ_VARID(ncidin0, "RAINC", rainc_varid)  
+                sts = NF90_GET_VAR(ncidin0, rainc_varid, rainc_in(:,:,2), &
+                  START = (/ xoffset, yoffset, 1 /), &
+                  COUNT = (/ xfocus, yfocus,1 /) )
+
+                sts = NF90_GET_ATT(ncidin0, NF90_GLOBAL, "BUCKET_MM", bucket_mm)
+                IF ( bucket_mm > 0. ) THEN
+		  IF (.not. ALLOCATED(i_rainnc_in)) ALLOCATE( i_rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
+                  sts = NF90_INQ_VARID(ncidin0, "I_RAINNC", varid)
+                  sts = NF90_GET_VAR(ncidin0, varid, i_rainnc_in(:,:,2), &
+                    START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /) ) 
+                  IF (.not. ALLOCATED(i_rainc_in)) ALLOCATE( i_rainc_in ( xfocus, yfocus, 2 ), STAT=sts )  
+                  sts = NF90_INQ_VARID(ncidin0, "I_RAINC", varid)
+                  sts = NF90_GET_VAR(ncidin0, varid, i_rainc_in(:,:,2), &
+                    START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /) )
+                END IF
+
+                sts = NF90_CLOSE(ncidin0)
+
+                ! set to the current wrfout file again
+                iflWRFin = fl_input(ifl) 
+
+              ! no further file, nothing can be done
+              ! just pass missing values on
+              ELSE
+                PRINT *, "no data available for average calculation any more"
+                calc = .FALSE.  
               END IF
+ 
+            !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+            ! prc [kg m-2 s-1] a Convective Precipitation 
 
-            ! if the successor file exists, get the data from that file
-            ! get the last available field from the current input file
-            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
-
-              PRINT *, "read rainc and rainnc from the current and the subsequent file"
-
-              IF (.not. ALLOCATED(rainnc_in)) ALLOCATE( rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )        
-              sts = NF90_INQ_VARID(ncidin, "RAINNC", rainnc_varid)
-              sts = NF90_GET_VAR(ncidin, rainnc_varid, rainnc_in(:,:,1), &
-                START = (/ xoffset, yoffset, it /), &
-                COUNT = (/ xfocus,yfocus, 1 /) )
+            ELSE IF (var_cmip(ivar) == "prc") THEN
 
               IF (.not. ALLOCATED(rainc_in)) ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
-              sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
-              sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,1), &
-                START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-
-              sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_MM", bucket_mm)
-              IF ( bucket_mm > 0. ) THEN
-                IF (.not. ALLOCATED(i_rainnc_in)) ALLOCATE( i_rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
-                sts = NF90_INQ_VARID(ncidin, "I_RAINNC", varid)
-                sts = NF90_GET_VAR(ncidin, varid, i_rainnc_in(:,:,1), &
-                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )   
-                IF (.not. ALLOCATED(i_rainc_in)) ALLOCATE( i_rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
-                sts = NF90_INQ_VARID(ncidin, "I_RAINC", varid)
-                sts = NF90_GET_VAR(ncidin, varid, i_rainc_in(:,:,1), &
-                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-              END IF
-
-              ! just get the next input file
-              ! read the first timestep of the subsequent wrfout file
-              iflWRFin = fl_input(ifl+1)
+              IF (it /= InDimLenRec) THEN
   
-              sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
-  
-              sts = NF90_INQ_VARID(ncidin0, "RAINNC", rainnc_varid)
-              sts = NF90_GET_VAR(ncidin0, rainnc_varid, rainnc_in(:,:,2), &
-                START = (/ xoffset, yoffset, 1 /), &
-                COUNT = (/ xfocus, yfocus,1 /) )
+                sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
+                sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
+                  START = (/ xoffset, yoffset, it /), &
+                  COUNT = (/ xfocus, yfocus, 2/) ) 
 
-              sts = NF90_INQ_VARID(ncidin0, "RAINC", rainc_varid)  
-              sts = NF90_GET_VAR(ncidin0, rainc_varid, rainc_in(:,:,2), &
-                START = (/ xoffset, yoffset, 1 /), &
-                COUNT = (/ xfocus, yfocus,1 /) )
+                sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_MM", bucket_mm)
+                IF ( bucket_mm > 0. ) THEN
+                  IF (.not. ALLOCATED(i_rainc_in)) ALLOCATE( i_rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
+                  sts = NF90_INQ_VARID(ncidin, "I_RAINC", varid)
+                  sts = NF90_GET_VAR(ncidin, varid, i_rainc_in(:,:,:), &
+                    START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
+                END IF
 
-              sts = NF90_GET_ATT(ncidin0, NF90_GLOBAL, "BUCKET_MM", bucket_mm)
-              IF ( bucket_mm > 0. ) THEN
-		IF (.not. ALLOCATED(i_rainnc_in)) ALLOCATE( i_rainnc_in ( xfocus, yfocus, 2 ), STAT=sts )
-                sts = NF90_INQ_VARID(ncidin0, "I_RAINNC", varid)
-                sts = NF90_GET_VAR(ncidin0, varid, i_rainnc_in(:,:,2), &
-                  START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /) ) 
-                IF (.not. ALLOCATED(i_rainc_in)) ALLOCATE( i_rainc_in ( xfocus, yfocus, 2 ), STAT=sts )  
-                sts = NF90_INQ_VARID(ncidin0, "I_RAINC", varid)
-                sts = NF90_GET_VAR(ncidin0, varid, i_rainc_in(:,:,2), &
-                  START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /) )
-              END IF
-
-              sts = NF90_CLOSE(ncidin0)
-
-              ! set to the current wrfout file again
-              iflWRFin = fl_input(ifl) 
-
-            ! no further file, nothing can be done
-            ! just pass missing values on
-            ELSE
-
-              PRINT *, "no data available for average calculation any more"
-
-              calc = .FALSE.
-  
-            END IF
- 
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! prc [kg m-2 s-1] a Convective Precipitation 
-! read two timesteps to calculate 1h or 3h sum  
-
-          ELSE IF (var_cmip(ivar) == "prc") THEN
-
-            IF (.not. ALLOCATED(rainc_in)) ALLOCATE( rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
-
-            IF (it /= InDimLenRec) THEN
-  
-              sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
-              sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,:), &
-                START = (/ xoffset, yoffset, it /), &
-                COUNT = (/ xfocus, yfocus, 2/) ) 
-
-              sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_MM", bucket_mm)
-              IF ( bucket_mm > 0. ) THEN
-                IF (.not. ALLOCATED(i_rainc_in)) ALLOCATE( i_rainc_in ( xfocus, yfocus, 2 ), STAT=sts )
-                sts = NF90_INQ_VARID(ncidin, "I_RAINC", varid)
-                sts = NF90_GET_VAR(ncidin, varid, i_rainc_in(:,:,:), &
-                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
-              END IF
-
-            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN 
+              ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN 
   
                 sts = NF90_INQ_VARID(ncidin, "RAINC", rainc_varid)
                 sts = NF90_GET_VAR(ncidin, rainc_varid, rainc_in(:,:,1), &
@@ -2607,149 +2137,110 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                   sts = NF90_INQ_VARID(ncidin0, "I_RAINC", varid)
                   sts = NF90_GET_VAR(ncidin0, varid, i_rainc_in(:,:,2), &
                     START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /) )
-                END IF
-   
-                sts = NF90_CLOSE(ncidin0)
-  
+                END IF   
+                sts = NF90_CLOSE(ncidin0)  
                 iflWRFin = fl_input(ifl)  !set to the current wrfout file again
+              ELSE
+                PRINT *, "no data available for average calculation any more"
+                calc = .FALSE.  
+              END IF
 
-            ELSE
-
-              PRINT *, "no data available for average calculation any more"
-
-              calc = .FALSE.  
   
-            END IF
-
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! prsn [kg m-2 s-1] ?>a Snowfall Flux
-  
-          ELSE IF (var_cmip(ivar) == "prsn") THEN
-  
-            IF (.not. ALLOCATED(snownc_in)) ALLOCATE( snownc_in ( xfocus, yfocus, 2 ), STAT=sts )
-
-            IF (it /= InDimLenRec) THEN
-  
-              sts = NF90_INQ_VARID(ncidin, "SNOWNC", snownc_varid)
-              sts = NF90_GET_VAR(ncidin, snownc_varid, snownc_in(:,:,:), &
-                START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
-           
-            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
-  
-              sts = NF90_INQ_VARID(ncidin, "SNOWNC", snownc_varid)
-              sts = NF90_GET_VAR(ncidin, snownc_varid, snownc_in(:,:,1), &
-                START = (/ xoffset, yoffset, it /), &
-                COUNT = (/ xfocus, yfocus, 1/))
-  
-              iflWRFin = fl_input(ifl+1)
-  
-              sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
-  
-              sts = NF90_INQ_VARID(ncidin0, "SNOWNC", snownc_varid)
-              sts = NF90_GET_VAR(ncidin0, snownc_varid, snownc_in(:,:,2), &
-                START = (/ xoffset, yoffset, 1 /), &
-                COUNT = (/xfocus, yfocus, 1 /) )
-  
-              sts = NF90_CLOSE(ncidin0)
-  
-              iflWRFin = fl_input(ifl)
-  
-            ELSE
-
-              PRINT *, "no data available for average calculation any more"
-
-              calc = .FALSE.  
-  
-            END IF
-  
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! snm [kg m-2 s-1] a Surface Snow Melt
-  
-          ELSE IF (var_cmip(ivar) == "snm") THEN
-  
-            IF (.not. ALLOCATED(acsnom_in)) ALLOCATE( acsnom_in ( xfocus, yfocus, 2 ), STAT=sts )
-
-            IF (it /= InDimLenRec) THEN
-  
-              sts = NF90_INQ_VARID(ncidin, "ACSNOM", acsnom_varid)
-              sts = NF90_GET_VAR(ncidin, acsnom_varid, acsnom_in(:,:,:), &
-                START = (/ xoffset, yoffset, it /), &
-                COUNT = (/ xfocus, yfocus, 2 /) )
-  
-              print*, sts
-  
-            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
-  
-              sts = NF90_INQ_VARID(ncidin, "ACSNOM", acsnom_varid)
-              sts = NF90_GET_VAR(ncidin, acsnom_varid, acsnom_in(:,:,1), &
-                START = (/ xoffset, yoffset, it /), &
-                COUNT = (/ xfocus, yfocus, 1 /))
-  
-              iflWRFin = fl_input(ifl+1)
-  
-              sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
-              
-              sts = NF90_INQ_VARID(ncidin0, "ACSNOM", acsnom_varid)
-              sts = NF90_GET_VAR(ncidin0, acsnom_varid, acsnom_in(:,:,2), &
-                START = (/ xoffset, yoffset, 1 /), &
-                COUNT =(/xfocus, yfocus, 1 /) )
+            !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+            !  prsn [kg m-2 s-1] ?>a Snowfall Flux or snm [kg m-2 s-1] a Surface Snow Melt
+            ! [kg m-2 s-1]
             
-              sts = NF90_CLOSE(ncidin0)
+            ELSE IF ( (var_cmip(ivar) == "prsn") .OR. (var_cmip(ivar) == "snm") ) THEN
+          
+	      PRINT *, "read XLAND"
+              IF (.not. ALLOCATED(landmask_in)) ALLOCATE( landmask_in( xfocus, yfocus), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "LANDMASK", mask_varid)
+              sts = NF90_GET_VAR(ncidin, mask_varid, landmask_in(:,:), &
+                START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+  
+              IF (.not. ALLOCATED(acsnom_in)) ALLOCATE( acsnom_in ( xfocus, yfocus, 2 ), STAT=sts )
+              IF (it /= InDimLenRec) THEN  
+                sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), acsnom_varid)
+                sts = NF90_GET_VAR(ncidin, acsnom_varid, acsnom_in(:,:,:), &
+                  START = (/ xoffset, yoffset, it /), &
+                  COUNT = (/ xfocus, yfocus, 2 /) )  
+  
+              ELSE IF ( (it == InDimLenRec) .and. (ifl /= nfiles) ) THEN  
+                sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), acsnom_varid)
+                sts = NF90_GET_VAR(ncidin, acsnom_varid, acsnom_in(:,:,1), &
+                  START = (/ xoffset, yoffset, it /), &
+                  COUNT = (/ xfocus, yfocus, 1 /))
+  
+                iflWRFin = fl_input(ifl+1)  
+                sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)              
+                sts = NF90_INQ_VARID(ncidin0, TRIM(var_wrf(ivar)), acsnom_varid)
+                sts = NF90_GET_VAR(ncidin0, acsnom_varid, acsnom_in(:,:,2), &
+                  START = (/ xoffset, yoffset, 1 /), &
+                  COUNT =(/xfocus, yfocus, 1 /) )
             
-              iflWRFin = fl_input(ifl)
+                ! Close the next file
+                sts = NF90_CLOSE(ncidin0)  
+                ! Open the current file
+                iflWRFin = fl_input(ifl)
               
-            ELSE
+              ELSE
+                PRINT *, "no data available for average calculation any more"
+                calc = .FALSE.  
+  
+              END IF
+              
+             !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+             ! snc snw snd [kg m-2 s-1] a Surface Snow Melt
+  
+            ELSE IF ( (var_cmip(ivar) == "snc") .OR. &
+           	 (var_cmip(ivar) == "snw") .OR. &
+            	 (var_cmip(ivar) == "snd") )THEN
+            
+	      PRINT *, "read XLAND"
+              IF (.not. ALLOCATED(landmask_in)) ALLOCATE( landmask_in( xfocus, yfocus), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "LANDMASK", mask_varid)
+              sts = NF90_GET_VAR(ncidin, mask_varid, landmask_in(:,:), &
+               START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
 
-              PRINT *, "no data available for average calculation any more"
 
-              calc = .FALSE.  
+              sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
+              sts = NF90_GET_VAR(ncidin, varid, data_in(:,:), &
+                START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
   
-            END IF
-  
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! evspsbl [kg m-2 s-1] a Evaporation
-  
+          !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+          ! evspsbl [kg m-2 s-1] a Evaporation  
           ELSE IF (var_cmip(ivar) == "evspsbl") THEN
-  
+ 
             IF (.not. ALLOCATED(sfcevp_in)) ALLOCATE( sfcevp_in ( xfocus, yfocus, 2 ), STAT=sts )
 
-            IF (it /= InDimLenRec) THEN
-  
-              sts = NF90_INQ_VARID(ncidin, "SFCEVP", sfcevp_varid)
+            IF (it /= InDimLenRec) THEN  
+              sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), sfcevp_varid)
               sts = NF90_GET_VAR(ncidin, sfcevp_varid, sfcevp_in(:,:,:), &
                 START = (/ xoffset, yoffset, it /), &
-                COUNT = (/ xfocus, yfocus, 2 /) )
-            
-            ELSE IF ( (it == InDimLenRec) .AND. (ifl /= SIZE(fl_input)) ) THEN
-  
-              sts = NF90_INQ_VARID(ncidin, "SFCEVP", sfcevp_varid)
+                COUNT = (/ xfocus, yfocus, 2 /) )            
+            ELSE IF ( (it == InDimLenRec) .AND. (ifl /= SIZE(fl_input)) ) THEN  
+              sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), sfcevp_varid)
               sts = NF90_GET_VAR(ncidin, sfcevp_varid, sfcevp_in(:,:,1), &
                 START = (/ xoffset, yoffset, it /), &
-                COUNT = (/ xfocus, yfocus, 1/))
-  
-              iflWRFin = fl_input(ifl+1) 
-  
-              sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
-  
-              sts = NF90_INQ_VARID(ncidin0, "SFCEVP", sfcevp_varid)
+                COUNT = (/ xfocus, yfocus, 1/)) 
+ 
+              iflWRFin = fl_input(ifl+1)   
+              sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)  
+              sts = NF90_INQ_VARID(ncidin0, TRIM(var_wrf(ivar)), sfcevp_varid)
               sts = NF90_GET_VAR(ncidin0, sfcevp_varid, sfcevp_in(:,:,2), &
                 START = (/ xoffset, yoffset, 1 /), &
-                COUNT =(/xfocus,yfocus, 1 /) )
-  
+                COUNT =(/xfocus,yfocus, 1 /) )  
               sts = NF90_CLOSE(ncidin0)
   
               iflWRFin = fl_input(ifl)  !set to the current wrfout file again
   
             ELSE
-
               PRINT *, "no data available for average calculation any more"
-
-              calc = .FALSE.  
-  
+              calc = .FALSE.    
             END IF 
   
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! evspblpot [kg m-2 s-1] a Potential Evapotranspiration 
+          !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+          ! evspblpot [kg m-2 s-1] a Potential Evapotranspiration 
   
           ELSE IF (var_cmip(ivar) == "evspsblpot") THEN
   
@@ -2760,17 +2251,14 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               sts = NF90_INQ_VARID(ncidin, "POTEVP", potevp_varid)
               sts = NF90_GET_VAR(ncidin, potevp_varid, potevp_in(:,:,:), &
                 START = (/ xoffset, yoffset, it /), &
-                COUNT = (/ xfocus, yfocus, 2 /) )
-  
-            ELSE IF ( (it == InDimLenRec) .AND. (ifl /= SIZE(fl_input)) ) THEN
-  
+                COUNT = (/ xfocus, yfocus, 2 /) )  
+            ELSE IF ( (it == InDimLenRec) .AND. (ifl /= SIZE(fl_input)) ) THEN  
               sts = NF90_INQ_VARID(ncidin, "POTEVP", potevp_varid)
               sts = NF90_GET_VAR(ncidin, potevp_varid, potevp_in(:,:,1), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus,1/))
   
-              iflWRFin = fl_input(ifl+1)
-  
+              iflWRFin = fl_input(ifl+1)  
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
                 sts = NF90_INQ_VARID(ncidin0, "POTEVP", potevp_varid)
                 sts = NF90_GET_VAR(ncidin0, potevp_varid, potevp_in(:,:,2), &
@@ -2781,29 +2269,32 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               iflWRFin = fl_input(ifl)  !set to the current wrfout file again
   
             ELSE
-
               PRINT *, "no data available for average calculation any more"
-
-              calc = .FALSE.  
-  
+              calc = .FALSE.    
             END IF 
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! mrros [kg m-2 s-1] a Surface Runoff
   
           ELSE IF (var_cmip(ivar) == "mrros") THEN
+          
+            PRINT *, "read XLAND"
+            IF (.not. ALLOCATED(landmask_in)) ALLOCATE( landmask_in( xfocus, yfocus), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "LANDMASK", mask_varid)
+              sts = NF90_GET_VAR(ncidin, mask_varid, landmask_in(:,:), &
+                START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
   
             IF (.not. ALLOCATED(sfroff_in)) ALLOCATE( sfroff_in ( xfocus, yfocus, 2 ), STAT=sts )
 
             IF (it /= InDimLenRec) THEN
   
-              sts = NF90_INQ_VARID(ncidin, "SFROFF", sfroff_varid)
+              sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), sfroff_varid)
               sts = NF90_GET_VAR(ncidin, sfroff_varid, sfroff_in(:,:,:), &
                 START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 2 /) )
   
             ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
   
-              sts = NF90_INQ_VARID(ncidin, "SFROFF", sfroff_varid)
+              sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), sfroff_varid)
               sts = NF90_GET_VAR(ncidin, sfroff_varid, sfroff_in(:,:,1), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus,1/))
@@ -2811,7 +2302,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               iflWRFin = fl_input(ifl+1)
   
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
-                sts = NF90_INQ_VARID(ncidin0, "SFROFF", sfroff_varid)
+                sts = NF90_INQ_VARID(ncidin0, TRIM(var_wrf(ivar)), sfroff_varid)
                 sts = NF90_GET_VAR(ncidin0, sfroff_varid, sfroff_in(:,:,2), &
                   START = (/ xoffset, yoffset, 1 /), &
                   COUNT =(/xfocus,yfocus, 1 /) )
@@ -2831,30 +2322,36 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! mrro [kg m-2 s-1] a Total Runoff
   
           ELSE IF (var_cmip(ivar) == "mrro") THEN
+          
+            PRINT *, "read XLAND"
+            IF (.not. ALLOCATED(landmask_in)) ALLOCATE( landmask_in( xfocus, yfocus), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "LANDMASK", mask_varid)
+              sts = NF90_GET_VAR(ncidin, mask_varid, landmask_in(:,:), &
+                START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
   
             IF (.not. ALLOCATED(sfroff_in)) ALLOCATE( sfroff_in ( xfocus, yfocus, 2 ), STAT=sts )
             IF (.not. ALLOCATED(udroff_in)) ALLOCATE( udroff_in ( xfocus, yfocus, 2 ), STAT=sts )
 
             IF (it /= InDimLenRec) THEN
   
-              sts = NF90_INQ_VARID(ncidin, "SFROFF", sfroff_varid)
+              sts = NF90_INQ_VARID(ncidin, "RUNSF", sfroff_varid)
               sts = NF90_GET_VAR(ncidin, sfroff_varid, sfroff_in(:,:,:), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus, 2 /) )
   
-              sts = NF90_INQ_VARID(ncidin, "UDROFF", udroff_varid)
+              sts = NF90_INQ_VARID(ncidin, "RUNSB", udroff_varid)
               sts = NF90_GET_VAR(ncidin, udroff_varid, udroff_in(:,:,:), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus, 2 /) )
   
             ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
   
-              sts = NF90_INQ_VARID(ncidin, "SFROFF", sfroff_varid)
+              sts = NF90_INQ_VARID(ncidin, "RUNSF", sfroff_varid)
               sts = NF90_GET_VAR(ncidin, sfroff_varid, sfroff_in(:,:,1), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus,1/))
   
-              sts = NF90_INQ_VARID(ncidin, "UDROFF", udroff_varid)
+              sts = NF90_INQ_VARID(ncidin, "RUNSB", udroff_varid)
               sts = NF90_GET_VAR(ncidin, udroff_varid, udroff_in(:,:,1), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT =(/xfocus,yfocus,1 /) )
@@ -2863,13 +2360,12 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
   
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
   
-              sts = NF90_INQ_VARID(ncidin0, "SFROFF", sfroff_varid)
-              sts = NF90_INQ_VARID(ncidin0, "UDROFF", udroff_varid)
-  
+              sts = NF90_INQ_VARID(ncidin0, "RUNSF", sfroff_varid)  
               sts = NF90_GET_VAR(ncidin0, sfroff_varid, sfroff_in(:,:,2), &
                 START = (/ xoffset, yoffset, 1 /), &
                 COUNT =(/xfocus, yfocus, 1 /) )
-  
+ 
+              sts = NF90_INQ_VARID(ncidin0, "RUNSB", udroff_varid)
               sts = NF90_GET_VAR(ncidin0, udroff_varid, udroff_in(:,:,2), &
                 START = (/ xoffset, yoffset, 1 /), &
                 COUNT =(/xfocus, yfocus, 1 /) )
@@ -2955,7 +2451,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! only method in use finally: accumulated values with bucket
 ! restriction: assume bucket is used
             
-         	ELSE IF ( (var_cmip(ivar) == "rsds") &
+          ELSE IF ( (var_cmip(ivar) == "rsds") &
             .OR. (var_cmip(ivar) == "rlds") &
             .OR. (var_cmip(ivar) == "rsus") &
             .OR. (var_cmip(ivar) == "rlus") &
@@ -2973,18 +2469,13 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
             
 
             PRINT *, "get radiation variables incl. bucket if set"
-
             IF (.not. ALLOCATED(rad_in)) ALLOCATE( rad_in ( xfocus, yfocus, 2 ), STAT=sts )
-
-            IF (it /= InDimLenRec) THEN
- 
+            IF (it /= InDimLenRec) THEN 
               PRINT *, "read rad_in for two times from the same file"
-
               sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
               sts = NF90_GET_VAR(ncidin, varid, rad_in(:,:,:), &
                 START = (/ xoffset, yoffset, it /), &
-                COUNT = (/ xfocus, yfocus, 2 /) )
- 
+                COUNT = (/ xfocus, yfocus, 2 /) ) 
               sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_J", bucket_J)
               IF ( bucket_J > 0. ) THEN
                 PRINT *, "BUCKET_J = ", bucket_J
@@ -2994,16 +2485,12 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                   START = (/ xoffset, yoffset, it /), &
                   COUNT = (/ xfocus, yfocus, 2 /) )
               END IF
-
-            ELSE IF ( (it == InDimLenRec) .AND. (ifl /= SIZE(fl_input)) ) THEN
-  
+            ELSE IF ( (it == InDimLenRec) .AND. (ifl /= SIZE(fl_input)) ) THEN  
               PRINT *, "read rad_in for one timestep from two files each"
-
               sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
               sts = NF90_GET_VAR(ncidin, varid, rad_in(:,:,1), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus, 1/))
-
               sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "BUCKET_J", bucket_J)
               IF ( bucket_J > 0. ) THEN
                 PRINT *, "BUCKET_J = ", bucket_J
@@ -3014,13 +2501,10 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               END IF
 
               iflWRFin = fl_input(ifl+1)
-
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
-
               sts = NF90_INQ_VARID(ncidin0, TRIM(var_wrf(ivar)), varid)
               sts = NF90_GET_VAR(ncidin0, varid, rad_in(:,:,2), &
                 START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1/) )
-
               sts = NF90_GET_ATT(ncidin0, NF90_GLOBAL, "BUCKET_J", bucket_J)
               IF ( bucket_J > 0. ) THEN
                 PRINT *, "BUCKET_J = ", bucket_J
@@ -3029,17 +2513,12 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                 sts = NF90_GET_VAR(ncidin0, varid, i_rad_in(:,:,2), &
                   START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /) )
               END IF
-
               sts = NF90_CLOSE(ncidin0)
-
-              iflWRFin = fl_input(ifl)
-  
+              iflWRFin = fl_input(ifl)  
             ELSE
 
               PRINT *, "no data available for average calculation any more"
-
-              calc = .FALSE.
-  
+              calc = .FALSE.  
             END IF
   
             PRINT *, "values in middle of domain = ", var_cmip(ivar), rad_in(xfocus/2,yfocus/2,1), rad_in(xfocus/2,yfocus/2,2)
@@ -3051,42 +2530,28 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! WMO definition >= 120 W m-2
 
           ELSE IF (var_cmip(ivar) == "sund") THEN
-
             IF (.not. ALLOCATED(swdown_in)) ALLOCATE( swdown_in ( xfocus, yfocus, 2 ), STAT=sts )
-
-            IF (it /= InDimLenRec) THEN
- 
+            IF (it /= InDimLenRec) THEN 
               sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
               sts = NF90_GET_VAR(ncidin, varid, swdown_in(:,:,:), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus, 2 /) )
-
             ELSE IF ( (it == InDimLenRec) .AND. (ifl /= SIZE(fl_input)) ) THEN
-
               sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
               sts = NF90_GET_VAR(ncidin, varid, swdown_in(:,:,1), &
                 START = (/ xoffset, yoffset, it /), &
                 COUNT = (/ xfocus, yfocus, 1/))
-
               iflWRFin = fl_input(ifl+1)
-
               sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
-
               sts = NF90_INQ_VARID(ncidin0, TRIM(var_wrf(ivar)), varid)
               sts = NF90_GET_VAR(ncidin0, varid, swdown_in(:,:,2), &
                 START = (/ xoffset, yoffset, 1 /), &
                 COUNT = (/ xfocus, yfocus, 1/))
-
               sts = NF90_CLOSE(ncidin0)
-
               iflWRFin = fl_input(ifl)
-
             ELSE
-
               PRINT *, "no data available for average calculation any more"
-
-              calc = .FALSE.
-  
+              calc = .FALSE.  
             END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3097,57 +2562,38 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! tsl [K] i Temperature of Soil
   
           ELSE IF ((var_cmip(ivar) == "mrso") &
+            .OR. (var_cmip(ivar) == "mrsos") &
             .OR. (var_cmip(ivar) == "mrsol") &
             .OR. (var_cmip(ivar) == "tsl")) THEN
+
+	     PRINT *, "read XLAND"
+             IF (.not. ALLOCATED(landmask_in)) ALLOCATE( landmask_in( xfocus, yfocus), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "LANDMASK", mask_varid)
+              sts = NF90_GET_VAR(ncidin, mask_varid, landmask_in(:,:), &
+                START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
  
-!            IF (.not. ALLOCATED(DZS)) ALLOCATE( DZS( 4 ), STAT=sts )
-!            sts = NF90_INQ_VARID(ncidin, "DZS", varid)
-!            IF ( sts /= NF90_NOERR ) THEN
-!              DZS = (/ 0.1, 0.3, 0.6, 1.0 /) ! total with Noah LSM 2m depth
-!              PRINT*,'attention: using hardwired layer thickness for Noah LSM'
-!            ELSE
-!              sts = NF90_GET_VAR(ncidin, varid, DZS, &
-!              START = (/ 1, it /), COUNT = (/ 4, 1 /) )
-!              PRINT*,'reading layer thickness from file'
-!            END IF
-!           use hardcoded
-            IF (.not. ALLOCATED(DZS)) ALLOCATE( DZS( SIZE(DZShc) ), STAT=sts )
-            DZS(:) = DZShc(:)
-            PRINT*,'DZS ', DZS(:)
- 
-!            IF (.not. ALLOCATED(smois_in)) ALLOCATE( smois_in( xfocus, yfocus, 4, 2 ), STAT=sts )
-            IF (.not. ALLOCATED(smois_in)) ALLOCATE( smois_in( xfocus, yfocus, 4, 1 ), STAT=sts )
-  
-!            IF (it /= InDimLenRec) THEN
-  
-              sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
-              sts = NF90_GET_VAR(ncidin, varid, smois_in(:,:,:,:), &
-                START = (/ xoffset, yoffset, 1, it /), &
-                COUNT = (/ xfocus, yfocus, SIZE(DZS), 1 /) )
-!                COUNT = (/ xfocus, yfocus, 4, 2 /) )
-  
-!            ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
-  
-!              sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
-!              sts = NF90_GET_VAR(ncidin, varid, smois_in(:,:,:,1), &
-!                START = (/ xoffset, yoffset, it /), &
-!                COUNT = (/ xfocus, yfocus,1/))
-  
-!              iflWRFin = fl_input(ifl) ! set to the previous wrfoutfile 
-!                                        ! if it is not the first 
-  
-!              sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
-  
-!              sts = NF90_INQ_VARID(ncidin0, TRIM(var_wrf(ivar)), varid)
-!              sts = NF90_GET_VAR(ncidin0, varid, smois_in(:,:,:,2), &
-!                START = (/ xoffset, yoffset, 1 /), &
-!                COUNT =(/xfocus,yfocus,1 /) )
-  
-!              sts = NF90_CLOSE(ncidin0)
-  
-!              iflWRFin = fl_input(ifl)  !set to the current wrfout file again
-  
-!            END IF
+	     IF ( ( var_cmip(ivar) == "mrso" ) .OR. ( var_cmip(ivar) == "mrsos" ) .OR. \
+	        ( var_cmip(ivar) == "mrsol" ) )THEN
+ 	    	PRINT *, "read SMOIS"
+            	IF (.not. ALLOCATED(smois_in)) ALLOCATE( smois_in( xfocus, yfocus, 4), STAT=sts )           
+            	sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
+            	sts = NF90_GET_VAR(ncidin, varid, smois_in(:,:,:), &
+		  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 4, 1 /) ) 
+             	IF (.not. ALLOCATED(DZS)) ALLOCATE( DZS( SIZE(DZShc) ), STAT=sts )
+                DZS(:) = DZShc(:)
+                PRINT*,'DZS ', DZS(:)
+             END IF  
+             
+	     IF ( ( var_cmip(ivar) == "tsl" ) )THEN
+ 	    	PRINT *, "read TSLB"
+            	IF (.not. ALLOCATED(tslb_in)) ALLOCATE( tslb_in( xfocus, yfocus, 4), STAT=sts )           
+            	sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
+            	sts = NF90_GET_VAR(ncidin, varid, tslb_in(:,:,:), &
+		  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 4, 1 /) ) 
+             	IF (.not. ALLOCATED(DZS)) ALLOCATE( DZS( SIZE(DZShc) ), STAT=sts )
+                DZS(:) = DZShc(:)
+                PRINT*,'DZS ', DZS(:)
+             END IF   
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! hurs [%] i Near-Surface Relative Humidity
@@ -3183,64 +2629,56 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
             sts = NF90_GET_VAR(ncidin, v10_varid, v10_in(:,:), &
               START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
   
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! uas [m s-1] i Eastward Near-Surface Wind
-! vas [m s-1] i Northward Near-Surface Wind
+           !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+           ! uas [m s-1] i Eastward Near-Surface Wind
+           ! vas [m s-1] i Northward Near-Surface Wind
 
           ELSE IF ((var_cmip(ivar) == "uas") .OR. (var_cmip(ivar) == "vas")) THEN
   
             IF (.not. ALLOCATED(u10_in)) ALLOCATE( u10_in ( xfocus, yfocus ), STAT=sts )
             IF (.not. ALLOCATED(v10_in)) ALLOCATE( v10_in ( xfocus, yfocus ), STAT=sts )
-            IF (.not. ALLOCATED(sinalpha_in)) ALLOCATE( sinalpha_in( xfocus, yfocus ), STAT=sts )
-            IF (.not. ALLOCATED(cosalpha_in)) ALLOCATE( cosalpha_in( xfocus, yfocus ), STAT=sts )
   
             sts = NF90_INQ_VARID(ncidin, "U10", u10_varid)
             sts = NF90_INQ_VARID(ncidin, "V10", v10_varid)
-            sts = NF90_INQ_VARID(ncidin, "SINALPHA", sinalpha_varid)
-            sts = NF90_INQ_VARID(ncidin, "COSALPHA", cosalpha_varid)
   
             sts = NF90_GET_VAR(ncidin, u10_varid, u10_in(:,:), &
               START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
             sts = NF90_GET_VAR(ncidin, v10_varid, v10_in(:,:), &
               START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-            sts = NF90_GET_VAR(ncidin, sinalpha_varid, sinalpha_in(:,:), &
-              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-            sts = NF90_GET_VAR(ncidin, cosalpha_varid, cosalpha_in(:,:), &
-              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )  
               
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! tauu [Pa] Surface Downward Eastward Wind Stress
-! tauv [Pa] Surface Downward Northward Wind Stress
+          !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+          ! tauu [Pa] Surface Downward Eastward Wind Stress
+          ! tauv [Pa] Surface Downward Northward Wind Stress
 
-		        ELSE IF ( (var_cmip(ivar) == "tauu") .OR. (var_cmip(ivar) == "tauv") ) THEN
-		        
- 				    IF (.not. ALLOCATED(cd_in)) ALLOCATE(cd_in ( xfocus, yfocus ), STAT=sts )
-			      IF (.not. ALLOCATED(u10_in)) ALLOCATE(u10_in ( xfocus, yfocus ), STAT=sts ) 
-			    	IF (.not. ALLOCATED(v10_in)) ALLOCATE(v10_in ( xfocus, yfocus ), STAT=sts ) 
-			    	IF (.not. ALLOCATED(t2_in)) ALLOCATE(t2_in ( xfocus, yfocus ), STAT=sts ) 
-			    	IF (.not. ALLOCATED(psfc_in)) ALLOCATE(psfc_in ( xfocus, yfocus ), STAT=sts ) 
-			    	
-			      sts = NF90_INQ_VARID(ncidin, "CD", cd_varid)  
-			      sts = NF90_GET_VAR(ncidin, cd_varid, cd_in(:,:), &
-			        START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )  
-			      sts = NF90_INQ_VARID(ncidin, "U10", u10_varid)
-			      sts = NF90_GET_VAR(ncidin, u10_varid, u10_in(:,:), &
-			        START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-		          sts = NF90_INQ_VARID(ncidin, "V10", v10_varid)  
-		          sts = NF90_GET_VAR(ncidin, v10_varid, v10_in(:,:), &
-		            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )   		            
-		          sts = NF90_INQ_VARID(ncidin, "T2", t2_varid)  
-		          sts = NF90_GET_VAR(ncidin, t2_varid, t2_in(:,:), &
-		            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )    
- 		          sts = NF90_INQ_VARID(ncidin, "PSFC", psfc_varid)  
-		          sts = NF90_GET_VAR(ncidin, psfc_varid, psfc_in(:,:), &
-		            START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )       
-  
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! prhmax [kg m-2 s-1] m Daily Maximum Hourly Precipitation Rate (using wrfxtrm)
-! reuse variables form rainc and rainnc
-! special offset, as needed with minimum and maximum per file 
-! as 'it' counts per input file this is OK
+          ELSE IF ( (var_cmip(ivar) == "tauu") .OR. (var_cmip(ivar) == "tauv") ) THEN
+        
+            IF (.not. ALLOCATED(cd_in)) ALLOCATE(cd_in ( xfocus, yfocus ), STAT=sts )
+	    IF (.not. ALLOCATED(u10_in)) ALLOCATE(u10_in ( xfocus, yfocus ), STAT=sts ) 
+	    IF (.not. ALLOCATED(v10_in)) ALLOCATE(v10_in ( xfocus, yfocus ), STAT=sts ) 
+	    IF (.not. ALLOCATED(t2_in)) ALLOCATE(t2_in ( xfocus, yfocus ), STAT=sts ) 
+	    IF (.not. ALLOCATED(psfc_in)) ALLOCATE(psfc_in ( xfocus, yfocus ), STAT=sts ) 
+	    	
+	    sts = NF90_INQ_VARID(ncidin, "CD", cd_varid)  
+	    sts = NF90_GET_VAR(ncidin, cd_varid, cd_in(:,:), &
+	      START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )  
+	    sts = NF90_INQ_VARID(ncidin, "U10", u10_varid)
+	    sts = NF90_GET_VAR(ncidin, u10_varid, u10_in(:,:), &
+	      START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+            sts = NF90_INQ_VARID(ncidin, "V10", v10_varid)  
+            sts = NF90_GET_VAR(ncidin, v10_varid, v10_in(:,:), &
+              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )   		            
+            sts = NF90_INQ_VARID(ncidin, "T2", t2_varid)  
+            sts = NF90_GET_VAR(ncidin, t2_varid, t2_in(:,:), &
+              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )    
+            sts = NF90_INQ_VARID(ncidin, "PSFC", psfc_varid)  
+            sts = NF90_GET_VAR(ncidin, psfc_varid, psfc_in(:,:), &
+              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )       
+
+          !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+          ! prhmax [kg m-2 s-1] m Daily Maximum Hourly Precipitation Rate (using wrfxtrm)
+          ! reuse variables form rainc and rainnc
+          ! special offset, as needed with minimum and maximum per file 
+          ! as 'it' counts per input file this is OK
 
           ELSE IF (var_cmip(ivar) == "prhmax") THEN
  
@@ -3254,42 +2692,11 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               START = (/ xoffset, yoffset, it+1 /), COUNT = (/ xfocus, yfocus, 1 /) )
             sts = NF90_GET_VAR(ncidin, rainnc_varid, rainnc_max_in(:,:), &
               START = (/ xoffset, yoffset, it+1 /), COUNT = (/ xfocus, yfocus, 1 /) )
-  
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! two possibilities with sea ice: either in SEAICE variable as fractional sea 
-! ice, or contained as binary sea ice in the landmask field during runtime
-! extent: XLAND = LU_INDEX
-
-!          ELSE IF ( (var_cmip(ivar) == "sic") .AND. (fractSeaIce .EQV. .FALSE.) ) THEN
-
-!            IF (.not. ALLOCATED(landmask_in)) ALLOCATE( landmask_in ( xfocus, yfocus ), STAT=sts ) 
-!            IF (.not. ALLOCATED(xland_in)) ALLOCATE( xland_in ( xfocus, yfocus ), STAT=sts )
-  
-!            sts = NF90_INQ_VARID(ncidin, "LANDMASK", landmask_varid)
-!            sts = NF90_INQ_VARID(ncidin, "XLAND", xland_varid)
-  
-!            sts = NF90_GET_VAR(ncidin, landmask_varid, landmask_in(:,:), &
-!              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-!            sts = NF90_GET_VAR(ncidin, xland_varid, xland_in(:,:), &
-!              START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! this is all other variables which are solely based on a namelist for whom 
-! no processing is needed whatsoever, e.g. tas, ps, huss, ...
-! they are read into data_in and also passed on in this 2D array for writing
 
           ELSE
 
-            PRINT *, "variable to read/write with no additional processing = ", var_wrf(ivar)
-  
+            PRINT *, "variable to read/write with no additional processing = ", var_wrf(ivar)  
             sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
- 
-!  sts = nf90_inquire_variable(ncidin, varid, contiguous = contiguous,  &
-!       deflate_level = deflate_level, shuffle = shuffle, &
-!fletcher32 = fletcher32, endianness = endianness)
-!
-!PRINT *, xtype, ndims, natts, contiguous, deflate_level, shuffle, fletcher32, endianness
-!  
   
             IF ( ( cell_methods(ivar) == "minimum" ) .OR. &
                  ( cell_methods(ivar) == "maximum" ) ) THEN
@@ -3300,66 +2707,28 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                     START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
             END IF
 
-!            PRINT *, 'some sample output 3x3 in the middle of the domain', &
-!              data_in(xfocus/2:(xfocus/2+2),yfocus/2:(yfocus/2+2))
-
           END IF
   
           sts = NF90_CLOSE(ncidin)
 
+
 !-------------------------------------------------------------------------------
 !-------------------------------------------------------------------------------
-! some analysis of the data
-!  
-!         PRINT *, "*** STATISTICS BEFORE PROCESSING OF VARIABLES ***"
-!         PRINT *, "(useless if data is stored in other vars than 'data_in')"
-!
-!         print *, "shape of array" , SHAPE(data_in)
-!         print *, "size of array" , SIZE(data_in)
-!         stat_mean = SUM(data_in(:,:))/SIZE(data_in(:,:))
-!         PRINT *, "mean of array", stat_mean
-!
-!-------------------------------------------------------------------------------
-!-------------------------------------------------------------------------------
-! this is where the real processing takes place 
-! if nothing is to be calculated or scaled, etc., then the variables are just
-! passed on to the write section in data_in
+! processing the data 
+
   
           PRINT *, "*** PROCESSING OF VARIABLES ***"
 
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! CORDEX [X], FPSCONV [X]
-! vars on pressure levels > for simplicity and as we like to use these data
-! instead of the original model outputs: extract and convert more than specified
-! at full temporal resolution, selective aggregation later
-! use different interpolation methods for different variables
-! psl [Pa] i Sea Level Pressure
-! ua [m s-1] i Eastward Wind
-! va [m s-1] i Northward Wind
-! ta [K] i Air Temperature
-! hus [1] i Specific Humidity
-! also needed:
-! wa
-! zg
-! levels needed CORDEX:             850       500  200
-! levels needed FPSCONV: 1000  925   "   700   "    "
-
           IF ( (var_cmip(ivar) == "psl") .OR. &
-          ! Josipa: read pressure level from plevel 
-               ( (plevel(ivar) /= -999) .AND. (filetype(ivar) == "s" ) ) .OR. &
-               !(height(ivar) == 1000) .OR. &
-               !(height(ivar) == 925) .OR. &
-               !(height(ivar) == 850) .OR. &
-               !(height(ivar) == 700) .OR. &
-               !(height(ivar) == 500) .OR. &
-               !(height(ivar) == 200) .OR. &
                (var_cmip(ivar) == "prw") .OR. &
                (var_cmip(ivar) == "clwvi") .OR. &
                (var_cmip(ivar) == "clivi") .OR. &
                (var_cmip(ivar) == "cape") .OR. &
-               (var_cmip(ivar) == "cin") ) THEN
+               (var_cmip(ivar) == "cin") .OR. &
+               ( (plevel(ivar) /= -999) .AND. (filetype(ivar) == "s" ) ) ) THEN
 
-            PRINT *, var_cmip(ivar), height(ivar)
+
+            PRINT *, var_cmip(ivar), plevel(ivar)
 
             ! needs this initialisation, might be possible that for very low
             ! high levels calculation cannot be done, then it is set to official
@@ -3368,13 +2737,10 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 
             ! total pressure [Pa]
             ! perturbation pressure + base state pressure
-            ! see: http://www2.mmm.ucar.edu/wrf/users/docs/user_guide_V3.8/users_guide_chap5.htm
             p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
 
             ! PH and PHB are on nz+1 levels
             ! vertically destaggering
-            ! total geopotential height [m]
-            ! see: http://www2.mmm.ucar.edu/wrf/users/docs/user_guide_V3.8/users_guide_chap5.htm
             DO nl = 1,nz 
               ph_fl(:,:,nl) = ((ph_in(:,:,nl)+phb_in(:,:,nl))+ &
                               (ph_in(:,:,nl+1)+phb_in(:,:,nl+1)))/2./gr
@@ -3382,76 +2748,22 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 
             ! transfer theta-t0 to total potential temperature [K]
             ! and then convert potential temperature theta to absolute temperature
-            ! this is the correct version, using 290K as base temp
-            ! wrfpress contains data that are still calculated with 300K
             t_in(:,:,:) = ( theta_in(:,:,:) + T00(1) ) * &
                           ( p_in(:,:,:) / P00(1) )**(R/cp)
+                         
+            !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-            !IF (height(ivar) == 1000) THEN
-            !  np = 1
-            !ELSE IF (height(ivar) == 925) THEN
-            !  np = 2
-            !ELSE IF (height(ivar) == 850) THEN
-            !  np = 3
-            !ELSE IF (height(ivar) == 700) THEN
-            !  np = 4
-            !ELSE IF (height(ivar) == 500) THEN
-            !  np = 5
-            !ELSE IF (height(ivar) == 200) THEN
-            !  np = 6
-            !END IF
-
-            ! Josipa: Extend list of pressure levels
-            IF (plevel(ivar) == 1000) THEN
-              np = 1
-            ELSE IF (plevel(ivar) == 925) THEN
-              np = 2
-            ELSE IF (plevel(ivar) == 850) THEN
-              np = 3
-            ELSE IF (plevel(ivar) == 700) THEN
-              np = 4
-            ELSE IF (plevel(ivar) == 600) THEN
-              np = 5
-            ELSE IF (plevel(ivar) == 500) THEN
-              np = 6
-            ELSE IF (plevel(ivar) == 400) THEN
-              np = 7
-            ELSE IF (plevel(ivar) == 300) THEN
-              np = 8
-            ELSE IF (plevel(ivar) == 250) THEN
-              np = 9
-            ELSE IF (plevel(ivar) == 200) THEN
-              np = 10
-            ELSE IF (plevel(ivar) == 150) THEN
-              np = 11
-            ELSE IF (plevel(ivar) == 100) THEN
-              np = 12
-            ELSE IF (plevel(ivar) == 70) THEN
-              np = 13
-            ELSE IF (plevel(ivar) == 50) THEN
-              np = 14
-            ELSE IF (plevel(ivar) == 30) THEN
-              np = 15
-            ELSE IF (plevel(ivar) == 20) THEN
-              np = 16
-            ELSE IF (plevel(ivar) == 10) THEN
-              np = 17
-            END IF
+            ! Set level on which the value is calculated to the plevel [hPa], 
+            ! and convert it to [Pa]           
+            pout(np)=plevel(ivar)*100.           
  
             ! vars needed: 3x int.: t_in, p_in, ph_fl 
             !              -> need: ph_in, phb_in, theta_in, pp_in, pb_in
             ! var_pl, var3d_in
             ! pout, slope, zg_pout
             ! comparison with wrfpress, same time: distribution OK, but ours is
-            ! much colder, old vs new scheme about identical, ta500
-            IF ( (var_cmip(ivar) == "ta1000") .OR. &
-                 (var_cmip(ivar) == "ta925") .OR.  &
-                 (var_cmip(ivar) == "ta850") .OR.  &
-                 (var_cmip(ivar) == "ta700") .OR.  &
-                 (var_cmip(ivar) == "ta500") .OR.  &
-                 (var_cmip(ivar) == "ta200") ) THEN
+            ! much ciolder, old vs new scheme about identical, ta500
+            IF (SCAN(var_cmip(ivar),"ta") == 1) THEN
               PRINT *, "calc ta..."
               var3d_in(:,:,:) = t_in(:,:,:)
               ! linear in p
@@ -3459,15 +2771,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               DO i = 1,xfocus 
                 DO j = 1,yfocus
                   DO nl = 1,nz - 1
-                    IF (pout(np).LE.p_in(i,j,nl) .AND. pout(np).GT.p_in(i,j,nl+1)) THEN
-                      ! HTr: calculate zg at pout, first (linear in log(p)
-                      !slope = (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))/ (LOG(p_in(i,j,nl))-LOG(p_in(i,j,nl+1)))
-                      !zg_pout = ph_fl(i,j,nl+1) + slope* (LOG(pout(np))-LOG(p_in(i,j,nl+1)))
-                      ! HTr: interpolate linearly in zg
-                      !slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ &
-                      !        (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))
-                      !var_pl(i,j) = var3d_in(i,j,nl+1) + &
-                      !              slope*(zg_pout-ph_fl(i,j,nl+1))
+                    IF (pout(np).LE.p_in(i,j,nl) .AND. pout(np).GT.p_in(i,j,nl+1)) THEN                    
                       slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/&
                               (p_in(i,j,nl)-p_in(i,j,nl+1))
                       data_in(i,j) = var3d_in(i,j,nl+1) + &
@@ -3478,30 +2782,14 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               END DO
               !$OMP END PARALLEL DO
 
-            ! vars needed: int.: p_in (> in: pp_in, pb_in)
-            !              out: var_pl, var3d_in
-            !              tmp: pout, slope, zg_pout
-            !              in: qv_in
-            ! comparison with wrfpress, same time: about identical, also old and 
-            ! new scheme, simple vs. sophisticated, hus500
-            ELSE IF ( (var_cmip(ivar) == "hus1000") .OR. &
-                 (var_cmip(ivar) == "hus925") .OR.       &
-                 (var_cmip(ivar) == "hus850") .OR.       &
-                 (var_cmip(ivar) == "hus700") .OR.       &
-                 (var_cmip(ivar) == "hus500") .OR.       &
-                 (var_cmip(ivar) == "hus200") ) THEN
+            ELSE IF (SCAN(var_cmip(ivar),"hus") == 1) THEN
               PRINT *, "calc hus..."
               var3d_in(:,:,:) = qv_in(:,:,:)
-              ! either linear in p or log(p)
               !$OMP PARALLEL DO
               DO i = 1,xfocus
                 DO j = 1,yfocus
                   DO nl = 1,nz - 1
                     IF (pout(np).LE.p_in(i,j,nl) .AND. pout(np).GT.p_in(i,j,nl+1)) THEN
-                      !slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ &
-                      !        (LOG(p_in(i,j,nl))-LOG(p_in(i,j,nl+1)))
-                      !var_pl(i,j) = var3d_in(i,j,nl+1) + &
-                      !              slope*(LOG(pout(np))-LOG(p_in(i,j,nl+1)))
                       SELECT CASE (vint_type)
                       CASE(0)
                       ! (HTr) - linear in p
@@ -3525,27 +2813,12 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               END DO
               !$OMP END PARALLEL DO
 
-            ! check as is: strange data holes, all negative speeds are affected
-            ! compare with wrfpress orig run, looks good, distribution OK
-            ! compare with heimo old, identical
-            ! insert SKn routine, simplified interpolation: looks OK
-            ! could also compare with p_interp: processeding and code: not done
-            ! comparison with wrfpress, same time: apart from the holes where
-            ! negative values are with the more sophisticated scheme, all three
-            ! datasets about identical: pattern and range, wrfpress, old scheme,
-            ! new scheme
-            ELSE IF ( (var_cmip(ivar) == "ua1000") .OR. &
-                 (var_cmip(ivar) == "ua925") .OR.       &
-                 (var_cmip(ivar) == "ua850") .OR.       &
-                 (var_cmip(ivar) == "ua700") .OR.       &
-                 (var_cmip(ivar) == "ua500") .OR.       &
-                 (var_cmip(ivar) == "ua200") ) THEN
+            ELSE IF (SCAN(var_cmip(ivar),"ua") == 1) THEN
               ! rotate to earth grid and destagger
               PRINT *, "calc ua..."
               DO i = 1,xfocus
                  var3d_in(i,:,:) = ((u_in(i,:,:)+u_in(i+1,:,:))/2.)*cosalpha_in(:,:) - &
                                    ((v_in(i,:,:)+v_in(i+1,:,:))/2.)*sinalpha_in(:,:) 
-!                var3d_in(i,:,:) = ((u_in(i,:,:)+u_in(i+1,:,:))/2.)
               END DO
               ! linear in p
               !$OMP PARALLEL DO
@@ -3553,19 +2826,6 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                 DO j = 1,yfocus
                   DO nl = 1,nz - 1
                     IF (pout(np).LE.p_in(i,j,nl) .AND. pout(np).GT.p_in(i,j,nl+1)) THEN
-                      ! HTr: calculate zg at pout, first (linear in log(p)
-                      !slope = (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))/ &
-                      !        (LOG(p_in(i,j,nl))-LOG(p_in(i,j,nl+1)))
-                      !zg_pout = ph_fl(i,j,nl+1) + slope* &
-                      !          (LOG(pout(np))-LOG(p_in(i,j,nl+1)))
-                      ! HTr: interpolate logarithmic in zg
-                      !slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ &
-                      !        (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))
-                      !var_pl(i,j) = var3d_in(i,j,nl) * &
-                      !                 EXP( (zg_pout - ph_fl(i,j,nl)) * &
-                      !                      (LOG(var3d_in(i,j,nl+1)) - &
-                      !                       LOG(var3d_in(i,j,nl))) / &
-                      !                 (ph_fl(i,j,nl+1)-ph_fl(i,j,nl)))
                       slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/&
                               (p_in(i,j,nl)-p_in(i,j,nl+1))
                       data_in(i,j) = var3d_in(i,j,nl+1) + &
@@ -3576,19 +2836,12 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               END DO
               !$OMP END PARALLEL DO
 
-            ! comparison with wrfpress, same time: simple scheme about the same
-            ! results
-            ELSE IF ( (var_cmip(ivar) == "va1000") .OR. &
-                 (var_cmip(ivar) == "va925") .OR.       &
-                 (var_cmip(ivar) == "va850") .OR.       &
-                 (var_cmip(ivar) == "va700") .OR.       &
-                 (var_cmip(ivar) == "va500") .OR.       &
-                 (var_cmip(ivar) == "va200") ) THEN
+            ! comparison with wrfpress, same time: simple scheme about the same results
+            ELSE IF ( SCAN(var_cmip(ivar),"va") == 1 ) THEN
               ! rotate to earth grid and destagger
                DO j = 1,yfocus
                  var3d_in(:,j,:) = (v_in(:,j,:)+v_in(:,j+1,:))/2.*cosalpha_in(:,:) + &
                                    (u_in(:,j,:)+u_in(:,j+1,:))/2.*sinalpha_in(:,:) 
-!                var3d_in(i,:,:) = ((v_in(i,:,:)+v_in(i+1,:,:))/2.)
                END DO
               ! linear in p
               !$OMP PARALLEL DO
@@ -3596,12 +2849,6 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                 DO j = 1,yfocus
                   DO nl = 1,nz - 1
                     IF (pout(np).LE.p_in(i,j,nl) .AND. pout(np).GT.p_in(i,j,nl+1)) THEN                
-                      ! HTr: calculate zg at pout, first (linear in log(p)
-                      !slope = (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))/ (LOG(p_in(i,j,nl))-LOG(p_in(i,j,nl+1)))
-                      !zg_pout = ph_fl(i,j,nl+1) + slope* (LOG(pout(np))-LOG(p_in(i,j,nl+1)))
-                      ! HTr: interpolate logarithmic in zg
-                      !slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ (ph_fl(i,j,nl)-ph_fl(i,j,nl+1))
-                      !var_pl(i,j) = var3d_in(i,j,nl) * EXP( (zg_pout - ph_fl(i,j,nl)) * (LOG(var3d_in(i,j,nl+1)) - LOG(var3d_in(i,j,nl))) / (ph_fl(i,j,nl+1)-ph_fl(i,j,nl)))
                       slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/&
                               (p_in(i,j,nl)-p_in(i,j,nl+1))
                       data_in(i,j) = var3d_in(i,j,nl+1) + &
@@ -3613,13 +2860,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               !$OMP END PARALLEL DO
 
             ! comparison with orig model data between level 16 and 17
-            ! OK
-            ELSE IF ( (var_cmip(ivar) == "wa1000") .OR. &
-                 (var_cmip(ivar) == "wa925") .OR.       &
-                 (var_cmip(ivar) == "wa850") .OR.       &
-                 (var_cmip(ivar) == "wa700") .OR.       &
-                 (var_cmip(ivar) == "wa500") .OR.       &
-                 (var_cmip(ivar) == "wa200") ) THEN
+            ELSE IF (SCAN(var_cmip(ivar),"wa") == 1) THEN
               ! vertically destagger:
               DO nl = 1,nz
                 var3d_in(:,:,nl) = ( w_in(:,:,nl) + w_in(:,:,nl+1) ) / 2.
@@ -3639,17 +2880,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               END DO              
               !$OMP END PARALLEL DO
 
-            ! vars needed: int.: ph_fl (> in: ph_in, phb_in); p_in (> in: pp_in, pb_in)
-            !              out: var_pl, var3d_in
-            !              tmp: pout, slope
-            ! comparison with wrfpress, same time: wrfpress, old and new scheme
-            ! about identical
-            ELSE IF ( (var_cmip(ivar) == "zg1000") .OR. &
-                 (var_cmip(ivar) == "zg925") .OR.       &
-                 (var_cmip(ivar) == "zg850") .OR.       &
-                 (var_cmip(ivar) == "zg700") .OR.       &
-                 (var_cmip(ivar) == "zg500") .OR.       &    
-                 (var_cmip(ivar) == "zg200") ) THEN
+            ELSE IF ( SCAN(var_cmip(ivar),"zg") == 1 ) THEN
               PRINT *, "calc zg..."
               var3d_in(:,:,:) = ph_fl(:,:,:)
               ! either linear in p or log(p)
@@ -3658,10 +2889,6 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                 DO j = 1,yfocus
                   DO nl = 1,nz - 1
                     IF (pout(np).LE.p_in(i,j,nl) .AND. pout(np).GT.p_in(i,j,nl+1)) THEN               
-                      !slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ &
-                      !        (LOG(p_in(i,j,nl))-LOG(p_in(i,j,nl+1)))
-                      !var_pl(i,j) = var3d_in(i,j,nl+1) + &
-                      !              slope*(LOG(pout(np))-LOG(p_in(i,j,nl+1)))
                       SELECT CASE (vint_type)
                       CASE(0)
                       ! (HTr) - linear in p
@@ -3686,27 +2913,7 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               !$OMP END PARALLEL DO
             END IF
 
-            ! alternative: use one routine for all
-            ! using np here is rubbish and wrong > originally trickeled up as well...
-!            DO i = 1,xfocus 
-!              DO j = 1,yfocus
-!                DO nl = 1,nz - 1
-!                  IF (pout(np).le.p_in(i,j,nl) .and. pout(np).gt.p_in(i,j,nl+1)) then                
-!                    ! SKn: original version
-!                    !slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ (p_in(i,j,nl)-p_in(i,j,nl+1))
-!                    !var_pl(i,j,np) = var3d_in(i,j,nl+1) + slope*(pout(np)-p_in(i,j,nl+1))
-!                    ! HTr: change interpolation to be linear in log(p)
-!                    slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/ (LOG(p_in(i,j,nl))-LOG(p_in(i,j,nl+1)))
-!                    var_pl(i,j,np) = var3d_in(i,j,nl+1) + slope*(LOG(pout(np))-LOG(p_in(i,j,nl+1)))
-!                  END IF
-!                END DO
-!              END DO
-!            END DO
-
-            !!data_in(:,:) = var_pl(:,:) ! superfluous, remove var_pl TODO was some old idea of someone but does not fit into the overall concept
-
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! CORDEX [X], FPS CEM [X]
 ! psl [Pa] i Sea Level Pressure
 
             ! several options to calculate slp, either from formula
@@ -3738,25 +2945,18 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                 !T_L        !(input) temperature at lowest level
                 !nz, ns, ew !(input) dimensions: vertical, north-south, east-west
                 CALL calcslptwo(psl_in, p_in, psfc_in, ph_in(:,:,1)+phb_in(:,:,1), t_in(:,:,1), yfocus, xfocus)
-                !                     int c    read   read          read         int c
+
               CASE DEFAULT
                 PRINT *, 'CAUTION: unknown setting for calcslp, proceed with default method'
                 STOP 'calc_slp_type not properly set'
               END SELECT
-
               data_in(:,:) = psl_in(:,:)
-
             END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! CORDEX [X], FPS CEM [X]
 ! prw [kg m-2] i Water Vapor Path
 
-            IF ( (var_cmip(ivar) == "prw") ) THEN
-  
-              !t_in(:,:,:) = ( theta_in(:,:,:)+T00(1) ) * ( (pp_in(:,:,:)+pb_in(:,:,:))/P00(1) )**(R/cp)
-              !p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
-  
+            IF ( (var_cmip(ivar) == "prw") ) THEN  
               prw(:,:) = 0.
               DO nl = 1, nz
                 prw(:,:) = prw(:,:) + &
@@ -3769,13 +2969,9 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
             END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! CORDEX [X], FPS CEM [X]
 ! clwvi [kg m-2] i Condensed Water Path  
 
             IF ( (var_cmip(ivar) == "clwvi") ) THEN
-    
-              !t_in(:,:,:) = (theta_in(:,:,:)+T00(1))*((pp_in(:,:,:)+pb_in(:,:,:))/P00(1))**(R/cp)
-              !p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
 
               clwvi(:,:) = 0.
               DO nl = 1,nz - 1
@@ -3790,7 +2986,6 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
             END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! CORDEX [X], FPS CEM [X]
 ! clivi  [kg m-2] i Ice Water Path
 
             IF ( (var_cmip(ivar) == "clivi")) THEN
@@ -3810,17 +3005,11 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
             END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! CORDEX [ ], FPS CEM [X]
 ! cape [J kg-1] i 2-D Maximum Convective Available Potential Energy
 ! cin [J kg-1] i 2-D Maximum Convective Inhibition
 
-            IF ( (var_cmip(ivar) == "cape") .OR. (var_cmip(ivar) == "cin") ) THEN
-    
-              !t_in(:,:,:) = (theta_in(:,:,:)+T00(1))*((pp_in(:,:,:)+pb_in(:,:,:))/P00(1))**(R/cp)
-              !p_in = pp_in+pb_in          
-    
+            IF ( (var_cmip(ivar) == "cape") .OR. (var_cmip(ivar) == "cin") ) THEN         
               t_p(:,:,1) = t_in(:,:,1)
-    
               cape(:,:) = 0.
               cin(:,:) = 0.
               lcl(:,:) = -999.
@@ -3829,150 +3018,86 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
               !$OMP PARALLEL DO
               DO i = 1,xfocus
                 DO j = 1,yfocus
-                  DO nl = 1,nz-1
-    
+                  DO nl = 1,nz-1    
                     qvs(i,j,nl) = 0.622*a*exp(b*(t_p(i,j,nl)-c)/(t_p(i,j,nl)-d))/p_in(i,j,nl)
     
-                    IF (qvs(i,j,nl) .gt. qv_in(i,j,1)) THEN ! dry adiabatic ascent
-                   
+                    IF (qvs(i,j,nl) .gt. qv_in(i,j,1)) THEN ! dry adiabatic ascent                   
                       t_p(i,j,nl+1) = (theta_in(i,j,1)+T00(1))*(p_in(i,j,nl+1)/P00(1))**(R/cp)
     
-                    ELSE IF (qvs(i,j,nl) .lt. qv_in(i,j,1)) THEN ! moist adiabatic ascent
-    
+                    ELSE IF (qvs(i,j,nl) .lt. qv_in(i,j,1)) THEN ! moist adiabatic ascent    
                       IF (lcl(i,j) .eq. -999) THEN ! lifting condensation level
                         lcl(i,j) = p_in(i,j,nl)
-                      END IF
-    
-                      t_ii = t_p(i,j,nl)
-    
-                      DO ii = 1,10 ! solve iteratively
-    
-                        qvs(i,j,nl+1) = 0.622*a*exp(b*(t_ii-c)/(t_ii-d))/p_in(i,j,nl+1)
-    
+                      END IF    
+                      t_ii = t_p(i,j,nl)    
+                      DO ii = 1,10 ! solve iteratively    
+                        qvs(i,j,nl+1) = 0.622*a*exp(b*(t_ii-c)/(t_ii-d))/p_in(i,j,nl+1)    
                         t_ii = t_ii - (t_ii*(P00(1)/p_in(i,j,nl+1))**(R/cp)*exp(L*qvs(i,j,nl+1)/(cp*t_ii)) - &
                                (t_p(i,j,nl)*(P00(1)/p_in(i,j,nl))**(R/cp)*exp(L*qvs(i,j,nl)/(cp*t_p(i,j,nl))))) / &
                                ( (P00(1)/p_in(i,j,nl+1))**(R/cp)*exp(n/(p_in(i,j,nl+1)*t_ii)*exp(b*(t_ii-c)/(t_ii-d))) * &
-                               (1 - (n/p_in(i,j,nl+1)*exp(b*(t_ii-c)/(t_ii-d))*(t_ii*(t_ii-b*c)+(b-2)*d*t_ii+d**2))/(t_ii*(d-t_ii)**2)) )
-  
-                      END DO
-    
-                      !print*, 'thetae(i,j,nl)',(t_p(i,j,nl)*(100000./p_in(i,j,nl))**(R/cp)*exp(L*qvs(i,j,nl)/(cp*t_p(i,j,nl))))
-                      !print*,'thetae(i.j.nl+1)',(t_ii*(100000./p_in(i,j,nl+1))**(R/cp)*exp(L*qvs(i,j,nl+1)/(cp*t_ii))) 
-  
-                      t_p(i,j,nl+1) = t_ii
-    
-                      !print*, nl, 'moist', t_p(i,j,nl+1), t_in(i,j,nl+1), (t_p(i,j,nl+1)-t_in(i,j,nl+1))
-    
+                               (1 - (n/p_in(i,j,nl+1)*exp(b*(t_ii-c)/(t_ii-d))*(t_ii*(t_ii-b*c)+(b-2)*d*t_ii+d**2))/(t_ii*(d-t_ii)**2)) )  
+                      END DO  
+                      t_p(i,j,nl+1) = t_ii   
                     END IF                 
   
-                    IF (t_p(i,j,nl) .gt. t_in(i,j,nl)) THEN
-                   
+                    IF (t_p(i,j,nl) .gt. t_in(i,j,nl)) THEN                   
                       IF (lfc(i,j) .eq. -999) THEN ! level of free convection
                         lfc(i,j) = p_in(i,j,nl)
-                      END IF
-    
-                      cape(i,j) = cape(i,j) + (t_p(i,j,nl) - t_in(i,j,nl)) / t_in(i,j,nl) * ((phb_in(i,j,nl)+ph_in(i,j,nl))-(phb_in(i,j,nl-1)+ph_in(i,j,nl-1)))
-    
-                      !print*, 'nl, cape(i,j)', nl, cape(i,j)
-    
+                      END IF    
+                      cape(i,j) = cape(i,j) + (t_p(i,j,nl) - t_in(i,j,nl)) / t_in(i,j,nl) * ((phb_in(i,j,nl)+ph_in(i,j,nl))-(phb_in(i,j,nl-1)+ph_in(i,j,nl-1)))      
                     ELSE IF ( (t_p(i,j,nl) .lt. t_in(i,j,nl)) .and. (cape(i,j) .eq. 0.) ) THEN ! convective inhibition 
-                 
-                      cin(i,j) = cin(i,j) + (t_in(i,j,nl) - t_p(i,j,nl)) / t_in(i,j,nl) * ((phb_in(i,j,nl)+ph_in(i,j,nl))-(phb_in(i,j,nl-1)+ph_in(i,j,nl-1))) 
-    
-                      !print*, 'nl, cin(i,j)', nl, cin(i,j)
-    
-                    END IF
-    
+                      cin(i,j) = cin(i,j) + (t_in(i,j,nl) - t_p(i,j,nl)) / t_in(i,j,nl) * ((phb_in(i,j,nl)+ph_in(i,j,nl))-(phb_in(i,j,nl-1)+ph_in(i,j,nl-1)))        
+                    END IF    
                   END DO
                 END DO
               END DO
-              !$OMP END PARALLEL DO
+             !$OMP END PARALLEL DO
   
               IF ( var_cmip(ivar) == "cape") THEN
                 data_in(:,:) = cape(:,:)
               END IF
               IF ( var_cmip(ivar) == "cin") THEN
                 data_in(:,:) = cin(:,:)
-              END IF
-    
+              END IF    
             END IF
-
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
           END IF ! pressure levels processing
           
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! Josipa: Processing variables on pressure levels        
-          
+! Processing variables on pressure levels        
+
           IF ( filetype(ivar) == "p" ) THEN
-            PRINT *, "Working on the pressure level", plevel(ivar)
-            IF (plevel(ivar) == 1000) THEN
-             np = 1
-            ELSE IF (plevel(ivar) == 925) THEN
-             np = 2
-            ELSE IF (plevel(ivar) == 850) THEN
-             np = 3
-            ELSE IF (plevel(ivar) == 700) THEN
-             np = 4
-            ELSE IF (plevel(ivar) == 600) THEN
-             np = 5
-            ELSE IF (plevel(ivar) == 500) THEN
-             np = 6
-            ELSE IF (plevel(ivar) == 400) THEN
-             np = 7
-            ELSE IF (plevel(ivar) == 300) THEN
-             np = 8
-            ELSE IF (plevel(ivar) == 250) THEN
-             np = 9
-            ELSE IF (plevel(ivar) == 200) THEN
-             np = 10
-            ELSE IF (plevel(ivar) == 150) THEN
-             np = 11
-            ELSE IF (plevel(ivar) == 100) THEN
-             np = 12
-            ELSE IF (plevel(ivar) == 70) THEN
-             np = 13
-            ELSE IF (plevel(ivar) == 50) THEN
-             np = 14
-            ELSE IF (plevel(ivar) == 30) THEN
-             np = 15
-            ELSE IF (plevel(ivar) == 20) THEN
-             np = 16
-            ELSE IF (plevel(ivar) == 10) THEN
-             np = 17
-            END IF
+            PRINT *, "Working on the pressure level", plevel(ivar)            
+            ! Set levels            
+            DO i = 1, num_levels
+              IF (plevel(ivar) == pout(i)) THEN
+                np = i
+              EXIT
+              END IF
+            END DO
 
             !PRINT *, "extracting/calculating", var_cmip(ivar) 
             PRINT *, "New np level is", np
             !If wind components, derotate, first u component, then v component.
             !sinalpha and cosalha extracted fromt the geo_em file.
             IF ( (SCAN(var_cmip(ivar),"ua") == 1) ) THEN
-              DO i = 1,xfocus 
-                DO j = 1,yfocus
-		  IF ( pl_in_u(i,j,np) == mv ) THEN
-		    data_in(i,j) = mv
-		  ELSE
-                    data_in(i,j) = pl_in_u(i,j,np)*cosalpha_in(i,j) - pl_in_v(i,j,np)*sinalpha_in(i,j) 
-		  END IF
-		END DO
-	      END DO
+              data_in(:,:) = pl_in_u(:,:,np)*cosalpha_in(:,:) - pl_in_v(:,:,np)*sinalpha_in(:,:)
             ELSE IF ( (SCAN(var_cmip(ivar),"va") == 1) ) THEN
-              data_in(:,:) = pl_in_u(:,:,np) !*sinalpha_in(:,:) + pl_in_v(:,:,np)*cosalpha_in(:,:)
+              data_in(:,:) = pl_in_u(:,:,np)*sinalpha_in(:,:) + pl_in_v(:,:,np)*cosalpha_in(:,:)
             ELSE
               !for all other variables such as hus, ta and zg just read the datafrom the coresponing level. 
               data_in(:,:) = pl_in(:,:,np) 
             END IF
 
-            WHERE (data_in(:,:) > 100000.) data_in(:,:) = mv    
+            WHERE (abs(data_in(:,:)) > 100000.) data_in(:,:) = mv
                    
           END IF 
  
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! Josipa: ua and va at height > 10m [m s-1] (e.g. ua100m, va100m) wind components at height > 10m
+! ua and va at height > 10m [m s-1] (e.g. ua100m, va100m) wind components at height > 10m
 ! The code implemented from CORDEX-WRF v1.3 module https://gmd.copernicus.org/articles/12/1029/2019/
 
-					IF ( ( height(ivar) > 10. ) .AND. &
-						 ( (SCAN(var_cmip(ivar),"ua") == 1 ) .OR.  (SCAN(var_cmip(ivar),"va") == 1 ) ) ) THEN
+          IF ( ( height(ivar) > 10. ) .AND. &
+            ( (SCAN(var_cmip(ivar),"ua") == 1 ) .OR.  (SCAN(var_cmip(ivar),"va") == 1 ) ) ) THEN
 
             !calculating height
             DO nl = 1,nz_lowest 
@@ -4003,43 +3128,30 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
             END IF           
           END IF
           
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! Josipa: tauu and tauv [Pa]
-! Surface downward wind stress
-! Should be ok, but check!
+          !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+          ! Surface downward wind stress
+          ! Should be ok, but check!
 
-					IF ( (var_cmip(ivar) == "tauu") .OR. (var_cmip(ivar) == "tauv") ) THEN
+          IF ( (var_cmip(ivar) == "tauu") .OR. (var_cmip(ivar) == "tauv") ) THEN
 
-					  IF (var_cmip(ivar) == "tauu") THEN  				
-					  	  
-					    data_in(:,:) = cd_in*(psfc_in/(R*t2_in))*(u10_in(:,:)*cosalpha_in(:,:) - v10_in(:,:)*sinalpha_in(:,:))**2
-					    
-					  ELSE IF (var_cmip(ivar) == "tauv")  THEN  
-					  
-					    data_in(:,:) = cd_in*(psfc_in/(R*t2_in))*(u10_in(:,:)*sinalpha_in(:,:) + v10_in(:,:)*cosalpha_in(:,:))**2
-					  
-					  END IF
-					  
-					END IF				
+            IF (var_cmip(ivar) == "tauu") THEN				 	  
+              data_in(:,:) = cd_in*(psfc_in/(R*t2_in))*(u10_in(:,:)*cosalpha_in(:,:) - v10_in(:,:)*sinalpha_in(:,:))**2    
+            ELSE IF (var_cmip(ivar) == "tauv")  THEN   
+              data_in(:,:) = cd_in*(psfc_in/(R*t2_in))*(u10_in(:,:)*sinalpha_in(:,:) + v10_in(:,:)*cosalpha_in(:,:))**2
+            END IF
+          END IF				
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! CORDEX [X], FPS CEM [X]
 ! clt [%] a Total Cloud Fraction
 ! not instantaneous, but average, have to recode here
   
           IF (var_cmip(ivar) == "clt") THEN
-
-            IF (calc) THEN
-  
+            IF (calc) THEN  
               IF (.not. ALLOCATED(cldfra_inv)) ALLOCATE( cldfra_inv( xfocus, yfocus ), STAT=sts )
-
               IF (ALLOCATED(tmp_3d)) DEALLOCATE( tmp_3d )
               ALLOCATE( tmp_3d( xfocus, yfocus, 2 ), STAT=sts )
-
               DO k =1,2,1
-
-                cldfra_inv(:,:) = 1.
-  
+                cldfra_inv(:,:) = 1.  
                 !$OMP PARALLEL DO
                 DO i = 1,xfocus
                   DO j = 1,yfocus
@@ -4055,141 +3167,79 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                     END IF
                   END DO ! j
                 END DO ! i
-                !$OMP END PARALLEL DO
-  
-                tmp_3d(:,:,k) = (1 - cldfra_inv(:,:))*100.
-  
+                !$OMP END PARALLEL DO  
+                tmp_3d(:,:,k) = (1 - cldfra_inv(:,:))*100.  
               END DO ! k
-
               WHERE (tmp_3d > 100.) tmp_3d = 100.
               WHERE (tmp_3d < 0.) tmp_3d = 0.
-
               data_in(:,:) = ( tmp_3d(:,:,1) + tmp_3d(:,:,2) ) / 2.
-
               DEALLOCATE(tmp_3d)
-
-            ! this is the last field, i.e. no subsequent field can be found
-            ! any more in the staged data
+! this is the last field, i.e. no subsequent field can be found
+! any more in the staged data
             ELSE
-
                 data_in(:,:) = mv
-
             END IF
-
-            calc = .TRUE.
-  
+            calc = .TRUE.  
           END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! CORDEX [X], FPS CEM [X]
-! pr [kg m-2 s-1] a Precipitation  
-! [mm dtHours-1] -> [kg m-2 s-1]
+! pr [kg m-2 s-1] Precipitation; [mm dtHours-1] -> [kg m-2 s-1]
 ! accumulated quantity (using a bucket)
 
           IF (var_cmip(ivar) == "pr") THEN
-
             IF (calc) THEN
   
-              IF ( bucket_mm > 0. ) THEN
-
-                !data_in(:,:) = ((rainnc_in(:,:,2) + rainc_in(:,:,2)) - (rainnc_in(:,:,1) + rainc_in(:,:,1)) + &
-                !                (i_rainnc_in(:,:,2) + i_rainc_in(:,:,2) - i_rainnc_in(:,:,1) - i_rainc_in(:,:,1))*bucket_mm)/(dtHours*3600.) 
-
+              IF ( bucket_mm > 0. ) THEN 
                 data_in(:,:) = (((rainnc_in(:,:,2)+i_rainnc_in(:,:,2)*bucket_mm) + &
                                  (rainc_in(:,:,2)+i_rainc_in(:,:,2)*bucket_mm  )) - &
                                 ((rainnc_in(:,:,1)+i_rainnc_in(:,:,1)*bucket_mm) + &
                                  (rainc_in(:,:,1)+i_rainc_in(:,:,1)*bucket_mm  ))) / &
                                (dtHours*3600.) 
-
               ELSE
-
                 data_in(:,:) = ( ( rainnc_in(:,:,2) + rainc_in(:,:,2) ) - &
                                  ( rainnc_in(:,:,1) + rainc_in(:,:,1) ) ) / &
                                  ( dtHours * 3600. )
-
               END IF
-
-            ! this is the last field, i.e. no subsequent field can be found
-            ! any more in the staged data
             ELSE
-
               data_in(:,:) = mv
-
             END IF
-
             calc = .TRUE.
-
           END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! prc [kg m-2 s-1] a Convective Precipitation 
 ! unit [mm/3hr] to [kg m-2 s-1]
-  
+    
           IF (var_cmip(ivar) == "prc") THEN
-
             IF (calc) THEN
-
-              IF ( bucket_mm > 0. ) THEN
-              
+              IF ( bucket_mm > 0. ) THEN              
                 data_in(:,:) = ( ( rainc_in(:,:,2)+i_rainc_in(:,:,2)*bucket_mm ) - &
                                  ( rainc_in(:,:,1)+i_rainc_in(:,:,1)*bucket_mm ) ) / &
                                  (dtHours*3600.) 
-
               ELSE
-
                 data_in(:,:) = ( rainc_in(:,:,2) - rainc_in(:,:,1) ) / &
-                               (dtHours*3600.)
- 
+                               (dtHours*3600.) 
               END IF
-
-            ! this is the last field, i.e. no subsequent field can be found
-            ! any more in the staged data
             ELSE
-
               data_in(:,:) = mv
-
             END IF
-
             calc = .TRUE.
-
           END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! prsn [kg m-2 s-1] ? Snowfall Flux
+! prsn [kg m-2 s-1] ? Snowfall Flux or snm [kg m-2 s-1] a Surface Snow Melt
 ! unit [mm/3hr] to [kg m-2 s-1]
   
-          IF (var_cmip(ivar) == "prsn") THEN
-  
-            IF (calc) THEN
-            
-              data_in(:,:) = (snownc_in(:,:,2) - snownc_in(:,:,1)) / &
-                             (dtHours*3600.)
-  
-            ELSE
-
-              data_in(:,:) = mv
-
-            END IF
-
-            calc = .TRUE.
-
-          END IF
-  
-!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! snm [kg m-2 s-1] a Surface Snow Melt
-! unit [kg m-2 /3hr] to [kg m-2 s-1]
-  
-          IF (var_cmip(ivar) == "snm") THEN
-  
-            IF (calc) THEN
-              data_in(:,:) = (acsnom_in(:,:,2) - acsnom_in(:,:,1)) / (dtHours*3600.)
-              WHERE (landmask_in == 0) data_in = mv
+          IF ( (var_cmip(ivar) == "prsn") .OR. (var_cmip(ivar) == "snm") ) THEN  
+            IF (calc) THEN            
+              data_in(:,:) = (acsnom_in(:,:,2) - acsnom_in(:,:,1)) / &
+                             (dtHours*3600.)  
             ELSE
               data_in(:,:) = mv
             END IF
+            WHERE (landmask_in == 0) data_in = 0.
             calc = .TRUE.
-
-          END IF
+         END IF
           
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! evspsbl [kg m-2 s-1] a Evaporation
@@ -4197,20 +3247,12 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! TO CHECK STILL, in principle OK
   
           IF (var_cmip(ivar) == "evspsbl") THEN
-  
-            IF (calc) THEN
-            
-              data_in(:,:) = ( sfcevp_in(:,:,2) - sfcevp_in(:,:,1) ) / &
-                             (dtHours*3600.)
-  
+              IF (calc) THEN            
+              data_in(:,:) = ( sfcevp_in(:,:,1) + sfcevp_in(:,:,2) ) / 2.  
             ELSE
-
               data_in(:,:) = mv
-
             END IF
-
             calc = .TRUE.
-
           END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4223,37 +3265,28 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! by using latent heat of vaporization you never get values that have a reasonable magnitude...
 ! CHECK with registry on the units
   
-          IF (var_cmip(ivar) == "evspsblpot") THEN
-  
-            IF (calc) THEN
-            
-              data_in(:,:) = (potevp_in(:,:,2) - (potevp_in(:,:,1))) / L
-  
+          IF (var_cmip(ivar) == "evspsblpot") THEN  
+            IF (calc) THEN            
+              data_in(:,:) = (potevp_in(:,:,2) - (potevp_in(:,:,1))) / L  
             ELSE
-
               data_in(:,:) = mv
-
             END IF
-
             calc = .TRUE.
-
           END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! mrros [kg m-2 s-1] a Surface Runoff
 ! unit [mm/3hr] to [kg m-2 s-1]
   
-          IF (var_cmip(ivar) == "mrros") THEN
-  
+          IF (var_cmip(ivar) == "mrros") THEN  
             IF (calc) THEN
-              data_in(:,:) = (sfroff_in(:,:,2) - sfroff_in(:,:,1)) / &
-                             (dtHours*3600.)
+              data_in(:,:) = (sfroff_in(:,:,2) + sfroff_in(:,:,1)) / &
+                             (2.*dtHours) !(dtHours*3600)
               WHERE (landmask_in == 0) data_in = mv
             ELSE
               data_in(:,:) = mv
             END IF
             calc = .TRUE.
-
           END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4262,18 +3295,16 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! SFROFF, UDROFF
 ! UDROFF is accumulated!
   
-          IF (var_cmip(ivar) == "mrro") THEN
-  
+          IF (var_cmip(ivar) == "mrro") THEN  
             IF (calc) THEN
-              data_in(:,:) = ( (sfroff_in(:,:,2) - sfroff_in(:,:,1)) + &
-                               (udroff_in(:,:,2) - udroff_in(:,:,1)) ) / &
-                               (dtHours*3600.) 
+              data_in(:,:) = ( ( sfroff_in(:,:,2) + sfroff_in(:,:,1) )/2. + &
+                               ( udroff_in(:,:,2) + udroff_in(:,:,1) )/2. ) / &
+                               (dtHours) !(dtHours*3600) 
               WHERE (landmask_in == 0) data_in = mv
             ELSE
               data_in(:,:) = mv
             END IF
             calc = .TRUE.
-
           END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4282,19 +3313,12 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
   
           IF ( (var_cmip(ivar) == "hfss") &
             .OR. (var_cmip(ivar) == "hfls") ) THEN
-    
             IF (calc) THEN
-
               data_in(:,:) = (hflux_in(:,:,1) + hflux_in(:,:,2)) / 2.
-
             ELSE
-
               data_in(:,:) = mv
-
             END IF
-
             calc = .TRUE.
-
           END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4334,35 +3358,24 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 
                 data_in(:,:) = ( ( rad_in(:,:,2) + ( i_rad_in(:,:,2) * bucket_J ) ) - &
                                ( rad_in(:,:,1) + ( i_rad_in(:,:,1) * bucket_J ) ) ) / &
-                               (dtHours*3600.)
-               
+                               (dtHours*3600.)               
               ELSE
-
                 data_in(:,:) = (rad_in(:,:,2) - rad_in(:,:,1)) / (dtHours*3600.)
-
               END IF
-
             ELSE
-
               data_in(:,:) = mv
-
             END IF
-
             calc = .TRUE.
-
           END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! sund [s] s Duration of Sunshine
 ! WMO definition >= 120 W m-2
 
-          IF ( var_cmip(ivar) == "sund" ) THEN
-    
+          IF ( var_cmip(ivar) == "sund" ) THEN    
             IF (calc) THEN
-
               DO i = 1,xfocus
                 DO j = 1,yfocus
-
                   ! if both neighbouring data points are above the threshold
                   IF ( (swdown_in(i,j,1) >= 120.) .AND. (swdown_in(i,j,2) >= 120.) ) THEN 
                     data_in(i,j) = dtHours*3600.
@@ -4376,19 +3389,13 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
                     ELSE IF ( slope < 0 ) THEN
                       data_in(i,j) = (120. - swdown_in(i,j,1)) / slope
                     END IF
-                  END IF
-               
+                  END IF               
                 END DO
               END DO
-
             ELSE
-
               data_in(:,:) = mv
-
             END IF
-
             calc = .TRUE.
-
           END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4400,33 +3407,35 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! assume standard area 1m2, assume 1l water = 1kg, 1mm m-2 water depth = 1l
 ! masking over ocean, with mv initialized
 
-          IF (var_cmip(ivar) == "mrso") THEN
-    
-            !data_in(:,:) = ((smois_in(:,:,1,1)*DZS(1) + smois_in(:,:,2,1)*DZS(2) + smois_in(:,:,3,1)*DZS(3) + smois_in(:,:,4,1)*DZS(4) ) + &
-            !                (smois_in(:,:,1,2)*DZS(1) + smois_in(:,:,2,2)*DZS(2) + smois_in(:,:,3,2)*DZS(3) + smois_in(:,:,4,2)*DZS(4) ))/2.*1000. 
-  
-            data_in(:,:) =  (smois_in(:,:,1,1)*DZS(1) + &
-                             smois_in(:,:,2,1)*DZS(2) + &
-                             smois_in(:,:,3,1)*DZS(3) + &
-                             smois_in(:,:,4,1)*DZS(4)) * 1000.
+          IF (var_cmip(ivar) == "mrso") THEN   
+            data_in(:,:) =  (smois_in(:,:,1)*DZS(1) + &
+                             smois_in(:,:,2)*DZS(2) + &
+                             smois_in(:,:,3)*DZS(3) + &
+                             smois_in(:,:,4)*DZS(4) ) * 1000.
             WHERE (landmask_in == 0) data_in = mv
-
           END IF
-  
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! mrsos [kg m-2] Soil Moisture Content at the 1st model layer
+! see comment in the variable aquisition section
+! m3 m-3 -> kg m-2
+! SMOIS_i [m3 m-3] * DZS_1 [m] * 1000 [kg m-3] = [kg m-2]
+! assume standard area 1m2, assume 1l water = 1kg, 1mm m-2 water depth = 1l
+! masking over ocean, with mv initialized
+
+          IF (var_cmip(ivar) == "mrsos") THEN    
+            data_in(:,:) =  (smois_in(:,:,1)*DZS(1)) * 1000.
+            WHERE (landmask_in == 0) data_in = mv
+          END IF
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! mrsol
 ! masking over ocean, with mv initialized
 
           IF (var_cmip(ivar) == "mrsol") THEN
-
-            DO i = 1, 4
-              WHERE (landmask_in(:,:) == 1)
-                data_in_3D(:,:,i) = smois_in(:,:,i,1) * DZS(i) * 1000.
-              ELSEWHERE
-                data_in_3D(:,:,i) = mv
-              END WHERE
+	    DO i = 1, 4
+	      data_in_3D(:,:,i) = smois_in(:,:,i) * DZS(i) * 1000.
+              WHERE (landmask_in == 0) data_in_3D(:,:,i) = mv 
             END DO
-
           END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4434,15 +3443,10 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! masking over ocean, with mv initialized
 
           IF (var_cmip(ivar) == "tsl") THEN
-
-            DO i = 1, 4
-              WHERE (landmask_in(:,:) == 1)
-                data_in_3D(:,:,i) = smois_in(:,:,i,1)
-              ELSEWHERE
-                data_in_3D(:,:,i) = mv
-              END WHERE
+	    DO i = 1, 4
+	      data_in_3D(:,:,i) = tslb_in(:,:,i)
+	      WHERE (landmask_in == 0) data_in_3D(:,:,i) = mv
             END DO
-
           END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4451,22 +3455,8 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! masking over ocean, with mv initialized
 
           IF ( (var_cmip(ivar) == "snc") ) THEN
-
-            !PRINT *, 'shape data_in with snc', SHAPE(data_in)
-            !PRINT *, 'landmask_in test snc middle', data_in(180, :)*100. 
-            !PRINT *, 'landmask_in', SHAPE(landmask_in)
-            !PRINT *, 'landmask_in middle', landmask_in(180, :)
-            !data_in = landmask_in
-
             data_in(:,:) = data_in(:,:)*100. 
             WHERE (landmask_in == 0) data_in = mv
-
-            !WHERE (landmask_in == 1)
-            !  data_in = data_in*100. 
-            !ELSEWHERE
-            !  data_in = mv
-            !END WHERE
-
           END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4476,15 +3466,8 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! variables are just passed through and need some masking
 
           IF ( (var_cmip(ivar) == "snd") &
-            .OR. (var_cmip(ivar) == "snw") ) THEN
- 
-            WHERE (landmask_in == 0) data_in = mv
-            !WHERE (landmask_in(:,:) == 1)
-            !  data_in(:,:) = data_in(:,:)
-            !ELSEWHERE
-            !  data_in(:,:) = mv
-            !END WHERE
-  
+            .OR. (var_cmip(ivar) == "snw") ) THEN 
+            WHERE (landmask_in == 0) data_in = mv  
           END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4493,62 +3476,58 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! reasonable; also offers the possibility of some proper sea-ice treatment
 
           IF ( (var_cmip(ivar) == "sic") ) THEN
- 
-            ! fractional sea ice 
-!           IF (fractSeaIce) THEN
+              data_in(:,:) = data_in(:,:) * 100.   
+          END IF
 
-              data_in(:,:) = data_in(:,:) * 100. 
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! sftlaf [%] where LU_INDEX=21 set to 100, otherwise set to 0.
 
-            ! binary sea ice mask, SEAICE is empty variable
-!           ELSE
-!
-!             WHERE ( xland_in == 2. )
-!
-!               xland_in = 0.
-!
-!             END WHERE
-!
-!              data_in(:,:) = ( landmask_in(:,:) - xland_in(:,:) ) * 100.
-!
-!            END IF
-  
+          IF ( (var_cmip(ivar) == "sftlaf") ) THEN
+              data_in(:,:) = data_in(:,:) * 100.
+          END IF
+
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! sfturf [%] Urban fraction
+          IF ( (var_cmip(ivar) == "sfturf") ) THEN
+              WHERE (data_in == 13 .OR. data_in > 30 ) data_in = 100.
+              WHERE (data_in < 100.) data_in = 0.
+          END IF
+          
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! sftlf [%] land-sea mask
+          IF ( (var_cmip(ivar) == "sftlf") ) THEN
+              WHERE (data_in == 2 ) data_in = 0.
+              data_in(:,:) = data_in(:,:) * 100.
           END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! -1] i Near-Surface Wind Speed
+! [ms-1] i Near-Surface Wind Speed
   
-          IF (var_cmip(ivar) == "sfcWind") THEN
-  
-            data_in(:,:) = (u10_in(:,:)**2 + v10_in(:,:)**2)**0.5 
-  
+          IF (var_cmip(ivar) == "sfcWind") THEN  
+            data_in(:,:) = (u10_in(:,:)**2 + v10_in(:,:)**2)**0.5   
           END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! uas [m s-1] i Eastward Near-Surface Wind
   
-          IF (var_cmip(ivar) == "uas") THEN 
-  
-            data_in(:,:) = u10_in(:,:)*cosalpha_in(:,:) - v10_in(:,:)*sinalpha_in(:,:) ! rotate to earth grid
-  
+          IF (var_cmip(ivar) == "uas") THEN   
+            data_in(:,:) = u10_in(:,:)*cosalpha_in(:,:) - v10_in(:,:)*sinalpha_in(:,:) ! rotate to earth grid  
           END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! vas [m s-1] i Northward Near-Surface Wind
   
-          IF (var_cmip(ivar) == "vas")  THEN
-  
-            data_in(:,:) = v10_in(:,:)*cosalpha_in(:,:) + u10_in(:,:)*sinalpha_in(:,:) ! rotate to earth grid
-  
+          IF (var_cmip(ivar) == "vas")  THEN  
+            data_in(:,:) = v10_in(:,:)*cosalpha_in(:,:) + u10_in(:,:)*sinalpha_in(:,:) ! rotate to earth grid  
           END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! prhmax [kg m-2 s-1] m Daily Maximum Hourly Precipitation Rate (using wrfxtrm)
 
           IF (var_cmip(ivar) == "prhmax") THEN
-
             data_in(:,:) = rainnc_max_in(:,:) + rainc_max_in(:,:)
-
           END IF
+         
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! hurs [%] i Near-Surface Relative Humidity
@@ -4561,13 +3540,11 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! Goff, J. A., Standardization of Thermodynamic Properties of Moist Air, Heating, Piping, and Air Conditioning, 1949, Vol. 21, 118.
 
           IF (var_cmip(ivar) == "hurs") THEN
-
             ! t2=t2_in 
             ! mr=q2_in 
             ! psf=psfc_in
             !        TK                    mr_sat                 e_sfc                  esat                   fact
             ALLOCATE(tmp_2d(xfocus,yfocus),tmp1_2d(xfocus,yfocus),tmp2_2d(xfocus,yfocus),tmp3_2d(xfocus,yfocus),tmp4_2d(xfocus,yfocus))
-
             tmp_2d = t2_in-c
             tmp2_2d = (q2_in / (epsil+q2_in)) * psfc_in
             tmp3_2d = exp( a1*t2_in**(-2) + a2/t2_in + a3 + a4*t2_in + a5*t2_in**2 + a6*t2_in**3 + a7*t2_in**4 + a8*log(t2_in) )
@@ -4584,11 +3561,6 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
             data_in = max(min(q2_in/tmp1_2d,1.),0.0)*100.
 
             DEALLOCATE(tmp_2d,tmp1_2d,tmp2_2d,tmp3_2d,tmp4_2d)
-
-            ! too simplified
-            !data_in(:,:) = q2_in(:,:) / ( (379.90516 / psfc_in(:,:)) * exp(17.2693882*(t2_in(:,:)-273.15) / (t2_in(:,:) - 35.86)) )
-            !data_in(:,:) = 0.01 * (psfc_in(:,:)*q2_in(:,:)/(q2_in(:,:)*(1.-0.622) + 0.622)) / (611.2*exp(17.67*(t2_in(:,:)-273.15)/(t2_in(:,:)-29.65)))
-
           END IF
 
 !-------------------------------------------------------------------------------
@@ -4597,139 +3569,49 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
           sts = NF90_OPEN( TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) &
             // "/" // TRIM(fn_out), NF90_WRITE, ncid )
 
-          ! file must exist, just from the logic of the code, nevertheless: test
-          IF (sts/=0) EXIT
+          IF (sts/=0) THEN
+            PRINT *, "NF90_OPEN",  sts
+            PRINT *, TRIM(pn_out) // "/" // TRIM(fn_out) // "  FAILED - EXIT"
+            EXIT
+          END IF
           
           sts = NF90_INQ_VARID(ncid, TRIM(var_cmip(ivar)), x_varid)
-          PRINT *, "NF90_OPEN",  sts
-  
-            PRINT *, 'NF90_INQ_VARID', ncid
-            PRINT *, 'var_cmip(ivar)', var_cmip(ivar)
-            PRINT *, 'x_varid', x_varid
-            PRINT *, 'counter/offset', counter
-            PRINT *, 'xfocus', xfocus
-            PRINT *, 'yfocus', yfocus
+          PRINT *, "NF90_OPEN",  sts  
+          PRINT *, 'NF90_INQ_VARID', ncid
+          PRINT *, 'var_cmip(ivar)', var_cmip(ivar)
+          PRINT *, 'x_varid', x_varid
+          PRINT *, 'counter/offset', counter
+          PRINT *, 'xfocus', xfocus
+          PRINT *, 'yfocus', yfocus
+
+          IF ( (var_cmip(ivar) == "mrsol") &
+             .OR. (var_cmip(ivar) == "tsl")) THEN
+              sts = NF90_PUT_VAR( ncid, x_varid, data_in_3D(:,:,:), &
+                START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 4, 1 /) )
+          ELSE IF (frequency(ifrq) == 'fx')  THEN
+            sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
+              START=(/ 1, 1 /), COUNT = (/ xfocus, yfocus /) )
+          ELSE
+             sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
+               START=(/ 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1 /) )
+          END IF
     
-            ! not needed anymore, always store 3D only, have height information
-            ! in the coordinates, this was before a standard 'violation'
-            !IF ( height(ivar) /= -999 ) THEN
-            !  sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
-            !    START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1, 1 /) )
-            !ELSE
-              sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
-                START=(/ 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1 /) )
-            !END IF
-    
-            PRINT *, 'NF90_PUT_VAR', sts
-            PRINT *, 'ncid', ncid
-            PRINT *, 'x_varid', x_varid
-            PRINT *, 'some sample output 3x3 in the middle of the domain', &
-              data_in(xfocus/2:(xfocus/2+2),yfocus/2:(yfocus/2+2))
+          PRINT *, 'NF90_PUT_VAR', sts
+          PRINT *, 'ncid', ncid
+          PRINT *, 'x_varid', x_varid
+          PRINT *, 'some sample output 3x3 in the middle of the domain', &
+             data_in(xfocus/2:(xfocus/2+2),yfocus/2:(yfocus/2+2))
 
           sts = NF90_CLOSE(ncid)
-          PRINT *, "NF90_CLOSE",  sts
-
-
-            
-          PRINT *, "*** WRITE DATA TO netCDF ***"
-          PRINT *, TRIM(pn_out) // "/" // TRIM(fn_out)
-          PRINT *, TRIM(var_cmip(ivar)), xfocus, yfocus, counter, ncid, x_varid
-  
-          ! check whether the field is not already occupied by some data
-          ! addon, 2023-11-12, KGo
-          ! in most cases data shall be written, but if a file exists and 
-          ! data already exist in this file (egde case: end of year 1, year 2 
-          ! is needed) for cell_method mean and sum cases, the data already 
-          ! inside the file of year 2 at the beginning shall not be 
-          ! overwritten; this is a case which happens when several years are
-          ! processed at the same time with on seperate compute nodes, albeit
-          ! writing their output to the very same netCDF file, one might 
-          ! avoid this by some time vec operations, but this seems more easy
-          ! to implement: check for the existence of a field by doing a quick
-          ! statistics calculation
-          !ALLOCATE(tmp_2d(xfocus,yfocus))
-          !sts = NF90_OPEN( TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) &
-          !  // "/" // TRIM(fn_out), NF90_NOWRITE, ncid )
-          !  sts = NF90_INQ_VARID(ncid, TRIM(var_cmip(ivar)), x_varid)
-          !  IF ((var_cmip(ivar) == "mrsol") &
-          !    .OR. (var_cmip(ivar) == "tsl")) THEN
-          !    sts = NF90_GET_VAR( ncid, x_varid, tmp_2d(:,:), &
-          !      START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1, 1 /) )
-          !  ELSE
-          !    sts = NF90_GET_VAR( ncid, x_varid, tmp_2d(:,:), &
-          !      START=(/ 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1 /) )
-          !  END IF
-          !sts = NF90_CLOSE(ncid)
-          !stat_min = MINVAL(tmp_2d(:,:))
-          !stat_max = MAXVAL(tmp_2d(:,:))
-          !DEALLOCATE(tmp_2d)
-
-          ! array is initialized with mv=1e20
-          ! if it is still empty and OK to fill, then min=max=mv
-          !IF ( (stat_min .EQ. mv) .AND. (stat_max .EQ. mv) ) THEN
-         
-            ! if the timestep in the output file is empty still, put data in
-            sts = NF90_OPEN( TRIM(DirOutputPostProRoot) // "/" // TRIM(pn_out) &
-              // "/" // TRIM(fn_out), NF90_WRITE, ncid )
-            PRINT *, "NF90_OPEN",  sts
-
-            ! file must exist, just from the logic of the code, nevertheless: test
-            IF (sts/=0) THEN
-              PRINT *, "NF90_OPEN",  sts
-              PRINT *, TRIM(pn_out) // "/" // TRIM(fn_out) // "  FAILED - EXIT"
-              EXIT
-            END IF
-          
-            sts = NF90_INQ_VARID(ncid, TRIM(var_cmip(ivar)), x_varid)
-            PRINT *, "NF90_OPEN",  sts
-  
-              PRINT *, 'NF90_INQ_VARID', ncid
-              PRINT *, 'var_cmip(ivar)', var_cmip(ivar)
-              PRINT *, 'x_varid', x_varid
-              PRINT *, 'counter/offset', counter
-              PRINT *, 'xfocus', xfocus
-              PRINT *, 'yfocus', yfocus
-   
-              ! most CMOR vars are not 3D, pressure level data is one field and
-              ! level per file; but there are exceptions, where data is stored 3D
-              ! including the repective z-coordinates, all according to CF
-              ! convention
-              IF ((var_cmip(ivar) == "mrsol") &
-                .OR. (var_cmip(ivar) == "tsl")) THEN
-                sts = NF90_PUT_VAR( ncid, x_varid, data_in_3D(:,:,:), &
-                  START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 4, 1 /) )
-              !IF ( height(ivar) /= -999 ) THEN
-              !  sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
-              !    START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1, 1 /) )
-              ELSE
-                sts = NF90_PUT_VAR( ncid, x_varid, data_in(:,:),  &
-                  START=(/ 1, 1, counter /), COUNT = (/ xfocus, yfocus, 1 /) )
-              END IF
-    
-              PRINT *, 'NF90_PUT_VAR', sts
-              PRINT *, 'ncid', ncid
-              PRINT *, 'x_varid', x_varid
-              PRINT *, 'some sample output 3x3 in the middle of the domain', &
-                data_in(xfocus/2:(xfocus/2+2),yfocus/2:(yfocus/2+2))
-
-            sts = NF90_CLOSE(ncid)
-            PRINT *, "NF90_CLOSE", sts
-
-          !ELSE
-            
-            !PRINT *, "not empty any more: ", TRIM(fn_out), " at timestep ", counter
-
-          !END IF
+          PRINT *, "NF90_CLOSE", sts
 
 !-------------------------------------------------------------------------------
 
           ELSE
-
             ! tested this: just define file with a temporal coverage outside the
             ! range of the input file: create file, loop over the inputs,
             ! nothing happens, no false sorting in 
             PRINT *, "no time match", time_match
-
           END IF
 
 !-------------------------------------------------------------------------------
@@ -4740,14 +3622,12 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
 ! next WRF file may contain different number of output intervals
 
         DEALLOCATE(InVarDataRec)
-
         DEALLOCATE(InDateTimeYear)
         DEALLOCATE(InDateTimeMonth)
         DEALLOCATE(InDateTimeDay)
         DEALLOCATE(InDateTimeHour)
         DEALLOCATE(InDateTimeMinute)
         DEALLOCATE(InDateTimeSecond)
-
         DEALLOCATE(InDateTimeCombined)
 
 !-------------------------------------------------------------------------------
@@ -4771,13 +3651,11 @@ fnNMLvar(22) = "runctrl.vars.std_sfc_test.nml"
     CALL mpi_barrier(MPI_COMM_WORLD, ierr)
     IF ( ierr /= MPI_SUCCESS ) STOP "Problem with MPI_BARRIER"
     CALL mpi_finalize(ierr)
-    IF ( ierr /= MPI_SUCCESS ) stop "Problem with MPI_FINALIZE" 
-
+    IF ( ierr /= MPI_SUCCESS ) stop "Problem with MPI_FINALIZE"
     DEALLOCATE( ivar_list )
 #else 
     END DO ! ivarnml - namelist loop     
-#endif 
-
+#endif
 END DO ! ifrq - different temporal aggregations
 
 !===============================================================================
@@ -4931,7 +3809,7 @@ real, DIMENSION(:,:,:), INTENT(IN)  :: PP         !(input) 3D pressure
 real, DIMENSION(:,:),   INTENT(IN)  :: P_s        !(input) pressure at surface
 real, DIMENSION(:,:),   INTENT(IN)  :: PHI_s      !(input) 2D geopotential of the surface
 real, DIMENSION(:,:),   INTENT(IN)  :: T_L        !(input) temperature at lowest level
-INTEGER,                INTENT(IN)  :: ns, ew !(input) dimensions: north-south, east-west
+INTEGER,                INTENT(IN)  :: ns, ew     !(input) dimensions: north-south, east-west
 
 real, DIMENSION(ew,ns)              :: P_L        !(calculated) pressure at lowest level
 real                                :: T_surf     !(calculated) surface temperature
@@ -4942,7 +3820,7 @@ real                                :: T_0        !(calculated) auxiliary variab
 real, PARAMETER                     :: Rd    = 287.04 ![J kg-1 K-1] (const.) dry air constant
 real, PARAMETER                     :: g     = 9.81   ![m s-2] (const.) acceleration due to gravity
 real, PARAMETER                     :: gamma = 0.0065 ![K m-1] (const.) lapse rate at const. 0.0065 K/m, also denoted as (dT/dz)_st
-integer                             :: j,k !loop parameters
+integer                             :: j,k            !loop parameters
 
 !print *,'this is calcslptwo !!!'
 
@@ -5205,6 +4083,8 @@ CASE ('6hr')
   dtDecDay = 0.25
 CASE ('day') ! always means or sums, centered at 12UTC per day
   dtDecDay = 1.0
+CASE ('fx') 
+  dtDecDay = 1.0 / 24.0_8
 CASE DEFAULT
   PRINT *, "invalid time interval specified"
   STOP
@@ -5239,6 +4119,8 @@ DO i=tstotYYYY,tetotYYYY,1
   ! here, also a 360day calendar can be implemented, just set ndpm(:) = 30
   IF ( CheckForLeapyear( i ) == 366 ) THEN 
     ndpm = (/31,29,31,30,31,30,31,31,30,31,30,31/)
+  ELSE IF ( CheckForLeapyear( i ) == 360 ) THEN 
+    ndpm = (/30,30,30,30,30,30,30,30,30,30,30,30/)
   ELSE
     ndpm = (/31,28,31,30,31,30,31,31,30,31,30,31/)
   END IF
@@ -5308,10 +4190,16 @@ CONTAINS
 
     INTEGER, INTENT(IN) :: year
 
-    IF ( ( MOD(year, 4) == 0 .AND. MOD(year, 100) /= 0 ) .OR. ( MOD(year, 400) == 0 ) ) THEN
-      CheckForLeapyear = 366
-    ELSE
+    IF ( TRIM(calendar) == "noleap" ) THEN
       CheckForLeapyear = 365
+    ELSE IF ( TRIM(calendar) == "360_days" ) THEN
+      CheckForLeapyear = 360
+    ELSE
+      IF ( ( MOD(year, 4) == 0 .AND. MOD(year, 100) /= 0 ) .OR. ( MOD(year, 400) == 0 ) ) THEN
+        CheckForLeapyear = 366
+      ELSE
+        CheckForLeapyear = 365
+      END IF
     END IF
 
   END FUNCTION CheckForLeapyear
