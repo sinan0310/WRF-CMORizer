@@ -730,12 +730,12 @@ fnNMLvar(1) = "runctrl.vars.nml"
         END IF
 
         IF ( frequency(ifrq) == "fx" ) THEN
-          nfiles = 1
+          nfiles = 2   ! Since the loop over files does not take the last file into account
         ELSE
           nfiles = SIZE(fl_input)
         END IF
 
-        DO ifl = 1, nfiles, 1 ! operational: loop over complete filelist
+        DO ifl = 1, nfiles-1, 1 ! operational: loop over complete filelist
 
           PRINT *,"============================================================"
           PRINT *, "filelist filetype = ", filetype(ivar) 
@@ -975,7 +975,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
               PRINT *, InDateTimeYear(it)
               DO i = 1, SIZE(TimeRefArray, 1), 1
                 IF ( TimeRefArray(i,2) == InDateTimeYear(it)) THEN
-                  counter = counter + 1
+                  counter = counter + 1 
                   ipos = [ipos, i]
                 END IF
               END DO
