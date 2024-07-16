@@ -2019,7 +2019,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
             !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
             ! pr [kg m-2 s-1] a Precipitation 
    
-            ELSE IF (var_cmip(ivar) == "pr") THEN 
+            ELSE IF ( (var_cmip(ivar) == "pr") .OR. ( (var_cmip(ivar) == "prhmax") .AND. (filetype(ivar) == "s" ) ) ) THEN 
              
               PRINT *, "read iflWRFin " , iflWRFin
               PRINT *, "it = ", it
@@ -2712,7 +2712,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
           ! special offset, as needed with minimum and maximum per file 
           ! as 'it' counts per input file this is OK
 
-          ELSE IF (var_cmip(ivar) == "prhmax") THEN
+          ELSE IF ( (var_cmip(ivar) == "prhmax") .AND. (filetype(ivar) == "x" ) ) THEN
  
             IF (.not. ALLOCATED(rainc_max_in)) ALLOCATE( rainc_max_in ( xfocus, yfocus ), STAT=sts ) 
             IF (.not. ALLOCATED(rainnc_max_in)) ALLOCATE( rainnc_max_in ( xfocus, yfocus ), STAT=sts )
@@ -3259,7 +3259,8 @@ fnNMLvar(1) = "runctrl.vars.nml"
 ! pr [kg m-2 s-1] Precipitation; [mm dtHours-1] -> [kg m-2 s-1]
 ! accumulated quantity (using a bucket)
 
-          IF (var_cmip(ivar) == "pr") THEN
+          IF ( (var_cmip(ivar) == "pr") .OR. \
+             ( (var_cmip(ivar) == "prhmax") .AND. (filetype(ivar) == "s" ) ) ) THEN
             IF (calc) THEN
   
               IF ( bucket_mm > 0. ) THEN 
@@ -3598,7 +3599,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! prhmax [kg m-2 s-1] m Daily Maximum Hourly Precipitation Rate (using wrfxtrm)
 
-          IF (var_cmip(ivar) == "prhmax") THEN
+          IF ( (var_cmip(ivar) == "prhmax") .AND. (filetype(ivar) == "x" ) ) THEN
             data_in(:,:) = rainnc_max_in(:,:) + rainc_max_in(:,:)
           END IF
          
