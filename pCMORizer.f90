@@ -62,6 +62,7 @@ MODULE NamelistHandling
   LOGICAL :: aggregation_yearly, aggregation_monthly, aggregation_individually
   CHARACTER (len = 19) :: tsact, teact
   INTEGER :: nvar
+                     
 
 ! reading from runctrl.vars.nml*
   CHARACTER (LEN = 100), DIMENSION(nvars) :: var_wrf, var_cmip, standard_name, &
@@ -240,7 +241,9 @@ REAL :: &
   !variable to fill the missing data in variabels extracted from wrfpress
   p_miss        , &          
   ! vertical interpolation
-  slope     
+  slope         , &
+  low_lev       , &
+  high_lev
 
 ! Time vec stuff
 REAL(KIND=8), DIMENSION(:), ALLOCATABLE :: &
@@ -1984,37 +1987,52 @@ fnNMLvar(1) = "runctrl.vars.nml"
                   START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )                           				
       				
 	    !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-            ! clt [%] a Total Cloud Fraction
-  
-            ELSE IF ( var_cmip(ivar) == "clt" ) THEN
+            ! cll, clm, clh, clt [%] Cloud Fractions
 
-              IF (.not. ALLOCATED(cldfra_in)) ALLOCATE( cldfra_in( xfocus, yfocus, nz, 2 ), STAT=sts )  
+            ELSE IF ( (var_cmip(ivar) == "cll") .OR. &
+                  (var_cmip(ivar) == "clm") .OR.  &
+                  (var_cmip(ivar) == "clh") .OR.  &
+                  (var_cmip(ivar) == "clt") ) THEN
+              
+              IF (.not. ALLOCATED(pp_in)) ALLOCATE( pp_in( xfocus, yfocus, nz ), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "P", pp_varid)
+              sts = NF90_GET_VAR(ncidin, pp_varid, pp_in(:,:,:), &
+                START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
+
+              PRINT *, "read PB"
+              IF (.not. ALLOCATED(pb_in)) ALLOCATE( pb_in( xfocus, yfocus, nz ), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "PB", pb_varid)
+              sts = NF90_GET_VAR(ncidin, pb_varid, pb_in(:,:,:), &
+                START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
+
+              IF (.not. ALLOCATED(cldfra_in)) ALLOCATE( cldfra_in( xfocus, yfocus, nz, 2 ), STAT=sts )
               IF (it /= InDimLenRec) THEN
               sts = NF90_INQ_VARID(ncidin, "CLDFRA", varid)
               sts = NF90_GET_VAR(ncidin, varid, cldfra_in(:,:,:,:), &
                 START = (/ xoffset, yoffset, 1, it /), &
                 COUNT = (/ xfocus, yfocus, nz, 2 /) )
-  
+
               ELSE IF ( (it == InDimLenRec) .and. (ifl /= SIZE(fl_input)) ) THEN
                 sts = NF90_INQ_VARID(ncidin, "CLDFRA", varid)
                 sts = NF90_GET_VAR(ncidin, varid, cldfra_in(:,:,:,1), &
                   START = (/ xoffset, yoffset, 1, it /), &
-                  COUNT = (/ xfocus, yfocus, nz, 1 /) )  
+                  COUNT = (/ xfocus, yfocus, nz, 1 /) )
                 iflWRFin = fl_input(ifl+1) ! if not the first set to the previous wrfoutfile 
-                                             
+
                 sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin0)
                 sts = NF90_INQ_VARID(ncidin0, "CLDFRA", varid)
                 sts = NF90_GET_VAR(ncidin0, varid, cldfra_in(:,:,:,2), &
                   START = (/ xoffset, yoffset, 1, 1 /), &
                   COUNT = (/ xfocus, yfocus, nz, 1 /) )
-  
-                sts = NF90_CLOSE(ncidin0)  
+
+                sts = NF90_CLOSE(ncidin0)
                 iflWRFin = fl_input(ifl)  !set to the current wrfout file again
               ELSE
                 PRINT *, "no data available for average calculation any more"
                 calc = .FALSE.
               END IF
-  
+
+
 
             !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
             ! pr [kg m-2 s-1] a Precipitation 
@@ -2603,7 +2621,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
               sts = NF90_GET_VAR(ncidin, mask_varid, landmask_in(:,:), &
                 START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
  
-	     IF ( ( var_cmip(ivar) == "mrso" ) .OR. ( var_cmip(ivar) == "mrsos" ) .OR. \
+	     IF ( ( var_cmip(ivar) == "mrso" ) .OR. ( var_cmip(ivar) == "mrsos" ) .OR. &
 	        ( var_cmip(ivar) == "mrsol" ) )THEN
  	    	PRINT *, "read SMOIS"
             	IF (.not. ALLOCATED(smois_in)) ALLOCATE( smois_in( xfocus, yfocus, 4), STAT=sts )           
@@ -2647,7 +2665,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! sfcWind [m s-1] i Near-Surface Wind Speed
  
-          ELSE IF ( (var_cmip(ivar) == "sfcWind") .OR. \
+          ELSE IF ( (var_cmip(ivar) == "sfcWind") .OR. &
             ( (var_cmip(ivar) == "sfcWindmax") .AND. (filetype(ivar) == "s" ) ) ) THEN
   
             IF (.not. ALLOCATED(u10_in)) ALLOCATE( u10_in ( xfocus, yfocus ), STAT=sts ) 
@@ -2745,7 +2763,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
 
 
 !-------------------------------------------------------------------------------
-!-------------------------------------------------------------------------------
+!--------------------------------/-----------------------------------------------
 ! processing the data 
 
   
@@ -3203,45 +3221,83 @@ fnNMLvar(1) = "runctrl.vars.nml"
           
           !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
           ! Surface downward wind stress
-          ! Should be ok, but check!
+          ! Following Trenberth et al.(1990; doi: https://doi.org/10.1175/1520-0485(1990)020%3C1742:TMACIG%3E2.0.CO;2)
 
           IF ( (var_cmip(ivar) == "tauu") .OR. (var_cmip(ivar) == "tauv") ) THEN
 
-            IF (var_cmip(ivar) == "tauu") THEN				 	  
-              data_in(:,:) = cd_in*(psfc_in/(R*t2_in))*(u10_in(:,:)*cosalpha_in(:,:) - v10_in(:,:)*sinalpha_in(:,:))**2    
+            IF (var_cmip(ivar) == "tauu") THEN
+  
+              data_in(:,:) = cd_in*(psfc_in/(R*t2_in)) * &
+                             ( (u10_in(:,:)**2 + v10_in(:,:)**2)**0.5 ) * &
+                             ( u10_in(:,:)*cosalpha_in(:,:) - v10_in(:,:)*sinalpha_in(:,:) )    
+
             ELSE IF (var_cmip(ivar) == "tauv")  THEN   
-              data_in(:,:) = cd_in*(psfc_in/(R*t2_in))*(u10_in(:,:)*sinalpha_in(:,:) + v10_in(:,:)*cosalpha_in(:,:))**2
+
+              data_in(:,:) = cd_in*(psfc_in/(R*t2_in)) * &
+                             ( (u10_in(:,:)**2 + v10_in(:,:)**2)**0.5 ) * &
+                             ( u10_in(:,:)*sinalpha_in(:,:) + v10_in(:,:)*cosalpha_in(:,:) )
+
             END IF
-          END IF				
+
+          END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! clt [%] a Total Cloud Fraction
+! cll, clm, clh [%] a Total Cloud Fraction
 ! not instantaneous, but average, have to recode here
-  
-          IF (var_cmip(ivar) == "clt") THEN
-            IF (calc) THEN  
+
+          IF ( (var_cmip(ivar) == "cll") .OR. &
+               (var_cmip(ivar) == "clm") .OR. &
+               (var_cmip(ivar) == "clh") .OR. &
+               (var_cmip(ivar) == "clt") ) THEN
+            
+            p_in = ( pp_in(:,:,:) + pb_in(:,:,:) ) / 100.
+
+            SELECT CASE (var_cmip(ivar))
+            CASE('clh')
+              low_lev=440.
+              high_lev=minval(p_in(:,:,:))
+            CASE('clm')
+              low_lev=680.
+              high_lev=440.
+            CASE('cll')
+              low_lev=maxval(p_in(:,:,:))
+              high_lev=680.
+            CASE('clt')
+              low_lev=maxval(p_in(:,:,:))
+              high_lev=minval(p_in(:,:,:))
+            CASE DEFAULT
+              PRINT *, "Invalid time interval specified"
+              STOP
+            END SELECT
+
+            IF (calc) THEN
               IF (.not. ALLOCATED(cldfra_inv)) ALLOCATE( cldfra_inv( xfocus, yfocus ), STAT=sts )
               IF (ALLOCATED(tmp_3d)) DEALLOCATE( tmp_3d )
               ALLOCATE( tmp_3d( xfocus, yfocus, 2 ), STAT=sts )
               DO k =1,2,1
-                cldfra_inv(:,:) = 1.  
+                cldfra_inv(:,:) = 1.
                 !$OMP PARALLEL DO
                 DO i = 1,xfocus
                   DO j = 1,yfocus
                     IF (maxval(cldfra_in(i,j,:,k)) .lt. 0.99) THEN
                       cldfra_inv(i,j) = 1.
                       DO nl = 2,nz
-                        cldfra_inv(i,j) = cldfra_inv(i,j) * &
-                          (1- max(cldfra_in(i,j,nl,k),cldfra_in(i,j,nl-1,k)) / &
-                          (1-cldfra_in(i,j,nl-1,k))) 
+                        IF ( p_in(i,j,nl) < low_lev .AND. p_in(i,j,nl) >= high_lev) THEN
+                          IF (( i == 150 ) .AND. ( j == 150)) THEN
+                            PRINT *, p_in(i,j,nl)
+                          END IF
+                          cldfra_inv(i,j) = cldfra_inv(i,j) * &
+                            (1- max(cldfra_in(i,j,nl,k),cldfra_in(i,j,nl-1,k)) / &
+                            (1-cldfra_in(i,j,nl-1,k)))
+                        END IF
                       END DO
-                    ELSE 
-                      cldfra_inv(i,j) = 0.  
+                    ELSE
+                      cldfra_inv(i,j) = 0.
                     END IF
                   END DO ! j
                 END DO ! i
                 !$OMP END PARALLEL DO  
-                tmp_3d(:,:,k) = (1 - cldfra_inv(:,:))*100.  
+                tmp_3d(:,:,k) = (1 - cldfra_inv(:,:))*100.
               END DO ! k
               WHERE (tmp_3d > 100.) tmp_3d = 100.
               WHERE (tmp_3d < 0.) tmp_3d = 0.
@@ -3252,14 +3308,14 @@ fnNMLvar(1) = "runctrl.vars.nml"
             ELSE
                 data_in(:,:) = mv
             END IF
-            calc = .TRUE.  
+            calc = .TRUE.
           END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! pr [kg m-2 s-1] Precipitation; [mm dtHours-1] -> [kg m-2 s-1]
 ! accumulated quantity (using a bucket)
 
-          IF ( (var_cmip(ivar) == "pr") .OR. \
+          IF ( (var_cmip(ivar) == "pr") .OR. &
              ( (var_cmip(ivar) == "prhmax") .AND. (filetype(ivar) == "s" ) ) ) THEN
             IF (calc) THEN
   
@@ -3577,7 +3633,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! [ms-1] i Near-Surface Wind Speed
   
-          IF ( (var_cmip(ivar) == "sfcWind") .OR. \
+          IF ( (var_cmip(ivar) == "sfcWind") .OR. &
              ( (var_cmip(ivar) == "sfcWindmax") .AND. (filetype(ivar) == "s" ) ) )THEN  
             data_in(:,:) = (u10_in(:,:)**2 + v10_in(:,:)**2)**0.5   
           END IF
