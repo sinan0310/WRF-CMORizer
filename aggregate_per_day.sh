@@ -19,7 +19,7 @@
 conda activate  NCLtoPY
 
 export wrkdir=$PWD
-export VERSION="v20240704"  #set the version of your postprocessed files (to create output folder)
+export VERSION="v20240715"  #set the version of your postprocessed files (to create output folder)
 
 if [ "$#" -lt 2 ]; then
     echo "Usage: $0 <CSV_FILE> <PATH_to_1hr_FILES>"
@@ -29,6 +29,7 @@ fi
 # File path to the CSV file
 CSV_FILE=$wrkdir/$1  	# a csv file containing complete list of variables
 DATAPATH=$2 		# example: ./CMORized/FPS-URB-RCC/CMIP6/DD/PARIS-3/UCAN/ERA5/evaluation/r1i1p1f1/WRF451R-COLC/v1/
+VARNAME=$3              # not obligatory
 FREQ="day"
 
 # If csv file given as 1st argument is a web location, first download the file
@@ -51,8 +52,9 @@ read_template=$(printf ' %s' "${headers[@]}")
 # Read variables and frequencies from the given CSV file, skip the header, and send a job per year, domain, variable and frequency
 if [ -e "$PWD/daily_variables_not_processed.txt" ]; then rm "$PWD/daily_variables_not_processed.txt"; fi
 tail -n +2 "$CSV_FILE" | while IFS=, eval "read "$read_template; do
+  if [ $# -eq 3 ]; then
+   if [ "$out_name" == "$3" ]; then
     VARIABLE=$out_name
-    FREQ=$frequency
     METHOD=$(grep "time:" <<< "$cell_methods" | awk -F"time: " '{print $2}' | awk '{print $1}')
     if [ "$METHOD" = "maximum" ]; then
       METHOD="max"
@@ -71,8 +73,6 @@ tail -n +2 "$CSV_FILE" | while IFS=, eval "read "$read_template; do
           
           # Create directory
           OUTDIR=$DATAPATH/day/$VARIABLE/$VERSION/
-          #echo $FNAME_DAY
-          #echo $OUTDIR
           mkdir -p $OUTDIR
           cdo day$METHOD $file $OUTDIR/$FNAME_DAY 
                      
@@ -89,6 +89,8 @@ tail -n +2 "$CSV_FILE" | while IFS=, eval "read "$read_template; do
     else
       echo "$VARIABLE not processed, no 1hr data available" >> "$PWD/daily_variables_not_processed.txt"
     fi
+  fi
+ fi
 done
 
 # Order the list of daily variables that are not processed

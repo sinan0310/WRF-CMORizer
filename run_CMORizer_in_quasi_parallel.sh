@@ -8,9 +8,9 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --time=720:00:00
 ##SBATCH --exclusive
-#SBATCH --mem-per-cpu=16G
+#SBATCH --mem-per-cpu=8G
 ##SBATCH --mem=60G
-##SBATCH --hint=nomultithread
+#SBATCH --hint=nomultithread
 ##SBATCH --nodelist=wncompute051
 #SBATCH --mail-user=milovacj@unican.es
 #SBATCH --partition=wncompute_meteo
@@ -35,7 +35,8 @@ export FREQ=$5
 if [[ ${PROJECT} == "I4C" ]]; then
   export dir_data_in="/gpfs/users/milovacj/asna/projects/impetus/02_I4C_evaluation/data/raw_output/"
 elif [[ ${PROJECT} == "EUROCORDEX" ]]; then
-  export dir_data_in="/gpfs/users/milovacj/asna/projects/euro-cordex/01_EUR12_NorESM2_ssp126/data/raw_output/"
+  export dir_data_in="/gpfs/users/milovacj/asna/projects/euro-cordex/01_EUR12_NorESM2_ssp126/rundir/WRF_v4515_i2021_impi2021_noleap/run/$YEAR/"
+  #export dir_data_in="/gpfs/users/milovacj/asna/projects/euro-cordex/01_EUR12_NorESM2_ssp126/data/raw_output/"
 else
   echo "Provide full path to you raw wrfout files."
 fi
@@ -64,8 +65,8 @@ echo "Changing in pCMORizer.f90 freq_id to $freq_id for the frequency $FREQ"
 dir_home=$(pwd)
 dir_work=${dir_home}/${PROJECT}/${DOM}_${FREQ}/${YEAR}
 mkdir -p ${dir_work}; cd ${dir_work}
-ln -sf ${dir_data_in}/wrf*_${DOM}_${YEAR}* ${dir_work}/
-ln -sf ${dir_data_in}/wrf*_${DOM}_${YEAR_next}-01-01* ${dir_work}/
+ln -sf ${dir_data_in}/wrf*_${DOM}_${YEAR}-08* ${dir_work}/
+#ln -sf ${dir_data_in}/wrf*_${DOM}_${YEAR_next}-01-01* ${dir_work}/
 
 # Create working directory per variable
 mkdir -p ${dir_work}/${VARNAME}
@@ -95,6 +96,6 @@ sleep 2
 
 # running the code
 cd ${dir_work}/${VARNAME}/
-#./pCMORizer.exe
-srun --cpu-bind=cores ./pCMORizer.exe 
+./pCMORizer.exe
+#srun --cpu-bind=cores ./pCMORizer.exe 
 exit 0
