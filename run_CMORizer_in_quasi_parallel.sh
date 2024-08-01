@@ -18,11 +18,7 @@
 
 
 # Set the enviroment
-ulimit -l unlimited
-ulimit -s unlimited
-module load wrflibs_spack/compiler/intel-classic-2021.10.0
-module load wrflibs_spack/netcdf-c/4.9.2-intel-oneapi-mpi-2021.11.0-intel-2021.10.0
-module load wrflibs_spack/netcdf-fortran/4.6.1-intel-oneapi-mpi-2021.11.0-intel-2021.10.0
+source loadenv.UCAN-IFCA_intel.ini
 
 # Adjust to your situations
 export YEAR=$1 	
@@ -36,7 +32,6 @@ if [[ ${PROJECT} == "I4C" ]]; then
   export dir_data_in="/gpfs/users/milovacj/asna/projects/impetus/02_I4C_evaluation/data/raw_output/"
 elif [[ ${PROJECT} == "EUROCORDEX" ]]; then
   export dir_data_in="/gpfs/users/milovacj/asna/projects/euro-cordex/01_EUR12_NorESM2_ssp126/rundir/WRF_v4515_i2021_impi2021_noleap/run/$YEAR/"
-  #export dir_data_in="/gpfs/users/milovacj/asna/projects/euro-cordex/01_EUR12_NorESM2_ssp126/data/raw_output/"
 else
   echo "Provide full path to you raw wrfout files."
 fi
@@ -48,7 +43,7 @@ case $FREQ in
     1hr)
         freq_id=1 ;;
     3hr)
-       freq_id=2 ;;
+        freq_id=2 ;;
     6hr)
         freq_id=3 ;;
     day)
@@ -65,8 +60,8 @@ echo "Changing in pCMORizer.f90 freq_id to $freq_id for the frequency $FREQ"
 dir_home=$(pwd)
 dir_work=${dir_home}/${PROJECT}/${DOM}_${FREQ}/${YEAR}
 mkdir -p ${dir_work}; cd ${dir_work}
-ln -sf ${dir_data_in}/wrf*_${DOM}_${YEAR}-08* ${dir_work}/
-#ln -sf ${dir_data_in}/wrf*_${DOM}_${YEAR_next}-01-01* ${dir_work}/
+ln -sf ${dir_data_in}/wrf*_${DOM}_${YEAR}* ${dir_work}/
+ln -sf ${dir_data_in}/wrf*_${DOM}_${YEAR_next}-01-01* ${dir_work}/
 
 # Create working directory per variable
 mkdir -p ${dir_work}/${VARNAME}
@@ -96,6 +91,6 @@ sleep 2
 
 # running the code
 cd ${dir_work}/${VARNAME}/
-./pCMORizer.exe
-#srun --cpu-bind=cores ./pCMORizer.exe 
+#./pCMORizer.exe                      # run directly in the interface
+srun --cpu-bind=cores ./pCMORizer.exe # when sending job and running on nodes
 exit 0
