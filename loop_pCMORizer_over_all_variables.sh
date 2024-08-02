@@ -86,8 +86,8 @@ tail -n +2 "$CSV_FILE" | while IFS=, eval "read "$read_template; do
         echo "Variable: $VARIABLE, Frequency: $FREQ"
         if [ "$FREQ" != "day" ]; then
           echo "$YEAR $DOMAIN $VARIABLE $EXP"
-          #qsub -N "$EXP$VARIABLE$FREQ$YEAR" -F "$YEAR $DOMAIN $VARIABLE $PROJECT $FREQ" run_CMORizer_in_quasi_parallel.sh     # in PBS
-          sbatch --job-name="$VARIABLE$FREQ$YEAR" run_CMORizer_in_quasi_parallel.sh $YEAR $DOMAIN $VARIABLE $PROJECT $FREQ # in SLURM
+          #qsub -N "$EXP$VARIABLE$FREQ$YEAR" -F "$YEAR $DOMAIN $VARIABLE $PROJECT $FREQ" run_pCMORizer_in_quasi_parallel.sh     # in PBS
+          sbatch --job-name="$VARIABLE$FREQ$YEAR" run_pCMORizer_in_quasi_parallel.sh $YEAR $DOMAIN $VARIABLE $PROJECT $FREQ # in SLURM
         fi
     fi
 done
