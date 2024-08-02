@@ -9,7 +9,7 @@
 #   3. i4c variable list --> https://raw.githubusercontent.com/impetus4change/T32-CPRCM/main/data-request.csv 
 #   3. euro-cordex variable list --> to be checked
 #
-# USAGE: ./loop_variables.sh <csv file> <year to postprocess> <domain> <project> <optional: frequency> 
+# USAGE: ./loop_pCMORizer_over_all_variables.sh <csv file> <year to postprocess> <domain> <project> <optional: frequency> 
 #        If frequecy not given, the script reads corresponding frequencies from the given csv file
 # VERSION: 2024-07-15
 # REQUIREMENTS: bash
@@ -21,10 +21,9 @@
 ####################################################################################################################################
 
 if [ "$#" -lt 3 ]; then
-    echo "Usage: $0 <CSV_FILE> <YEAR> <DOMAIN> [optimal: FREQUENCY]"
+    echo "Usage: $0 <CSV_FILE> <YEAR> <DOMAIN> <PROJECT> [optimal: FREQUENCY]"
     exit 1
 fi
-
 
 # File path to the CSV file
 CSV_FILE=$1  	# a csv file containing complete list of variables
