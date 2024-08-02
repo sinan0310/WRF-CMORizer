@@ -131,3 +131,6 @@ else
     echo "All daily variables correctly postprocessed!"
 fi
 
+# Remove extra csv file created for the purpose of this script:
+rm data_request_${FREQ}.csv
+
