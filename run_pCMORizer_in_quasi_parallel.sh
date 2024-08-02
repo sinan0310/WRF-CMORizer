@@ -29,9 +29,9 @@ export PROJECT=$4
 export FREQ=$5
 
 if [[ ${PROJECT} == "I4C" ]]; then
-  export dir_data_in="/gpfs/users/milovacj/asna/projects/impetus/02_I4C_evaluation/data/raw_output/"
+  export dir_data_in="full_path_to_raw_wrfout_file"
 elif [[ ${PROJECT} == "EUROCORDEX" ]]; then
-  export dir_data_in="/gpfs/users/milovacj/asna/projects/euro-cordex/01_EUR12_NorESM2_ssp126/rundir/WRF_v4515_i2021_impi2021_noleap/run/$YEAR/"
+  export dir_data_in="full_path_to_raw_wrfout_file"
 else
   echo "Provide full path to you raw wrfout files."
 fi
