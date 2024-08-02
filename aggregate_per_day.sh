@@ -7,29 +7,37 @@
 ##SBATCH --ntasks-per-node=32
 #SBATCH --cpus-per-task=1
 #SBATCH --time=720:00:00
-##SBATCH --exclusive
 #SBATCH --mem-per-cpu=4G
-##SBATCH --mem=60G
-##SBATCH --hint=nomultithread
-##SBATCH --nodelist=wncompute051
+#SBATCH --hint=nomultithread
 #SBATCH --mail-user=milovacj@unican.es
 #SBATCH --partition=wncompute_meteo
-##SBATCH --exclude=wncompute051
 
-conda activate  NCLtoPY
+# AUTHOR(S): Josipa Milovac, milovacj@unican.es, Instituto de Fisica de Cantabria (IFCA), CSIC-Universidad de Cantabria, Santander, Spain
+# VERSION: 2024-07-15
+# INVOCATION: "sbatch ./$0 $CSV_FILE $PATH_to_postporcessed_data $YEAR $VARNAME(not_obligatory)"
+# PURPOSE: after CMORization of 1hr data, aggregate data per day
+# REQUIREMENTS: sh, CDO, NCO
 
-export wrkdir=$PWD
-export VERSION="v20240715"  #set the version of your postprocessed files (to create output folder)
+# Load enviroment with CDO and NCO
+conda activate <env_name>
 
-if [ "$#" -lt 2 ]; then
-    echo "Usage: $0 <CSV_FILE> <PATH_to_1hr_FILES>"
+# Check if arrguments given
+if [ "$#" -lt 3 ]; then
+    echo "Usage: $0 <CSV_FILE> <PATH_to_1hr_FILES> [varname] <YEAR> <VARNAME>"
+    echo "<VARNAME> not obligatory. If not given, the script will process all \
+          daily variables in the csv file."
     exit 1
 fi
 
+# Set path to working directory and data version
+export wrkdir=$PWD              # set working directory (e.g. data-request_eurocordex.csv) 
+export VERSION="v20240715"      # set the version of your postprocessed files (to create output folder)
+
 # File path to the CSV file
-CSV_FILE=$wrkdir/$1  	# a csv file containing complete list of variables
+CSV_FILE=$wrkdir/$1  	# csv file containing complete list of variables
 DATAPATH=$2 		# example: ./CMORized/FPS-URB-RCC/CMIP6/DD/PARIS-3/UCAN/ERA5/evaluation/r1i1p1f1/WRF451R-COLC/v1/
-VARNAME=$3              # not obligatory
+YEAR=$3			
+VARNAME=$4		# e.g. tas, pr, hfls ...
 FREQ="day"
 
 # If csv file given as 1st argument is a web location, first download the file
@@ -39,7 +47,7 @@ if [[ ${CSV_FILE:0:5} == "https" ]]; then
     CSV_FILE="data_request.csv"
 fi
 
-# Create a subset variable list with corresponig freqencies if 4th argument given
+# Create a subset variable list with corresponding frequencies if 4th argument given
 echo "Creating a sub-csv file only listing variables with the corresponding frequencies."
 echo $(head -n 1 "$CSV_FILE") > "data_request_${FREQ}.csv"
 grep ",${FREQ}," $CSV_FILE >> "data_request_${FREQ}.csv"
@@ -49,48 +57,70 @@ CSV_FILE="data_request_${FREQ}.csv"
 IFS=',' read -r -a headers < <(head -n 1 "$CSV_FILE")
 read_template=$(printf ' %s' "${headers[@]}")
 
-# Read variables and frequencies from the given CSV file, skip the header, and send a job per year, domain, variable and frequency
+# Define a function to process variables
+process_variable() {
+    local VARIABLE=$1
+    # Find the aggregation method in the csv file
+    local METHOD=$(grep "time:" <<< "$cell_methods" | awk -F"time: " '{print $2}' | awk '{print $1}')
+    
+    # Set the cdo command corresponing to the aggregation method
+    if [ "$METHOD" = "maximum" ]; then
+        METHOD="max"
+    elif [ "$METHOD" = "minimum" ]; then
+        METHOD="min"
+    elif [ "$METHOD" = "sum" ]; then
+        METHOD="sum"
+    fi
+
+    if [ -d "$DATAPATH/1hr/$VARIABLE" ]; then 
+        if ls "$DATAPATH/1hr/$VARIABLE/"*/*_$YEAR*.nc 1>/dev/null 2>&1; then
+            echo "Calculating daily values for $VARIABLE"
+            
+            # Loop over files 
+            for file in "$DATAPATH/1hr/$VARIABLE/"*/*_$YEAR*.nc; do
+
+                # Set the correct name of the file
+                FNAME=$(basename `ls $file`)
+                FNAME_DAY="${FNAME/_1hr_/_day_}"
+                FNAME_DAY="${FNAME_DAY//0000/}"
+                
+                # Create directory
+                OUTDIR=$DATAPATH/day/$VARIABLE/$VERSION/
+                mkdir -p $OUTDIR
+
+                # Calculate daily aggregation
+                cdo day$METHOD $file $OUTDIR/$FNAME_DAY 
+                
+                # Fix global attributes (remove not needed and update tracking_id)
+                ncatted -O -h -a CDI,global,d,, $OUTDIR/$FNAME_DAY
+                ncatted -O -h -a history,global,d,, $OUTDIR/$FNAME_DAY
+                ncatted -O -h -a CDO,global,d,, $OUTDIR/$FNAME_DAY
+                ncatted -O -h -a tracking_id,global,m,c,"hdl:21.14103/`uuidgen`" $OUTDIR/$FNAME_DAY          
+            done 
+        else
+            echo "$VARIABLE not processed, no 1hr data available" >> "$PWD/daily_variables_not_processed.txt"
+        fi
+    else
+        echo "$VARIABLE not processed, no 1hr data available" >> "$PWD/daily_variables_not_processed.txt"
+    fi
+}
+
+# Read variables and frequencies from the given CSV file, skip the header
 if [ -e "$PWD/daily_variables_not_processed.txt" ]; then rm "$PWD/daily_variables_not_processed.txt"; fi
 tail -n +2 "$CSV_FILE" | while IFS=, eval "read "$read_template; do
-  if [ $# -eq 3 ]; then
-   if [ "$out_name" == "$3" ]; then
-    VARIABLE=$out_name
-    METHOD=$(grep "time:" <<< "$cell_methods" | awk -F"time: " '{print $2}' | awk '{print $1}')
-    if [ "$METHOD" = "maximum" ]; then
-      METHOD="max"
-    elif [ "$METHOD" = "minimum" ]; then
-      METHOD="min"
-    fi
-    if [ -d "$DATAPATH/1hr/$VARIABLE" ]; then 
-      if ls "$DATAPATH/1hr/$VARIABLE/"*/*.nc 1>/dev/null 2>&1; then
-        echo "Calculating daily values"
-        for file in "$DATAPATH/1hr/$VARIABLE/"*/*.nc; do
-          
-          # Set the correct name of the file
-          FNAME=$(basename `ls $file`)
-          FNAME_DAY="${FNAME/_1hr_/_day_}"
-          FNAME_DAY="${FNAME_DAY//0000/}"
-          
-          # Create directory
-          OUTDIR=$DATAPATH/day/$VARIABLE/$VERSION/
-          mkdir -p $OUTDIR
-          cdo day$METHOD $file $OUTDIR/$FNAME_DAY 
-                     
-          # Fix attributes (remove not needed and update tracking_id)
-          ncatted -O -h -a CDI,global,d,, $OUTDIR/$FNAME_DAY
-          ncatted -O -h -a history,global,d,, $OUTDIR/$FNAME_DAY
-          ncatted -O -h -a CDO,global,d,, $OUTDIR/$FNAME_DAY
-          ncatted -O -h -a tracking_id,global,m,c,"hdl:21.14103/`uuidgen`" $OUTDIR/$FNAME_DAY          
-        done 
-        
-      else
-        echo "$VARIABLE not processed, no 1hr data available" >> "$PWD/daily_variables_not_processed.txt"
-      fi
+
+    # If $VARNAME given as an argument process only that variable
+    if [ -z "$VARNAME" ]; then
+        process_variable "$out_name"
+
+    # Othewise process all what you find in the csv file
     else
-      echo "$VARIABLE not processed, no 1hr data available" >> "$PWD/daily_variables_not_processed.txt"
+        if [ "$out_name" == "$VARNAME" ]; then
+            process_variable "$out_name"
+            echo $VARNAME
+            break
+        fi
     fi
-  fi
- fi
 done
 
 # Order the list of daily variables that are not processed
@@ -98,5 +128,6 @@ if [ -e "$PWD/daily_variables_not_processed.txt" ]; then
     sort "$PWD/daily_variables_not_processed.txt" | uniq > tmp.txt
     mv tmp.txt "$PWD/daily_variables_not_processed.txt" 
 else
-    echo "All daily variables correclty postprocessed!"
+    echo "All daily variables correctly postprocessed!"
 fi
+
