@@ -1,7 +1,7 @@
 #!/bin/bash
 ################################################################################################################################
-# The script reads a csv files with the complete variabels list 
-# and sends jobs per variabels per year and per domain
+# AUTHOR(S): Josipa Milovac, milovacj@unican.es, Instituto de Fisica de Cantabria (IFCA), CSIC-Universidad de Cantabria, Santander, Spain
+# PURPOSE: The script reads a csv files with the complete variabels list and sends jobs per variabels per year and per domain
 #
 # The links to the csv files:
 #   1. fps-conv variable list --> https://github.com/impetus4change/T32-CPRCM/raw/main/data-request-fpsconv.csv
@@ -9,8 +9,15 @@
 #   3. i4c variable list --> https://raw.githubusercontent.com/impetus4change/T32-CPRCM/main/data-request.csv 
 #   3. euro-cordex variable list --> to be checked
 #
-# To run the script: 
-#   ./loop_variables.sh <csv file> <year to postprocess> <domain> <optional: frequency> 
+# USAGE: ./loop_variables.sh <csv file> <year to postprocess> <domain> <project> <optional: frequency> 
+#        If frequecy not given, the script reads corresponding frequencies from the given csv file
+# VERSION: 2024-07-15
+# REQUIREMENTS: bash
+#
+# NOTE: Since the main Fortran code cannot process daily output, this script reads info from the given csv file, and then changes
+# the frequency to 1hr if the variable in this frequency is not required. For that reason, in the output will be all daily 
+# variables available also in 1hr frequency. This is done because the daily files are calculated later using aggregate_per_day.sh
+# from these hourly output.
 ####################################################################################################################################
 
 if [ "$#" -lt 3 ]; then
@@ -20,11 +27,11 @@ fi
 
 
 # File path to the CSV file
-CSV_FILE=$1  # a csv file containing complete list of variables
-YEAR=$2      # year to postporcess
-DOMAIN=$3    # domain, accepted fromat: d01 or d02
-PROJECT=$4      # optional argument: 1hr 3hr 6hr day
-FREQ=$5
+CSV_FILE=$1  	# a csv file containing complete list of variables
+YEAR=$2      	# year to postporcess
+DOMAIN=$3    	# domain, accepted fromat: d01 or d02
+PROJECT=$4      # this chooses the correct template - runctrl.current.nml_template_${PROJECT}
+FREQ=$5     	# optimal argument: 1hr, 3hr, 6hr, day acceptable
 
 # If csv file given as 1st argument is a web location, first download the file
 if [[ ${CSV_FILE:0:5} == "https" ]]; then
@@ -80,8 +87,8 @@ tail -n +2 "$CSV_FILE" | while IFS=, eval "read "$read_template; do
         echo "Variable: $VARIABLE, Frequency: $FREQ"
         if [ "$FREQ" != "day" ]; then
           echo "$YEAR $DOMAIN $VARIABLE $EXP"
-          #qsub -N "$EXP$VARIABLE$FREQ$YEAR" -F "$YEAR $DOMAIN $VARIABLE $EXP $FREQ" run_CMORizer_in_quasi_parallel.sh
-          sbatch --job-name="$VARIABLE$FREQ$YEAR" run_CMORizer_in_quasi_parallel.sh $YEAR $DOMAIN $VARIABLE $PROJECT $FREQ
+          #qsub -N "$EXP$VARIABLE$FREQ$YEAR" -F "$YEAR $DOMAIN $VARIABLE $PROJECT $FREQ" run_CMORizer_in_quasi_parallel.sh     # in PBS
+          sbatch --job-name="$VARIABLE$FREQ$YEAR" run_CMORizer_in_quasi_parallel.sh $YEAR $DOMAIN $VARIABLE $PROJECT $FREQ # in SLURM
         fi
     fi
 done
