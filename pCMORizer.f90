@@ -237,7 +237,8 @@ REAL :: &
   bucket_mm     , &
   bucket_J      , &
   ! tmp variable to calcualte cape and ci
-  t_ii          , &  
+  t_ii          , &
+  t_old         , &
   !variable to fill the missing data in variabels extracted from wrfpress
   p_miss        , &          
   ! vertical interpolation
@@ -378,7 +379,7 @@ INTEGER, DIMENSION(:), ALLOCATABLE :: InDateTimeYear, InDateTimeMonth, &
 LOGICAL, DIMENSION(nvars) :: procflag
 
 ! some special switch for input handling
-INTEGER :: i, j, k, sts, ivar, ifrq, ifl, it, counter, np, nl, ii, ivarnml, prevpass = 0
+INTEGER :: i, j, k, sts, ivar, ifrq, ifl, it, counter, np, nl, ii, ivarnml, prevpass = 0, iteration
 LOGICAL :: FileExists, newpass, time_match, calc = .TRUE., inputtimesteptruncate = .FALSE.
 REAL :: cpuTs, cpuTe
 INTEGER, ALLOCATABLE :: ipos(:)
@@ -3119,13 +3120,17 @@ fnNMLvar(1) = "runctrl.vars.nml"
                       IF (lcl(i,j) .eq. -999) THEN ! lifting condensation level
                         lcl(i,j) = p_in(i,j,nl)
                       END IF    
-                      t_ii = t_p(i,j,nl)    
-                      DO ii = 1,10 ! solve iteratively    
+                      t_ii = t_p(i,j,nl)
+                      t_old = t_ii
+                      iteration = 1
+                      DO WHILE (ABS(t_ii - t_old) > 0.01 .AND. iteration < 100)
+                        t_old = t_ii
                         qvs(i,j,nl+1) = 0.622*a*exp(b*(t_ii-c)/(t_ii-d))/p_in(i,j,nl+1)    
                         t_ii = t_ii - (t_ii*(P00(1)/p_in(i,j,nl+1))**(R/cp)*exp(L*qvs(i,j,nl+1)/(cp*t_ii)) - &
                                (t_p(i,j,nl)*(P00(1)/p_in(i,j,nl))**(R/cp)*exp(L*qvs(i,j,nl)/(cp*t_p(i,j,nl))))) / &
                                ( (P00(1)/p_in(i,j,nl+1))**(R/cp)*exp(n/(p_in(i,j,nl+1)*t_ii)*exp(b*(t_ii-c)/(t_ii-d))) * &
                                (1 - (n/p_in(i,j,nl+1)*exp(b*(t_ii-c)/(t_ii-d))*(t_ii*(t_ii-b*c)+(b-2)*d*t_ii+d**2))/(t_ii*(d-t_ii)**2)) )  
+                        iteration = iteration + 1
                       END DO  
                       t_p(i,j,nl+1) = t_ii   
                     END IF                 
