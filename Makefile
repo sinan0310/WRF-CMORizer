@@ -1,19 +1,8 @@
-EBROOTNETCDFMINFORTRAN="full-path-to-netcdf-fortran library"
-EBROOTNETCDF="full-path-to-netcdf-c library"
-
-# gfortran flags (uncomment if using gfortran)
-#FC = gfortran
-#FCFLAGS = -O2 -cpp -DSERIAL
-#FCFLAGS += -Wall
-#FCFLAGS += -ffree-line-length-none
-#FCFLAGS += -Wno-tabs -Wno-unused-variable -Wno-maybe-uninitialized
-
-# intel flags (comment out if not using intel compiler)
-FC = ifort 
+EBROOTNETCDFMINFORTRAN="/gpfs/projects/meteo/opt/spack/opt/spack/linux-almalinux9-zen2/intel-2021.10.0/netcdf-fortran-4.6.1-qkxq3x6syfzslfo24e5wzcgllfrpisum/"
+EBROOTNETCDF="/gpfs/projects/meteo/opt/spack/opt/spack/linux-almalinux9-zen2/intel-2021.10.0/netcdf-c-4.9.2-r7sfzbgpbqtqpxlk5l5swrdxoej7mh4c/"
+FC = /gpfs/projects/meteo/opt/spack/opt/spack/linux-almalinux9-x86_64/gcc-11.3.1/intel-oneapi-compilers-classic-2021.10.0-d2pr7o6urpbwb2rzhdhuravudmxwbbth/bin/ifort # or gfortran
 FCFLAGS = -O2 -assume realloc_lhs -cpp -DSERIAL
 FCFLAGS += -fp-model precise -prec-div -prec-sqrt
-
-# Flags for gfortran and intel (never comment out)
 FCFLAGS += -I$(EBROOTNETCDFMINFORTRAN)/include -I$(EBROOTNETCDF)/include
 LDFLAGS = -L$(EBROOTNETCDFMINFORTRAN)/lib -lnetcdff -L${EBROOTNETCDF}/lib -lnetcdf
 
