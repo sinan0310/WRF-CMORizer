@@ -3024,7 +3024,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
                   phb_in(:,:,nl)))/gr)
               END DO
               data_in(:,:) = prw(:,:)
-  
+              WHERE (data_in < 0.) data_in = 0.
             END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3041,7 +3041,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
                              phb_in(:,:,nl)))/gr
               END DO
               data_in(:,:) = clwvi(:,:)
-
+              WHERE (data_in < 0.) data_in = 0.
             END IF
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3060,7 +3060,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
                              (ph_in(:,:,nl)+phb_in(:,:,nl)))/gr
               END DO
               data_in(:,:) = clivi(:,:)
-    
+              WHERE (data_in < 0.) data_in = 0.
             END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3077,9 +3077,9 @@ fnNMLvar(1) = "runctrl.vars.nml"
                              p_in(:,:,nl)/(R*t_in(:,:,nl)) * &
                              ((ph_in(:,:,nl+1)+phb_in(:,:,nl+1)) - &
                              (ph_in(:,:,nl)+phb_in(:,:,nl)))/gr
-              END DO
+              END DO              
               data_in(:,:) = clgvi(:,:)
-
+              WHERE (data_in < 0.) data_in = 0.
             END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3098,7 +3098,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
                              (ph_in(:,:,nl)+phb_in(:,:,nl)))/gr
               END DO
               data_in(:,:) = clhvi(:,:)
-
+              WHERE (data_in < 0.) data_in = 0.
             END IF
 
   
