@@ -147,11 +147,22 @@ INTERFACE
 ! Josipa: Add subrotine to calculate wint at different levels 
   SUBROUTINE var_zwind(nz, u, v, z, u10, v10, sa, ca, newz, unewz, vnewz)
     IMPLICIT NONE
-    INTEGER, INTENT(in)                 :: nz
-    REAL, DIMENSION(nz), INTENT(in)     :: u,v,z
-    REAL, INTENT(in)                    :: u10, v10, sa, ca, newz
-    REAL, INTENT(out)                   :: unewz, vnewz
+    INTEGER, INTENT(IN)                 :: nz
+    REAL, DIMENSION(nz), INTENT(IN)     :: u,v,z
+    REAL, INTENT(IN)                    :: u10, v10, sa, ca, newz
+    REAL, INTENT(OUT)                   :: unewz, vnewz
   END SUBROUTINE var_zwind
+  
+  
+! Josipa: Add subrotine to calculate cape cin and li
+  SUBROUTINE calculate_cape_cin_li_2d(T2, PSFC, Q2, P, PHB, THETA, nlev, CAPE, CIN, LI)
+    IMPLICIT NONE
+    INTEGER, INTENT(IN) :: nlev
+    REAL, INTENT(IN) :: T2, PSFC, Q2 
+    REAL, DIMENSION(nlev), INTENT(IN) :: P, PHB, THETA
+    REAL, INTENT(OUT) :: CAPE, CIN, LI
+  END SUBROUTINE calculate_cape_cin_li_2d
+
 
 END INTERFACE
 
@@ -237,8 +248,9 @@ REAL :: &
   bucket_mm     , &
   bucket_J      , &
   ! tmp variable to calcualte cape and ci
-  t_ii          , &
-  t_old         , &
+  cape          , &
+  cin           , &
+  li            , &
   !variable to fill the missing data in variabels extracted from wrfpress
   p_miss        , &          
   ! vertical interpolation
@@ -273,10 +285,6 @@ REAL, DIMENSION(:,:), ALLOCATABLE :: &
   cldfra_inv    , &
   u10_in        , &
   v10_in        , &
-  cape          , &
-  cin           , &
-  lcl           , &
-  lfc           , &
   prw           , &
   clwvi         , &
   clivi         , &
@@ -1715,6 +1723,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
                 .OR.  (var_cmip(ivar) == "clhvi") &
                 .OR.  (var_cmip(ivar) == "cape") &
                 .OR.  (var_cmip(ivar) == "cin") &
+                .OR.  (var_cmip(ivar) == "li") &
                 .OR.  ( (plevel(ivar) /= -999) &
                         .AND. (filetype(ivar) == "s") ) ) THEN
 
@@ -1735,15 +1744,6 @@ fnNMLvar(1) = "runctrl.vars.nml"
 
               IF ( var_cmip(ivar) == "psl" ) THEN
                 IF (.not. ALLOCATED(psl_in)) ALLOCATE( psl_in ( xfocus, yfocus ), STAT=sts )
-              END IF
-
-              IF ( (var_cmip(ivar) == "cape" ) .OR. (var_cmip(ivar) == "cin" ) ) THEN
-                IF (.not. ALLOCATED(t_p))  ALLOCATE( t_p( xfocus, yfocus, nz ), STAT=sts )
-                IF (.not. ALLOCATED(qvs))  ALLOCATE( qvs( xfocus, yfocus, nz ), STAT=sts )
-                IF (.not. ALLOCATED(cape)) ALLOCATE( cape( xfocus, yfocus ), STAT=sts )
-                IF (.not. ALLOCATED(cin))  ALLOCATE( cin( xfocus, yfocus ), STAT=sts )
-                IF (.not. ALLOCATED(lcl))  ALLOCATE( lcl( xfocus, yfocus ), STAT=sts )
-                IF (.not. ALLOCATED(lfc))  ALLOCATE( lfc( xfocus, yfocus ), STAT=sts )
               END IF
 
               IF ( var_cmip(ivar) == "clwvi" ) THEN
@@ -1800,9 +1800,8 @@ fnNMLvar(1) = "runctrl.vars.nml"
 
               IF ( ( var_cmip(ivar) == "prw" ) &
                  .OR. ( var_cmip(ivar) == "psl" ) &
-                 .OR. ( SCAN(var_cmip(ivar),"hus") == 1 ) &
-                 .OR. ( var_cmip(ivar) == "cape" ) &
-                 .OR. ( var_cmip(ivar) == "cin" ) ) THEN
+                 .OR. ( SCAN(var_cmip(ivar),"hus") == 1 ) ) THEN
+                 
                 PRINT *, "read QVAPOR"
                 IF (.not. ALLOCATED(qv_in)) ALLOCATE( qv_in( xfocus, yfocus, nz  ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, "QVAPOR", qv_varid)
@@ -1859,7 +1858,6 @@ fnNMLvar(1) = "runctrl.vars.nml"
                   START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
               END IF
 
-
               IF ( (SCAN(var_cmip(ivar),"ua") == 1) .OR. (SCAN(var_cmip(ivar),"va") == 1) ) THEN
                 PRINT *, "read U"
                 IF (.not. ALLOCATED(u_in)) ALLOCATE( u_in( xfocus+1, yfocus, nz ), STAT=sts )
@@ -1888,6 +1886,29 @@ fnNMLvar(1) = "runctrl.vars.nml"
                 sts = NF90_INQ_VARID(ncidin, "PSFC", psfc_varid)
                 sts = NF90_GET_VAR(ncidin, psfc_varid, psfc_in(:,:), &
                   START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+              END IF
+              
+              IF ( ( var_cmip(ivar) == "cape" ) .OR. &
+                   ( var_cmip(ivar) == "cin" )  .OR. & 
+                   ( var_cmip(ivar) == "li" ) ) THEN
+
+                PRINT *, "read PSFC"
+                IF (.not. ALLOCATED(psfc_in)) ALLOCATE( psfc_in( xfocus, yfocus ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "PSFC", psfc_varid)
+                sts = NF90_GET_VAR(ncidin, psfc_varid, psfc_in(:,:), &
+                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+                  
+                PRINT *, "read T2"
+                IF (.not. ALLOCATED(t2_in)) ALLOCATE( t2_in( xfocus, yfocus ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "T2", t2_varid)  
+                sts = NF90_GET_VAR(ncidin, t2_varid, t2_in(:,:), &
+                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )    
+
+                PRINT *, "read Q2"                  
+                IF (.not. ALLOCATED(q2_in)) ALLOCATE( q2_in ( xfocus, yfocus ), STAT=sts )
+                sts = NF90_INQ_VARID(ncidin, "Q2", q2_varid)
+                sts = NF90_GET_VAR(ncidin, q2_varid, q2_in(:,:), &
+                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )                  
               END IF
             
             !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2778,6 +2799,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
                (var_cmip(ivar) == "clhvi") .OR. &
                (var_cmip(ivar) == "cape") .OR. &
                (var_cmip(ivar) == "cin") .OR. &
+               (var_cmip(ivar) == "li") .OR. &
                ( (plevel(ivar) /= -999) .AND. (filetype(ivar) == "s" ) ) ) THEN
 
 
@@ -3100,61 +3122,25 @@ fnNMLvar(1) = "runctrl.vars.nml"
 ! cape [J kg-1] i 2-D Maximum Convective Available Potential Energy
 ! cin [J kg-1] i 2-D Maximum Convective Inhibition
 
-            IF ( (var_cmip(ivar) == "cape") .OR. (var_cmip(ivar) == "cin") ) THEN         
-              t_p(:,:,1) = t_in(:,:,1)
-              cape(:,:) = 0.
-              cin(:,:) = 0.
-              lcl(:,:) = -999.
-              lfc(:,:) = -999.
-    
-              !$OMP PARALLEL DO
+            IF ( (var_cmip(ivar) == "cape") .OR. &
+                 (var_cmip(ivar) == "cin" ) .OR. &
+                 (var_cmip(ivar) == "li" ) ) THEN  
+                       
               DO i = 1,xfocus
-                DO j = 1,yfocus
-                  DO nl = 1,nz-1    
-                    qvs(i,j,nl) = 0.622*a*exp(b*(t_p(i,j,nl)-c)/(t_p(i,j,nl)-d))/p_in(i,j,nl)
-    
-                    IF (qvs(i,j,nl) .gt. qv_in(i,j,1)) THEN ! dry adiabatic ascent                   
-                      t_p(i,j,nl+1) = (theta_in(i,j,1)+T00(1))*(p_in(i,j,nl+1)/P00(1))**(R/cp)
-    
-                    ELSE IF (qvs(i,j,nl) .lt. qv_in(i,j,1)) THEN ! moist adiabatic ascent    
-                      IF (lcl(i,j) .eq. -999) THEN ! lifting condensation level
-                        lcl(i,j) = p_in(i,j,nl)
-                      END IF    
-                      t_ii = t_p(i,j,nl)
-                      t_old = t_ii
-                      iteration = 1
-                      DO WHILE (ABS(t_ii - t_old) > 0.01 .AND. iteration < 100)
-                        t_old = t_ii
-                        qvs(i,j,nl+1) = 0.622*a*exp(b*(t_ii-c)/(t_ii-d))/p_in(i,j,nl+1)    
-                        t_ii = t_ii - (t_ii*(P00(1)/p_in(i,j,nl+1))**(R/cp)*exp(L*qvs(i,j,nl+1)/(cp*t_ii)) - &
-                               (t_p(i,j,nl)*(P00(1)/p_in(i,j,nl))**(R/cp)*exp(L*qvs(i,j,nl)/(cp*t_p(i,j,nl))))) / &
-                               ( (P00(1)/p_in(i,j,nl+1))**(R/cp)*exp(n/(p_in(i,j,nl+1)*t_ii)*exp(b*(t_ii-c)/(t_ii-d))) * &
-                               (1 - (n/p_in(i,j,nl+1)*exp(b*(t_ii-c)/(t_ii-d))*(t_ii*(t_ii-b*c)+(b-2)*d*t_ii+d**2))/(t_ii*(d-t_ii)**2)) )  
-                        iteration = iteration + 1
-                      END DO  
-                      t_p(i,j,nl+1) = t_ii   
-                    END IF                 
-  
-                    IF (t_p(i,j,nl) .gt. t_in(i,j,nl)) THEN                   
-                      IF (lfc(i,j) .eq. -999) THEN ! level of free convection
-                        lfc(i,j) = p_in(i,j,nl)
-                      END IF    
-                      cape(i,j) = cape(i,j) + (t_p(i,j,nl) - t_in(i,j,nl)) / t_in(i,j,nl) * ((phb_in(i,j,nl)+ph_in(i,j,nl))-(phb_in(i,j,nl-1)+ph_in(i,j,nl-1)))      
-                    ELSE IF ( (t_p(i,j,nl) .lt. t_in(i,j,nl)) .and. (cape(i,j) .eq. 0.) ) THEN ! convective inhibition 
-                      cin(i,j) = cin(i,j) + (t_in(i,j,nl) - t_p(i,j,nl)) / t_in(i,j,nl) * ((phb_in(i,j,nl)+ph_in(i,j,nl))-(phb_in(i,j,nl-1)+ph_in(i,j,nl-1)))        
-                    END IF    
-                  END DO
+                DO j = 1,yfocus                          
+                  call calculate_cape_cin_li_2d(t2_in(i,j),psfc_in(i,j),q2_in(i,j),p_in(i,j,:)/100.,ph_fl(i,j,:),t_in(i,j,:),nz,cape,cin,li)
+                  IF (var_cmip(ivar) == "cape") THEN
+                    data_in(i,j) = cape
+                  ELSE IF (var_cmip(ivar) == "cin") THEN
+                    data_in(i,j) = cin
+                  ELSE IF (var_cmip(ivar) == "li") THEN
+                    data_in(i,j) = li
+                  END IF
                 END DO
               END DO
-             !$OMP END PARALLEL DO
-  
-              IF ( var_cmip(ivar) == "cape") THEN
-                data_in(:,:) = cape(:,:)
-              END IF
-              IF ( var_cmip(ivar) == "cin") THEN
-                data_in(:,:) = cin(:,:)
-              END IF    
             END IF
+                  
+             
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
           END IF ! pressure levels processing
           
@@ -4025,6 +4011,140 @@ END DO
 !$OMP END PARALLEL DO
   
 END SUBROUTINE calcslptwo
+
+!*********************************************************************************************
+! Josipa: Add subroutine to calculate cape and cin and li 
+!*********************************************************************************************
+
+subroutine calculate_cape_cin_li_2d(T2, PSFC, Q2, P, PHB, THETA, nlev, CAPE, CIN, LI)
+    implicit none
+
+    ! Input parameters
+    integer, intent(in) :: nlev
+    real, intent(in)    :: T2, PSFC, Q2           			! Surface temperature in Kelvin, Surface pressure in hPa, Surface mixing ratio in kg/kg
+    real, dimension(nlev), intent(in) :: P, PHB, THETA  ! Pressure levels, Geopotential height at each pressure level, Environmental temperature profile
+    
+    ! Output parameters
+    real, intent(out) :: CAPE, CIN, LI         ! Convective Available Potential Energy in J/kg
+    
+    ! Define constants
+    real, parameter :: Rd = 287.0      ! Gas constant for dry air, J/(kg·K)
+    real, parameter :: Lv = 2.5e6      ! Latent heat of vaporization, J/kg
+    real, parameter :: Cp = 1004.0     ! Specific heat at constant pressure, J/(kg·K)
+    real, parameter :: g = 9.81        ! Gravitational acceleration, m/s²
+
+    ! Local variables
+    real :: T_d, T_LCL, P_LCL
+    real, dimension(nlev) :: T_parcel
+    integer :: k
+    real :: delta_z, Gamma_m, T_prev, T_new, epsilon
+
+    ! Variables for CAPE and CIN calculations
+    real :: buoyancy
+    real, dimension(nlev-1) :: buoyancy_CAPE, buoyancy_CIN
+    integer :: lfc_index, el_index
+    logical :: found_lfc, found_el
+
+    ! Tolerance for iterative convergence
+    real, parameter :: trashold = 1.0e-3
+    integer :: max_iter, iter
+
+    ! Initialize parcel temperature array
+    T_parcel(1) = T2
+
+    ! Calculate dew point temperature
+    T_d = 243.5 * log(Q2 * PSFC / (0.622 + Q2) / 6.112) / &
+          (17.67 - log(Q2 * PSFC / (0.622 + Q2) / 6.112))
+
+    ! Calculate LCL temperature
+    T_LCL = T2 - (T2 - T_d) / 8.0
+    P_LCL = PSFC * (T_LCL / T2)**((g * 0.622) / (Rd * 8.0))  
+
+    ! Lift parcel from surface to each pressure level
+    do k = 2, nlev
+        if (P(k) > P_LCL) then
+            ! Lift dry adiabatically until LCL
+            delta_z = (Rd * (T_parcel(k-1) - T_LCL) / g) * 1000.0 / 9.8
+            T_parcel(k) = T_parcel(k-1) - delta_z * 9.8 / 1000.0
+        else
+            ! Lift moist adiabatically above LCL using iterative method
+            T_prev = T_parcel(k-1)
+            T_new = T_prev
+            iter = 0
+            max_iter = 100
+
+            do
+                iter = iter + 1
+                Gamma_m = g * (1.0 + (Lv * Q2) / (Rd * T_new)) / &
+                          (Cp + (Lv**2 * Q2) / (Rd * T_new**2))
+                delta_z = (Rd * (T_parcel(k-1) - T_new) / g) * 1000.0 / Gamma_m
+                T_new = T_parcel(k-1) - delta_z * Gamma_m / 1000.0
+
+                ! Check for convergence
+                epsilon = abs(T_new - T_prev)
+                if (epsilon < trashold .or. iter >= max_iter) exit
+
+                T_prev = T_new
+            end do
+
+            T_parcel(k) = T_new
+        end if
+    end do
+
+    ! Initialize variables for CAPE and CIN calculation
+    CAPE = 0.0
+    CIN = 0.0
+    found_lfc = .false.
+    found_el = .false.
+    lfc_index = 0
+    el_index = 0
+
+    ! Calculate buoyancy at each level and identify LFC and EL
+    do k = 1, nlev
+        buoyancy = (T_parcel(k) - THETA(k)) / THETA(k) * g
+        if (.not. found_lfc .and. buoyancy > 0) then
+            found_lfc = .true.
+            lfc_index = k
+        endif
+        if (found_lfc .and. buoyancy < 0) then
+            found_el = .true.
+            el_index = k
+            exit
+        endif
+    end do
+   
+    PRINT *, lfc_index
+    PRINT *, el_index
+
+    ! Integrate buoyancy to calculate CIN from surface to LFC
+    if (found_lfc) then
+      do k = 1, lfc_index-1
+        buoyancy_CIN(k) = (T_parcel(k) - THETA(k)) / THETA(k) * g 
+        if (buoyancy_CIN(k) < 0) then
+          CIN = CIN + buoyancy_CIN(k) * (PHB(k+1) - PHB(k))
+        endif
+      end do
+    end if
+
+    ! Integrate buoyancy to calculate CAPE from LFC to EL
+    if (found_lfc .and. found_el) then
+      do k = lfc_index, el_index-1
+      buoyancy_CAPE(k) = (T_parcel(k) - THETA(k)) / THETA(k) * g  
+      if (buoyancy_CAPE(k) > 0) then
+         CAPE = CAPE + buoyancy_CAPE(k) * (PHB(k+1) - PHB(k))
+        endif
+      end do
+    end if
+
+    ! Calculate Lifted Index (LI)
+    do k = 1, nlev
+        if (P(k) <= 500.0) then
+            LI = THETA(k) - T_parcel(k)
+            exit
+        end if
+    end do
+    
+end subroutine calculate_cape_cin_li_2d
 
 !*********************************************************************************************
 ! Josipa: Add subroutine to extrapolate the wind at a given height following 
