@@ -237,7 +237,8 @@ REAL :: &
   bucket_mm     , &
   bucket_J      , &
   ! tmp variable to calcualte cape and ci
-  t_ii          , &  
+  t_ii          , & 
+  t_tmp         , & 
   !variable to fill the missing data in variabels extracted from wrfpress
   p_miss        , &          
   ! vertical interpolation
@@ -274,6 +275,7 @@ REAL, DIMENSION(:,:), ALLOCATABLE :: &
   v10_in        , &
   cape          , &
   cin           , &
+  li            , &
   lcl           , &
   lfc           , &
   prw           , &
@@ -1708,12 +1710,13 @@ fnNMLvar(1) = "runctrl.vars.nml"
 
             IF ( (var_cmip(ivar) == "psl") &
                 .OR.  (var_cmip(ivar) == "prw") &
-                .OR.  (var_cmip(ivar) == "clwvi") &
+                .OR.  (var_cmip(ivar) == "cin") &
                 .OR.  (var_cmip(ivar) == "clivi") &
                 .OR.  (var_cmip(ivar) == "clgvi") &
                 .OR.  (var_cmip(ivar) == "clhvi") &
                 .OR.  (var_cmip(ivar) == "cape") &
                 .OR.  (var_cmip(ivar) == "cin") &
+                .OR.  (var_cmip(ivar) == "li") &
                 .OR.  ( (plevel(ivar) /= -999) &
                         .AND. (filetype(ivar) == "s") ) ) THEN
 
@@ -1736,13 +1739,15 @@ fnNMLvar(1) = "runctrl.vars.nml"
                 IF (.not. ALLOCATED(psl_in)) ALLOCATE( psl_in ( xfocus, yfocus ), STAT=sts )
               END IF
 
-              IF ( (var_cmip(ivar) == "cape" ) .OR. (var_cmip(ivar) == "cin" ) ) THEN
+              IF ( (var_cmip(ivar) == "cape" ) .OR. (var_cmip(ivar) == "cin" ) .OR. &
+                   (var_cmip(ivar) == "li" ) ) THEN
                 IF (.not. ALLOCATED(t_p))  ALLOCATE( t_p( xfocus, yfocus, nz ), STAT=sts )
                 IF (.not. ALLOCATED(qvs))  ALLOCATE( qvs( xfocus, yfocus, nz ), STAT=sts )
                 IF (.not. ALLOCATED(cape)) ALLOCATE( cape( xfocus, yfocus ), STAT=sts )
                 IF (.not. ALLOCATED(cin))  ALLOCATE( cin( xfocus, yfocus ), STAT=sts )
                 IF (.not. ALLOCATED(lcl))  ALLOCATE( lcl( xfocus, yfocus ), STAT=sts )
                 IF (.not. ALLOCATED(lfc))  ALLOCATE( lfc( xfocus, yfocus ), STAT=sts )
+                IF (.not. ALLOCATED(li))   ALLOCATE( li( xfocus, yfocus ), STAT=sts )
               END IF
 
               IF ( var_cmip(ivar) == "clwvi" ) THEN
@@ -1801,7 +1806,8 @@ fnNMLvar(1) = "runctrl.vars.nml"
                  .OR. ( var_cmip(ivar) == "psl" ) &
                  .OR. ( SCAN(var_cmip(ivar),"hus") == 1 ) &
                  .OR. ( var_cmip(ivar) == "cape" ) &
-                 .OR. ( var_cmip(ivar) == "cin" ) ) THEN
+                 .OR. ( var_cmip(ivar) == "cin" )  &
+                 .OR. ( var_cmip(ivar) == "li") ) THEN
                 PRINT *, "read QVAPOR"
                 IF (.not. ALLOCATED(qv_in)) ALLOCATE( qv_in( xfocus, yfocus, nz  ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, "QVAPOR", qv_varid)
@@ -2777,10 +2783,11 @@ fnNMLvar(1) = "runctrl.vars.nml"
                (var_cmip(ivar) == "clhvi") .OR. &
                (var_cmip(ivar) == "cape") .OR. &
                (var_cmip(ivar) == "cin") .OR. &
+               (var_cmip(ivar) == "li") .OR. &
                ( (plevel(ivar) /= -999) .AND. (filetype(ivar) == "s" ) ) ) THEN
 
 
-            PRINT *, var_cmip(ivar), plevel(ivar)
+            PRINT *, var_cmip(ivar),plevel(ivar)
 
             ! needs this initialisation, might be possible that for very low
             ! high levels calculation cannot be done, then it is set to official
@@ -3099,10 +3106,12 @@ fnNMLvar(1) = "runctrl.vars.nml"
 ! cape [J kg-1] i 2-D Maximum Convective Available Potential Energy
 ! cin [J kg-1] i 2-D Maximum Convective Inhibition
 
-            IF ( (var_cmip(ivar) == "cape") .OR. (var_cmip(ivar) == "cin") ) THEN         
+            IF ( (var_cmip(ivar) == "cape") .OR. (var_cmip(ivar) == "cin") .OR. &
+                 (var_cmip(ivar) == "li") ) THEN        
+
               t_p(:,:,1) = t_in(:,:,1)
               cape(:,:) = 0.
-              cin(:,:) =
+              cin(:,:) = 0.
               lcl(:,:) = -999.
               lfc(:,:) = -999.
      
@@ -3120,16 +3129,18 @@ fnNMLvar(1) = "runctrl.vars.nml"
                         lcl(i,j) = p_in(i,j,nl)
                       END IF    
                       t_ii = t_p(i,j,nl)
-                      t_tmp = 0. 
-                      ii=1   
-                      DO WHILE ( ( ABS(t_ii-t_tmp) < 0.01) .OR. (ii < 100) )  ! solve iteratively 
+                      t_tmp = 0.
+                      DO ii = 1,100 ! solve iteratively 
                         qvs(i,j,nl+1) = 0.622*a*exp(b*(t_ii-c)/(t_ii-d))/p_in(i,j,nl+1)    
                         t_ii = t_ii - (t_ii*(P00(1)/p_in(i,j,nl+1))**(R/cp)*exp(L*qvs(i,j,nl+1)/(cp*t_ii)) - &
                                (t_p(i,j,nl)*(P00(1)/p_in(i,j,nl))**(R/cp)*exp(L*qvs(i,j,nl)/(cp*t_p(i,j,nl))))) / &
                                ( (P00(1)/p_in(i,j,nl+1))**(R/cp)*exp(n/(p_in(i,j,nl+1)*t_ii)*exp(b*(t_ii-c)/(t_ii-d))) * &
                                (1 - (n/p_in(i,j,nl+1)*exp(b*(t_ii-c)/(t_ii-d))*(t_ii*(t_ii-b*c)+(b-2)*d*t_ii+d**2))/(t_ii*(d-t_ii)**2)) )  
-                        t_tmp = t_ii
-                        ii = ii+1
+                        IF ( ABS(t_ii - t_tmp) .le. 0.01 ) THEN
+                          exit
+                        ELSE
+                          t_tmp = t_ii
+                        END IF
                       END DO  
                       t_p(i,j,nl+1) = t_ii   
                     END IF                 
@@ -3142,12 +3153,18 @@ fnNMLvar(1) = "runctrl.vars.nml"
                   END DO
                   
                   DO nl = 1,nz-1
-                    IF (t_p(i,j,nl) .gt. t_in(i,j,nl) .AND. (lfc(i,j) > 0.) .AND. (p_in(i,j,nl) < lfc(i,j)) ) THEN   
+                    IF (t_p(i,j,nl) .gt. t_in(i,j,nl) .AND. (lfc(i,j) .gt. 0.) .AND. (p_in(i,j,nl) .lt. lfc(i,j)) ) THEN   
                       cape(i,j) = cape(i,j) + (t_p(i,j,nl) - t_in(i,j,nl)) / t_in(i,j,nl) * ((phb_in(i,j,nl)+ph_in(i,j,nl))-(phb_in(i,j,nl-1)+ph_in(i,j,nl-1)))      
-                    ELSE IF ( (t_p(i,j,nl) .lt. t_in(i,j,nl)) .AND. (lfc(i,j) > 0.) .and. (p_in(i,j,nl) >= lfc(i,j)) ) THEN ! convective inhibition 
+                    ELSE IF ( (t_p(i,j,nl) .lt. t_in(i,j,nl)) .AND. (lfc(i,j) .gt. 0.) .AND. (p_in(i,j,nl) .ge. lfc(i,j)) ) THEN ! convective inhibition 
                       cin(i,j) = cin(i,j) + (t_in(i,j,nl) - t_p(i,j,nl)) / t_in(i,j,nl) * ((phb_in(i,j,nl)+ph_in(i,j,nl))-(phb_in(i,j,nl-1)+ph_in(i,j,nl-1)))
-                    END IF    
+                    END IF
+                    
+                    IF ( (p_in(i,j,nl) .lt. 50000.) ) THEN
+                      li(i,j) = t_in(i,j,nl) - t_p(i,j,nl)
+                      exit
+                    END IF
                   END DO
+
                 END DO 
               END DO
              !$OMP END PARALLEL DO
@@ -3158,6 +3175,10 @@ fnNMLvar(1) = "runctrl.vars.nml"
               IF ( var_cmip(ivar) == "cin") THEN
                 data_in(:,:) = cin(:,:)
               END IF    
+              IF ( var_cmip(ivar) == "li") THEN
+                data_in(:,:) = li(:,:)
+              END IF
+             
             END IF
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
           END IF ! pressure levels processing
