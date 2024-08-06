@@ -3245,7 +3245,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
             IF ( (SCAN(var_cmip(ivar),"ua") == 1 ) .AND. ( height(ivar) > 10 ) ) THEN
             	data_in(:,:) = var2d_u(:,:)
             ELSE IF ( (SCAN(var_cmip(ivar),"va") == 1 ) .AND. ( height(ivar) > 10 ) ) THEN
-            	data_in(:,:) = var2d_u(:,:)
+            	data_in(:,:) = var2d_v(:,:)
             END IF           
           END IF
           
