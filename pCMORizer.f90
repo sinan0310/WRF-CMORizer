@@ -1697,7 +1697,6 @@ fnNMLvar(1) = "runctrl.vars.nml"
 	    !  zg
 	    ! prw [kg m-2] i Water Vapor Path
 	    ! clwvi [kg m-2] i Condensed Water Path  
-	    ! clwvi [kg m-2] i Condensed Water Path  
 	    ! cape [J kg-1] i 2-D Maximum convective available potential energy
 	    ! cin [J kg-1] i 2-D Maximum convective inhibition
 	    ! CONSIDER GRID STAGGERING
@@ -1708,12 +1707,13 @@ fnNMLvar(1) = "runctrl.vars.nml"
 	    ! allocation may still persist from a previous pass of the code with a different
 	    ! variable
 
-            IF ( (var_cmip(ivar) == "psl") &
+             IF ( (var_cmip(ivar) == "psl") &
                 .OR.  (var_cmip(ivar) == "prw") &
                 .OR.  (var_cmip(ivar) == "cin") &
                 .OR.  (var_cmip(ivar) == "clivi") &
                 .OR.  (var_cmip(ivar) == "clgvi") &
                 .OR.  (var_cmip(ivar) == "clhvi") &
+                .OR.  (var_cmip(ivar) == "clwvi") &
                 .OR.  (var_cmip(ivar) == "cape") &
                 .OR.  (var_cmip(ivar) == "cin") &
                 .OR.  (var_cmip(ivar) == "li") &
