@@ -145,13 +145,13 @@ INTERFACE
   END SUBROUTINE calcslptwo
 
 ! Josipa: Add subrotine to calculate wint at different levels 
-  SUBROUTINE var_zwind(nz, u, v, z, u10, v10, newz, unewz, vnewz)
+  SUBROUTINE var_zwind(nz, u, v, z, u10, v10, sa, ca, newz, unewz, vnewz)
     IMPLICIT NONE
     INTEGER, INTENT(in)                 :: nz
     REAL, DIMENSION(nz), INTENT(in)     :: u,v,z
-    REAL, INTENT(in)                    :: u10, v10, newz
+    REAL, INTENT(in)                    :: u10, v10, sa, ca, newz
     REAL, INTENT(out)                   :: unewz, vnewz
-  END SUBROUTINE var_zwind
+  END SUBROUTINE var_zwind 
   
   
 END INTERFACE
@@ -3174,14 +3174,14 @@ fnNMLvar(1) = "runctrl.vars.nml"
                     END IF
                   END DO
                  
-                  IF (lfc(i,j) .gt. 0.) THEN 
-                    DO nl = 1,nz-1
-                      IF (t_p(i,j,nl) .gt. t_in(i,j,nl)) .AND. (p_in(i,j,nl) .lt. lfc(i,j)) ) THEN   
+                  DO nl = 1,nz-1
+                    IF (lfc(i,j) .gt. 0.) THEN
+                      IF ( (t_p(i,j,nl) .gt. t_in(i,j,nl)) .AND. (p_in(i,j,nl) .lt. lfc(i,j)) ) THEN   
                         cape(i,j) = cape(i,j) + (t_p(i,j,nl) - t_in(i,j,nl)) / t_in(i,j,nl) * ((phb_in(i,j,nl)+ph_in(i,j,nl))-(phb_in(i,j,nl-1)+ph_in(i,j,nl-1)))      
                       ELSE IF ( (t_p(i,j,nl) .lt. t_in(i,j,nl)) .AND. (p_in(i,j,nl) .ge. lfc(i,j)) ) THEN ! convective inhibition 
                         cin(i,j) = cin(i,j) + (t_in(i,j,nl) - t_p(i,j,nl)) / t_in(i,j,nl) * ((phb_in(i,j,nl)+ph_in(i,j,nl))-(phb_in(i,j,nl-1)+ph_in(i,j,nl-1)))
                       END IF
-                  END IF
+                    END IF
                     
                     IF ( (p_in(i,j,nl) .lt. 50000.) ) THEN
                       li(i,j) = t_in(i,j,nl) - t_p(i,j,nl)
@@ -3244,24 +3244,27 @@ fnNMLvar(1) = "runctrl.vars.nml"
 ! The code implemented from CORDEX-WRF v1.3 module https://gmd.copernicus.org/articles/12/1029/2019/
 
           IF ( ( height(ivar) > 10. ) .AND. &
-            ( (SCAN(var_cmip(ivar),"ua") == 1 ) .OR.  (SCAN(var_cmip(ivar),"va") == 1 ) ) ) THEN
+             ( (SCAN(var_cmip(ivar),"ua") == 1 ) .OR.  (SCAN(var_cmip(ivar),"va") == 1 ) ) ) THEN
 
             !calculating height
             DO nl = 1,nz_lowest 
                ph_fl(:,:,nl) = (((ph_in(:,:,nl)+phb_in(:,:,nl))+ &
                                (ph_in(:,:,nl+1)+phb_in(:,:,nl+1)))/2./gr) - hgt_in(:,:)
             END DO 
-                          
-            !horizontal unstaggering and derotation
+            
+            !horizontal unstaggering     
+            DO i = 1,xfocus 
+               var3d_in_u(i,:,:) = 0.5*(u_in(i,:,:) + u_in(i+1,:,:))
+            END DO
+            
+            DO j = 1,yfocus 
+               var3d_in_v(:,j,:) = 0.5*(v_in(:,j,:) + v_in(:,j+1,:))
+            END DO
+
             DO i = 1,xfocus 
               DO j = 1,yfocus
-               var3d_in_u(i,j,:) = ( 0.5*(u_in(i,:,:) + u_in(i+1,:,:))*cosalpha_in(i,j) - &
-                                  0.5*(v_in(:,j,:) + v_in(:,j+1,:)*sinalpha_in(i,j)) )
-               var3d_in_v(:,j,:) = ( 0.5*(u_in(i,:,:) + u_in(i+1,:,:))*sinalpha_in(i,j) + &
-                                  0.5*(v_in(:,j,:) + v_in(:,j+1,:)*cosalpha_in(i,j)) )
-
-               CALL var_zwind( nz_lowest, var3d_in_u(i,j,:), var3d_in_v(i,j,:), ph_fl(i,j,:), u10_in(i,j), v10_in(i,j), &
-                                /real(height(ivar)), var2d_u(i,j), var2d_v(i,j) )
+                CALL var_zwind( nz_lowest, var3d_in_u(i,j,:), var3d_in_v(i,j,:), ph_fl(i,j,:), u10_in(i,j), v10_in(i,j), &
+                  sinalpha_in(i,j), cosalpha_in(i,j), real(height(ivar)), var2d_u(i,j), var2d_v(i,j) )
               END DO
             END DO 
 
@@ -3269,7 +3272,8 @@ fnNMLvar(1) = "runctrl.vars.nml"
             	data_in(:,:) = var2d_u(:,:)
             ELSE IF ( (SCAN(var_cmip(ivar),"va") == 1 ) .AND. ( height(ivar) > 10 ) ) THEN
             	data_in(:,:) = var2d_v(:,:)
-            END IF           
+            END IF   
+   
           END IF
           
           !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -4084,13 +4088,13 @@ END SUBROUTINE calcslptwo
 ! methodes d’evaluation du potentiel, variabilite et tendances. Climatologie. 
 ! Ecole Doctorale Polytechnique, 2015. French
 !*********************************************************************************************
-SUBROUTINE var_zwind(nz, u, v, z, u10, v10, newz, unewz, vnewz)
+SUBROUTINE var_zwind(nz, u, v, z, u10, v10, sa, ca, newz, unewz, vnewz)
 
 IMPLICIT NONE
 
 INTEGER, INTENT(in)                 :: nz
 REAL, DIMENSION(nz), INTENT(in)     :: u,v,z
-REAL, INTENT(in)                    :: u10, v10, newz
+REAL, INTENT(in)                    :: u10, v10, sa, ca, newz
 REAL, INTENT(out)                   :: unewz, vnewz
 
 ! Local
@@ -4159,8 +4163,8 @@ alpha = (LOG(ABS(v2))-LOG(ABS(v1)))/(LOG(zz(2))-LOG(zz(1)))
 uvnewz = v1*(newz/zz(1))**alpha
 
 ! Earth-rotation
-unewz = uvnewz(1) !*ca - uvnewz(2)*sa
-vnewz = uvnewz(2) !*sa + uvnewz(2)*ca
+unewz = uvnewz(1)*ca - uvnewz(2)*sa
+vnewz = uvnewz(2)*sa + uvnewz(2)*ca
 
 !!WRITE(message,*)'  result vz:', uvnewz
 !!CALL wrf_debug(750,message)
