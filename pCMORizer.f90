@@ -1898,29 +1898,6 @@ fnNMLvar(1) = "runctrl.vars.nml"
                   START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
               END IF
               
-              IF ( ( var_cmip(ivar) == "cape" ) .OR. &
-                   ( var_cmip(ivar) == "cin" )  .OR. & 
-                   ( var_cmip(ivar) == "li" ) ) THEN
-
-                PRINT *, "read PSFC"
-                IF (.not. ALLOCATED(psfc_in)) ALLOCATE( psfc_in( xfocus, yfocus ), STAT=sts )
-                sts = NF90_INQ_VARID(ncidin, "PSFC", psfc_varid)
-                sts = NF90_GET_VAR(ncidin, psfc_varid, psfc_in(:,:), &
-                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-                  
-                PRINT *, "read T2"
-                IF (.not. ALLOCATED(t2_in)) ALLOCATE( t2_in( xfocus, yfocus ), STAT=sts )
-                sts = NF90_INQ_VARID(ncidin, "T2", t2_varid)  
-                sts = NF90_GET_VAR(ncidin, t2_varid, t2_in(:,:), &
-                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )    
-
-                PRINT *, "read Q2"                  
-                IF (.not. ALLOCATED(q2_in)) ALLOCATE( q2_in ( xfocus, yfocus ), STAT=sts )
-                sts = NF90_INQ_VARID(ncidin, "Q2", q2_varid)
-                sts = NF90_GET_VAR(ncidin, q2_varid, q2_in(:,:), &
-                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )                  
-              END IF
-            
             !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
             ! Reading data from wrfpress files
             ELSE IF ( filetype(ivar) == "p" )  THEN
