@@ -547,7 +547,7 @@ IF (.not. ALLOCATED(cosalpha_in)) ALLOCATE( cosalpha_in( xfocus, yfocus ), STAT=
 sts = NF90_INQ_VARID(ncidin, "COSALPHA", cosalpha_varid)
 sts = NF90_GET_VAR(ncidin, cosalpha_varid, cosalpha_in(:,:), &
   START = (/ xoffset, yoffset, 1 /), COUNT = (/ xfocus, yfocus, 1 /) )
-  
+
 sts = NF90_CLOSE(ncidin)
 
 !-------------------------------------------------------------------------------
@@ -1684,7 +1684,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
             !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
             PRINT *, "*** READING OF VARIABLES ***"
-            PRINT *, "variable to work on = ", TRIM(var_cmip(ivar))
+            PRINT *, "variable to work on = ",TRIM(var_cmip(ivar))
 
 	    !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	    ! psl [Pa] i Sea Level Pressure
@@ -1717,8 +1717,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
                 .OR.  (var_cmip(ivar) == "cape") &
                 .OR.  (var_cmip(ivar) == "cin") &
                 .OR.  (var_cmip(ivar) == "li") &
-                .OR.  ( (plevel(ivar) /= -999) &
-                        .AND. (filetype(ivar) == "s") ) ) THEN
+                .OR.  ( (plevel(ivar) /= -999) .AND. (filetype(ivar) == "s") ) ) THEN
 
               PRINT *,'read 3D vars'
 
@@ -1726,6 +1725,16 @@ fnNMLvar(1) = "runctrl.vars.nml"
               ! internal vars needed in the pressure level / 3D processing section
 
               ! always needed
+              
+              IF ( (plevel(ivar) /= -999) .AND. ( filetype(ivar) == "s") ) THEN
+                PRINT *, "prep. int. 3D pres. level vars"
+                IF (.not. ALLOCATED(var3d_in)) ALLOCATE( var3d_in( xfocus, yfocus, nz ), STAT=sts )
+                IF ( ( INDEX(var_cmip(ivar),"ua") == 1 ) .OR. ( INDEX(var_cmip(ivar),"va") == 1 ) ) THEN
+                  IF (.not. ALLOCATED(var3d_in_u)) ALLOCATE( var3d_in_u( xfocus, yfocus, nz ), STAT=sts )
+                  IF (.not. ALLOCATED(var3d_in_v)) ALLOCATE( var3d_in_v( xfocus, yfocus, nz ), STAT=sts )
+                END IF
+              END IF
+              
               PRINT *, "allocate p_in, t_in, ph_fl" 
               IF (.not. ALLOCATED(p_in))  ALLOCATE( p_in( xfocus, yfocus, nz ), STAT=sts ) 
               IF (.not. ALLOCATED(t_in))  ALLOCATE( t_in( xfocus, yfocus, nz ), STAT=sts )
@@ -1766,11 +1775,6 @@ fnNMLvar(1) = "runctrl.vars.nml"
                 IF (.not. ALLOCATED(clhvi)) ALLOCATE( clhvi( xfocus, yfocus ), STAT=sts )
               END IF
 
-              IF ( (plevel(ivar) /= -999) .AND. ( filetype(ivar) == "s") ) THEN
-                PRINT *, "prep. int. 3D pres. level vars"
-                IF (.not. ALLOCATED(var3d_in)) ALLOCATE( var3d_in( xfocus, yfocus, nz ), STAT=sts )
-              END IF
-
               PRINT *, "read P"
               IF (.not. ALLOCATED(pp_in)) ALLOCATE( pp_in( xfocus, yfocus, nz ), STAT=sts )
               sts = NF90_INQ_VARID(ncidin, "P", pp_varid)
@@ -1804,7 +1808,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
 
               IF ( ( var_cmip(ivar) == "prw" ) &
                  .OR. ( var_cmip(ivar) == "psl" ) &
-                 .OR. ( SCAN(var_cmip(ivar),"hus") == 1 ) &
+                 .OR. ( INDEX(var_cmip(ivar),"hus") == 1 ) &
                  .OR. ( var_cmip(ivar) == "cape" ) &
                  .OR. ( var_cmip(ivar) == "cin" )  &
                  .OR. ( var_cmip(ivar) == "li") ) THEN
@@ -1864,7 +1868,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
                   START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz, 1 /) )
               END IF
 
-              IF ( (SCAN(var_cmip(ivar),"ua") == 1) .OR. (SCAN(var_cmip(ivar),"va") == 1) ) THEN
+              IF ( (INDEX(var_cmip(ivar),"ua") == 1 ) .OR. ( INDEX(var_cmip(ivar),"va") == 1 ) ) THEN
                 PRINT *, "read U"
                 IF (.not. ALLOCATED(u_in)) ALLOCATE( u_in( xfocus+1, yfocus, nz ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, "U", u_varid)
@@ -1878,7 +1882,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
                   START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus+1, nz, 1 /) )
               END IF
             
-              IF ( (SCAN(var_cmip(ivar),"wa") == 1) ) THEN
+              IF ( (INDEX(var_cmip(ivar),"wa") == 1) ) THEN
                 PRINT *, "read W"
                 IF (.not. ALLOCATED(w_in)) ALLOCATE( w_in( xfocus, yfocus, nz+1 ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, "W", w_varid)
@@ -1921,7 +1925,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
             ! Reading data from wrfpress files
             ELSE IF ( filetype(ivar) == "p" )  THEN
               sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "P_LEV_MISSING", p_miss)
-              IF ( SCAN(var_cmip(ivar),"hus") == 1 ) THEN
+              IF ( INDEX(var_cmip(ivar),"hus") == 1 ) THEN
                 PRINT *, "read Q_PL"
                 IF (.not. ALLOCATED(pl_in)) ALLOCATE( pl_in( xfocus, yfocus, npl  ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, "Q_PL", pl_varid)
@@ -1930,7 +1934,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
                   WHERE (pl_in < -900.) pl_in = mv
               END IF
 
-              IF ( SCAN(var_cmip(ivar),"ta") == 1 ) THEN
+              IF ( INDEX(var_cmip(ivar),"ta") == 1 ) THEN
                 PRINT *, "read T_PL"
                 IF (.not. ALLOCATED(pl_in)) ALLOCATE( pl_in( xfocus, yfocus, npl  ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, "T_PL", pl_varid)
@@ -1939,7 +1943,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
                   WHERE  (pl_in < -900.) pl_in(:,:,:) = mv
               END IF
 
-              IF ( SCAN(var_cmip(ivar),"zg") == 1 ) THEN
+              IF ( INDEX(var_cmip(ivar),"zg") == 1 ) THEN
                 PRINT *, "read GHT_PL"
                 IF (.not. ALLOCATED(pl_in)) ALLOCATE( pl_in( xfocus, yfocus, npl  ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, "GHT_PL", pl_varid)
@@ -1948,7 +1952,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
                   WHERE (pl_in < -900.) pl_in = mv
               END IF
 
-              IF ( (SCAN(var_cmip(ivar),"ua") == 1 ) .OR. ( SCAN(var_cmip(ivar),"va") == 1) ) THEN
+              IF ( (INDEX(var_cmip(ivar),"ua") == 1 ) .OR. ( INDEX(var_cmip(ivar),"va") == 1) ) THEN
                 PRINT *, "read U_PL"
                 IF (.not. ALLOCATED(pl_in_u)) ALLOCATE( pl_in_u( xfocus, yfocus, npl  ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, "U_PL", pl_varid_u)
@@ -1967,7 +1971,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
               ! Josipa: ua and va at height > 10m [ms-1] wind components at heights higher then 10m 
 
               ELSE IF ( ( height(ivar) > 10. ) .AND. &
-			( (SCAN(var_cmip(ivar),"ua") == 1 ) .OR.  (SCAN(var_cmip(ivar),"va") == 1 ) ) ) THEN
+			( (INDEX(var_cmip(ivar),"ua") == 1 ) .OR.  (INDEX(var_cmip(ivar),"va") == 1 ) ) ) THEN
 
 		PRINT *, "alocating 2D and 3D variables"
 		IF (.not. ALLOCATED(hgt_in)) ALLOCATE( hgt_in( xfocus, yfocus ), STAT=sts )
@@ -2844,7 +2848,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
             ! pout, slope, zg_pout
             ! comparison with wrfpress, same time: distribution OK, but ours is
             ! much ciolder, old vs new scheme about identical, ta500
-            IF (SCAN(var_cmip(ivar),"ta") == 1) THEN
+            IF (INDEX(var_cmip(ivar),"ta") == 1) THEN
               PRINT *, "calc ta..."
               var3d_in(:,:,:) = t_in(:,:,:)
               ! linear in p
@@ -2863,7 +2867,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
               END DO
               !$OMP END PARALLEL DO
 
-            ELSE IF (SCAN(var_cmip(ivar),"hus") == 1) THEN
+            ELSE IF (INDEX(var_cmip(ivar),"hus") == 1) THEN
               PRINT *, "calc hus..."
               var3d_in(:,:,:) = qv_in(:,:,:)
               !$OMP PARALLEL DO
@@ -2894,13 +2898,17 @@ fnNMLvar(1) = "runctrl.vars.nml"
               END DO
               !$OMP END PARALLEL DO
 
-            ELSE IF (SCAN(var_cmip(ivar),"ua") == 1) THEN
+            ELSE IF ( (INDEX(var_cmip(ivar),"ua") == 1 ) .AND. (filetype(ivar) == "s" ) ) THEN
               ! rotate to earth grid and destagger
               PRINT *, "calc ua..."
               DO i = 1,xfocus
-                 var3d_in(i,:,:) = ((u_in(i,:,:)+u_in(i+1,:,:))/2.)*cosalpha_in(:,:) - &
-                                   ((v_in(i,:,:)+v_in(i+1,:,:))/2.)*sinalpha_in(:,:) 
+                 var3d_in_u(i,:,:) = 0.5*(u_in(i,:,:)+u_in(i+1,:,:))*sinalpha_in(:,:)     
               END DO
+              DO j = 1,yfocus
+                 var3d_in_v(:,j,:) = 0.5*(v_in(:,j,:)+v_in(:,j+1,:))*cosalpha_in(:,:)   
+              END DO
+              var3d_in(:,:,:) = var3d_in_u(:,:,:) - var3d_in_v(:,:,:)
+
               ! linear in p
               !$OMP PARALLEL DO
               DO i = 1,xfocus 
@@ -2916,14 +2924,18 @@ fnNMLvar(1) = "runctrl.vars.nml"
                 END DO
               END DO
               !$OMP END PARALLEL DO
-
+              
             ! comparison with wrfpress, same time: simple scheme about the same results
-            ELSE IF ( SCAN(var_cmip(ivar),"va") == 1 ) THEN
+            ELSE IF ( (INDEX(var_cmip(ivar),"va") == 1) .AND. (filetype(ivar) == "s" ) ) THEN
               ! rotate to earth grid and destagger
-               DO j = 1,yfocus
-                 var3d_in(:,j,:) = (v_in(:,j,:)+v_in(:,j+1,:))/2.*cosalpha_in(:,:) + &
-                                   (u_in(:,j,:)+u_in(:,j+1,:))/2.*sinalpha_in(:,:) 
-               END DO
+              DO i = 1,xfocus
+                 var3d_in_u(i,:,:) = 0.5*(u_in(i,:,:)+u_in(i+1,:,:))*sinalpha_in(:,:) 
+              END DO
+              DO j = 1,yfocus
+                 var3d_in_v(:,j,:) = 0.5*(v_in(:,j,:)+v_in(:,j+1,:))*cosalpha_in(:,:)  
+              END DO
+              var3d_in(:,:,:) = var3d_in_u(:,:,:) + var3d_in_v(:,:,:)
+              
               ! linear in p
               !$OMP PARALLEL DO
               DO i = 1,xfocus 
@@ -2938,10 +2950,10 @@ fnNMLvar(1) = "runctrl.vars.nml"
                   END DO
                 END DO
               END DO
-              !$OMP END PARALLEL DO
+              !$OMP END PARALLEL DO          
 
             ! comparison with orig model data between level 16 and 17
-            ELSE IF (SCAN(var_cmip(ivar),"wa") == 1) THEN
+            ELSE IF (INDEX(var_cmip(ivar),"wa") == 1) THEN
               ! vertically destagger:
               DO nl = 1,nz
                 var3d_in(:,:,nl) = ( w_in(:,:,nl) + w_in(:,:,nl+1) ) / 2.
@@ -2961,7 +2973,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
               END DO              
               !$OMP END PARALLEL DO
 
-            ELSE IF ( SCAN(var_cmip(ivar),"zg") == 1 ) THEN
+            ELSE IF ( INDEX(var_cmip(ivar),"zg") == 1 ) THEN
               PRINT *, "calc zg..."
               var3d_in(:,:,:) = ph_fl(:,:,:)
               ! either linear in p or log(p)
@@ -3226,9 +3238,9 @@ fnNMLvar(1) = "runctrl.vars.nml"
             PRINT *, "New np level is", np
             !If wind components, derotate, first u component, then v component.
             !sinalpha and cosalha extracted fromt the geo_em file.
-            IF ( (SCAN(var_cmip(ivar),"ua") == 1) ) THEN
+            IF ( (INDEX(var_cmip(ivar),"ua") == 1) ) THEN
               data_in(:,:) = pl_in_u(:,:,np)*cosalpha_in(:,:) - pl_in_v(:,:,np)*sinalpha_in(:,:)
-            ELSE IF ( (SCAN(var_cmip(ivar),"va") == 1) ) THEN
+            ELSE IF ( (INDEX(var_cmip(ivar),"va") == 1) ) THEN
               data_in(:,:) = pl_in_u(:,:,np)*sinalpha_in(:,:) + pl_in_v(:,:,np)*cosalpha_in(:,:)
             ELSE
               !for all other variables such as hus, ta and zg just read the datafrom the coresponing level. 
@@ -3244,7 +3256,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
 ! The code implemented from CORDEX-WRF v1.3 module https://gmd.copernicus.org/articles/12/1029/2019/
 
           IF ( ( height(ivar) > 10. ) .AND. &
-             ( (SCAN(var_cmip(ivar),"ua") == 1 ) .OR.  (SCAN(var_cmip(ivar),"va") == 1 ) ) ) THEN
+             ( (INDEX(var_cmip(ivar),"ua") == 1 ) .OR.  (INDEX(var_cmip(ivar),"va") == 1 ) ) ) THEN
 
             !calculating height
             DO nl = 1,nz_lowest 
@@ -3268,9 +3280,9 @@ fnNMLvar(1) = "runctrl.vars.nml"
               END DO
             END DO 
 
-            IF ( (SCAN(var_cmip(ivar),"ua") == 1 ) .AND. ( height(ivar) > 10 ) ) THEN
+            IF ( (INDEX(var_cmip(ivar),"ua") == 1 ) .AND. ( height(ivar) > 10 ) ) THEN
             	data_in(:,:) = var2d_u(:,:)
-            ELSE IF ( (SCAN(var_cmip(ivar),"va") == 1 ) .AND. ( height(ivar) > 10 ) ) THEN
+            ELSE IF ( (INDEX(var_cmip(ivar),"va") == 1 ) .AND. ( height(ivar) > 10 ) ) THEN
             	data_in(:,:) = var2d_v(:,:)
             END IF   
    
