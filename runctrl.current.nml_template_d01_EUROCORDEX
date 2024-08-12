@@ -51,9 +51,9 @@
 /
 &tool_config
    nvar = 1,
-   aggregation_yearly = .F.,              	! for tier-2 / initial processing, default CMOR, 1hr 3hr data are stored in yearly files, data controls files created
+   aggregation_yearly = .T.,              	! for tier-2 / initial processing, default CMOR, 1hr 3hr data are stored in yearly files, data controls files created
    aggregation_monthly = .F.,             	! data controls monthly files created
-   aggregation_individually = .T.,      	! individual file is created, for the timespan as defined below
+   aggregation_individually = .F.,      	! individual file is created, for the timespan as defined below
    tsact = '2012-07-01_00:00:00',         	! tsact and teact are only needed if aggregation_individually = .TRUE.,
    teact = '2012-12-31_23:00:00',         	! set 1 timestep less - since extra timestep is needed for accumulated variables. Othewise, the last timestep will be filled with missing values.
 /
