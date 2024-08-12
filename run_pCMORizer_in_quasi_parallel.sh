@@ -24,16 +24,14 @@ source loadenv.UCAN-IFCA_intel.ini
 export YEAR=$1 	
 export YEAR_next=$(date -u --date="$YEAR-01-01 1 year" '+%Y')
 export DOM=$2 
-export VARNAME=$3	
+export VARNAME=$3
 export PROJECT=$4
 export FREQ=$5
 
-
 if [[ ${PROJECT} == "I4C" ]]; then
-  export dir_data_in="/gpfs/users/milovacj/asna/projects/impetus/02_I4C_evaluation/data/raw_output/"
+  export dir_data_in="set-full-path-to-raw-wrfoutput-files"
 elif [[ ${PROJECT} == "EUROCORDEX" ]]; then
-  #export dir_data_in="/gpfs/users/milovacj/asna/projects/euro-cordex/01_EUR12_NorESM2_ssp126/rundir/WRF_v4515_i2021_impi2021_noleap/run/$YEAR/"
-  export dir_data_in="/gpfs/users/milovacj/asna/projects/euro-cordex/01_EUR12_NorESM2_ssp126/data/raw_output/"
+  export dir_data_in="set-full-path-to-raw-wrfoutput-files"
 else
   echo "Provide full path to you raw wrfout files."
 fi

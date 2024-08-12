@@ -27,7 +27,7 @@
 
 &filesystem
    DirInputSimResRoot = "../",
-   DirOutputPostProRoot = "/gpfs/users/milovacj/asna/projects/impetus/02_I4C_evaluation/data/postprocessed/",
+   DirOutputPostProRoot = "set-full-path-to-output",
    domain = "d02",                					! for filename generation needed
    calendar = "standard"
 /
@@ -46,7 +46,7 @@
    tetot = '2101-01-01_00:00:00',         	! end of the main time vector, do not change
 /
 &static_fields
-   PnFnGeo = '/gpfs/users/milovacj/asna/projects/impetus/00_common/domains/EUR12toALPX3/geo_em.d02.nc',
+   PnFnGeo = 'set-full-path-to-geo_em.d02.nc',
    projection = 'LCC' !'ROT'
 /
 &tool_config
