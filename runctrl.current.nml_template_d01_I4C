@@ -42,7 +42,7 @@
    yoffset = 0,                           	! many grps do not remove the boundary relaxation zone, in agreement with UCAN boundary relaxation zone is removed
    xfocus = 456,                          	! EUR-11 official grid x-dim, unknown from geo_em file, nx-2*xoffset
    yfocus = 439,                          	! EUR-11 official grid y-dim, unknown from geo_em file, ny-2*yoffset
-   tstot = '1949-12-01_00:00:00',         	! start of the main time vector, per protocol, do not change
+   tstot = '1950-01-01_00:00:00',         	! start of the main time vector, per protocol, do not change
    tetot = '2101-01-01_00:00:00',         	! end of the main time vector, do not change
 /
 &static_fields
