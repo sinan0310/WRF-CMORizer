@@ -1944,6 +1944,13 @@ fnNMLvar(1) = "runctrl.vars.nml"
                   WHERE (pl_in_v < -900.) pl_in_v = mv
               END IF
 
+              IF ( var_cmip(ivar) == "od550aer" ) THEN
+                PRINT *, "variable to read/write with no additional processing = ", var_wrf(ivar)
+                sts = NF90_INQ_VARID(ncidin, TRIM(var_wrf(ivar)), varid)
+                sts = NF90_GET_VAR(ncidin, varid, data_in(:,:), &
+                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+              END IF
+
               !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
               ! Josipa: ua and va at height > 10m [ms-1] wind components at heights higher then 10m 
 
@@ -2879,10 +2886,10 @@ fnNMLvar(1) = "runctrl.vars.nml"
               ! rotate to earth grid and destagger
               PRINT *, "calc ua..."
               DO i = 1,xfocus
-                 var3d_in_u(i,:,:) = 0.5*(u_in(i,:,:)+u_in(i+1,:,:))*sinalpha_in(:,:)     
+                 var3d_in_u(i,:,:) = 0.5*(u_in(i,:,:)+u_in(i+1,:,:))*cosalpha_in(:,:)     
               END DO
               DO j = 1,yfocus
-                 var3d_in_v(:,j,:) = 0.5*(v_in(:,j,:)+v_in(:,j+1,:))*cosalpha_in(:,:)   
+                 var3d_in_v(:,j,:) = 0.5*(v_in(:,j,:)+v_in(:,j+1,:))*sinalpha_in(:,:)   
               END DO
               var3d_in(:,:,:) = var3d_in_u(:,:,:) - var3d_in_v(:,:,:)
 
@@ -3201,7 +3208,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! Processing variables on pressure levels        
 
-          IF ( filetype(ivar) == "p" ) THEN
+          IF ( ( filetype(ivar) == "p" ) .AND. ( plevel(ivar) .NE. -999 ) ) THEN
             PRINT *, "Working on the pressure level", plevel(ivar)            
             ! Set levels            
             DO i = 1, num_levels
@@ -3225,7 +3232,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
             END IF
 
             WHERE (abs(data_in(:,:)) > 100000.) data_in(:,:) = mv
-                   
+   
           END IF 
  
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
