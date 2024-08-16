@@ -175,7 +175,9 @@ def create_vararray(varname, filepath):
                 #ftype="'x'"
                 ftype="'s'"
             elif plevel != "-999" and "wa" not in varname and plevel in map(str, wrfpress_levels): 
-                ftype="'p'"                 
+                ftype="'p'" 
+            elif varname == "od550aer": 
+                ftype="'p'"               
             else:
                 ftype="'s'"            
                                          
