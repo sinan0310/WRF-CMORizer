@@ -85,10 +85,10 @@ zg750,-999,m,i,Geopotential Height,geopotential_height,x,x,x,,x,TIER 2
 wa750,-999,m s-1,i,Upward Air Velocity,upward_air_velocity,x,x,x,,x,TIER 2
 ua200m,-999,m s-1,i,Eastward Wind at 200m,eastward_wind,x,x,,,x,TIER 2
 ua250m,-999,m s-1,i,Eastward Wind at 250m,eastward_wind,x,x,,,x,TIER 2
-ua300m,-999,m s-1,i,Eastward Wind at 250m,eastward_wind,x,x,,,x,TIER 2
+ua300m,-999,m s-1,i,Eastward Wind at 300m,eastward_wind,x,x,,,x,TIER 2
 va200m,-999,m s-1,i,Northward Wind at 200m,northward_wind,x,x,,,x,TIER 1
 va250m,-999,m s-1,i,Northward Wind at 250m,northward_wind,x,x,,,x,TIER 1
-va300m,-999,m s-1,i,Northward Wind at 350m,northward_wind,x,x,,,x,TIER 1
+va300m,-999,m s-1,i,Northward Wind at 300m,northward_wind,x,x,,,x,TIER 1
 sftgif,-999,%,,Percentage of the Grid Cell Covered by Glacier,land_ice_area_fraction,,,,,,TIER 2
 mrsofc,-999,kg m-2,,Capacity of Soil to Store Water  (Field Capacity),soil_moisture_content_at_field_capacity,,,,,,TIER 2
 rootd,-999,m,,Maximum Root Depth,root_depth,,,,,,TIER 2
