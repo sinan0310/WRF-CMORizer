@@ -19,7 +19,7 @@ The provided postprocessing scripts and codes enable the efficient postprocessin
     - YEAR: e.g. '2020'
     - DOMAIN: e.g. 'd01' or 'd02'
     - VARNAME: e.g. 'tas'
-    - PROJECT: e.g. 'EUROCORDEX', 'I4C', 'FPS-URBAN' (any name given to the template - runctrl.current.nml_template_d01_EUROCORDEX)
+    - PROJECT: e.g. 'EUROCORDEX', 'I4C', 'STAGE0-URBAN' (any name given to the template - runctrl.current.nml_template_d01_EUROCORDEX)
     - FREQUENCY: 'fx' '1hr' '3hr' '6hr' 'day'
 
  - To process all requested variables in the selected project, use this command:
