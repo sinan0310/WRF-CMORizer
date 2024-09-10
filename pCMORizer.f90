@@ -208,7 +208,7 @@ INTEGER :: varid, x_varid, lon_varid, lat_varid, rlon_varid, rlat_varid, hgt_var
   sfcevp_varid, potevp_varid, sfroff_varid, udroff_varid, acsnom_varid, q2_varid, &
   sinalpha_varid, cosalpha_varid, plev_varid, plevbnds_varid, psfc_varid, &
   depth_varid, soillayerbnds_varid, cd_varid, xlon_varid, ylat_varid, t00_varid, p00_varid, &
-  mask_varid
+  mask_varid, sh2o_varid
 
 ! input data general query
 INTEGER :: ncid_in, ndims_in, nvars_in, ngatts_in, unlimdimid_in
@@ -338,6 +338,7 @@ REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
   pl_in_u     , &
   pl_in_v     , &
   smois_in    , & 
+  sh2o_in    , & 
   tslb_in  
 
 
@@ -450,7 +451,7 @@ CLOSE(2)
 ALLOCATE( data_in( xfocus, yfocus ), STAT=sts )
 IF (sts /= 0) STOP "*** Not enough memory on this device, stopping***"
 
-! this is a dirty hack for the mrsol and tsl variables
+! this is a dirty hack for the mrsol, mrsfl and tsl variables
 ! at this point it is not even clear whether this variable is needed at all
 ALLOCATE( data_in_3D( xfocus, yfocus, 4 ), STAT=sts )
 IF (sts /= 0) STOP "*** Not enough memory on this device to create data_in_3D, stopping***"
@@ -941,7 +942,8 @@ fnNMLvar(1) = "runctrl.vars.nml"
             counter = 0
             IF (aggregation_individually) THEN
               PRINT *, "aggregation_individually"
-              PRINT *,tsactYear, tsactMonth, tsactDay, tsactHour, teactYear, teactMonth, teactDay, teactHour
+              PRINT *,tsactYear, tsactMonth, tsactDay, tsactHour
+              PRINT *,teactYear, teactMonth, teactDay, teactHour
 
               tsact_singlenumber = REAL(tsactYear,8)*1000000._8 + REAL(tsactMonth,8)*10000._8 + REAL(tsactDay,8)*100._8 + REAL(tsactHour,8)
               teact_singlenumber = REAL(teactYear,8)*1000000._8 + REAL(teactMonth,8)*10000._8 + REAL(teactDay,8)*100._8 + REAL(teactHour,8)
@@ -1026,23 +1028,28 @@ fnNMLvar(1) = "runctrl.vars.nml"
               WRITE (tsactYearStr,'(I4.4)') INT(TimeRefArraySubset(1,2))
               WRITE (tsactMonthStr,'(I2.2)') INT(TimeRefArraySubset(1,3))    
               WRITE (tsactDayStr,'(I2.2)') INT(TimeRefArraySubset(1,4))   
+              WRITE (tsactHourStr,'(I2.2)') INT(tsactHour)
+              !WRITE (tsactMinuteStr,'(I2.2)') INT(TimeRefArraySubset(1,6))
               WRITE (teactYearStr,'(I4.4)') INT(TimeRefArraySubset(counter,2))
               WRITE (teactMonthStr,'(I2.2)') INT(TimeRefArraySubset(counter,3))
-              WRITE (teactDayStr,'(I2.2)') INT(TimeRefArraySubset(counter,4))     
+              WRITE (teactDayStr,'(I2.2)') INT(TimeRefArraySubset(counter,4))   
+              WRITE (teactHourStr,'(I2.2)') INT(teactHour) 
+              !WRITE (teactHourStr,'(I2.2)') INT(TimeRefArraySubset(counter,5))
+              !WRITE (teactMinuteStr,'(I2.2)') INT(TimeRefArraySubset(counter,6))
 
               IF ((frequency(ifrq) == '1hr') .OR. &
                   (frequency(ifrq) == '3hr') .OR. &
                   (frequency(ifrq) == '6hr')) THEN
                   
               IF ( (cell_methods(ivar) == "mean") .OR. (cell_methods(ivar) == "sum") ) THEN 
-                WRITE (tsactHourStr,'(I2.2)') INT( FLOOR( ((dtHours/2.)*60.) / 60. ) )
+                !WRITE (tsactHourStr,'(I2.2)') INT( FLOOR( ((dtHours/2.)*60.) / 60. ) )
                 WRITE (tsactMinuteStr,'(I2.2)') INT( MOD( (dtHours/2.)*60., 60. ) )
-                WRITE (teactHourStr,'(I2.2)') INT( FLOOR( ( (24.*60.) - (dtHours/2.)*60.)  / 60. ) )
+                !WRITE (teactHourStr,'(I2.2)') INT( FLOOR( ( (24.*60.) - (dtHours/2.)*60.)  / 60. ) )
                 WRITE (teactMinuteStr,'(I2.2)') INT( MOD( (24.*60.) - (dtHours/2.)*60., 60. ) )
               ELSE
-                WRITE (tsactHourStr,'(I2.2)') INT(TimeRefArraySubset(1,5))
+                !WRITE (tsactHourStr,'(I2.2)') INT(TimeRefArraySubset(1,5))
                 WRITE (tsactMinuteStr,'(I2.2)') INT(0)
-                WRITE (teactHourStr,'(I2.2)') INT(TimeRefArraySubset(counter,5))
+                !WRITE (teactHourStr,'(I2.2)') INT(TimeRefArraySubset(counter,5))
                 WRITE (teactMinuteStr,'(I2.2)') INT(0)
               END IF
               
@@ -1291,6 +1298,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
 
               ! define special vertical dimension dimension 4D vars
               IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. &
+                  (TRIM(var_cmip(ivar)) == 'mrsfl') .OR. &
                   (TRIM(var_cmip(ivar)) == 'tsl')) THEN
                 sts = NF90_DEF_DIM(ncid, "sdepth", SIZE(DZShc), depth_dimid)
                 sts = NF90_DEF_DIM(ncid, "bnds", 2, nb2_dimid)
@@ -1410,6 +1418,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
 
               ! included for soil moisture and soil temperature at all levels   
               IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. &
+                  (TRIM(var_cmip(ivar)) == 'mrsfl') .OR. &
                   (TRIM(var_cmip(ivar)) == 'tsl')) THEN
                 sts = nf90_def_var(ncid, "sdepth", NF90_DOUBLE, (/ depth_dimid /), depth_varid)
                 sts = nf90_put_att(ncid, depth_varid, "standard_name", "depth")
@@ -1490,7 +1499,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
              
               ! Define dimensions for the LCC and ROT projections
               IF ( projection == "LCC" ) THEN
-                IF ((var_cmip(ivar) == "mrsol") .OR. (var_cmip(ivar) == "tsl")) THEN
+                IF ((var_cmip(ivar) == "mrsol") .OR. (var_cmip(ivar) == "mrsfl") .OR. (var_cmip(ivar) == "tsl")) THEN
                   sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid, depth_dimid, rec_dimid /), x_varid)
                 ELSE IF (frequency(ifrq) == 'fx') THEN
                   sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid/), x_varid)
@@ -1498,7 +1507,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
                   sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid, rec_dimid /), x_varid)
                 END IF                 
               ELSE
-                IF ((var_cmip(ivar) == "mrsol") .OR. (var_cmip(ivar) == "tsl")) THEN
+                IF ((var_cmip(ivar) == "mrsol") .OR. (var_cmip(ivar) == "mrsfl") .OR. (var_cmip(ivar) == "tsl")) THEN
                   sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, depth_dimid, rec_dimid /), x_varid)
                 ELSE IF (frequency(ifrq) == 'fx') THEN
                   sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid/), x_varid)
@@ -1526,6 +1535,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
               ELSE IF ( plevel(ivar) /= -999 ) THEN 
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "plev lat lon") 
               ELSE IF ( (TRIM(var_cmip(ivar)) == 'mrsol')   .OR. &
+                        (TRIM(var_cmip(ivar)) == 'mrsfl')   .OR. &
                 	(TRIM(var_cmip(ivar)) == 'tsl'  ) ) THEN
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "sdepth lat lon") 
               ELSE
@@ -1598,7 +1608,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
                 sts = NF90_PUT_VAR(ncid, soillayerbnds_varid, RESHAPE((/ 0.0D0, 0.1D0/), (/2,1/)))
               END IF
 
-              IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. (TRIM(var_cmip(ivar)) == 'tsl')) THEN
+              IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. (TRIM(var_cmip(ivar)) == 'mrsfl') .OR. (TRIM(var_cmip(ivar)) == 'tsl')) THEN
                 sts = NF90_PUT_VAR(ncid, depth_varid, (/ 0.05D0, 0.25D0, 0.7D0, 1.5D0 /) ) ! center points of the depth layers, hardcoded
                 sts = NF90_PUT_VAR(ncid, soillayerbnds_varid, RESHAPE((/ 0.0D0, 0.1D0, 0.1D0, 0.4D0, 0.4D0, 1.0D0, 1.0D0, 2.0D0 /), (/2,4/))) ! bnds hardcoded
               END IF 
@@ -1903,7 +1913,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
             ELSE IF ( filetype(ivar) == "p" )  THEN
               sts = NF90_GET_ATT(ncidin, NF90_GLOBAL, "P_LEV_MISSING", p_miss)
               IF ( INDEX(var_cmip(ivar),"hus") == 1 ) THEN
-                PRINT *, "read Q_PL"
+                PRINT *, "read Q_PL from wrfpress files"
                 IF (.not. ALLOCATED(pl_in)) ALLOCATE( pl_in( xfocus, yfocus, npl  ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, "Q_PL", pl_varid)
                 sts = NF90_GET_VAR(ncidin, pl_varid, pl_in(:,:,:), &
@@ -1912,7 +1922,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
               END IF
 
               IF ( INDEX(var_cmip(ivar),"ta") == 1 ) THEN
-                PRINT *, "read T_PL"
+                PRINT *, "read T_PL from wrfpress files"
                 IF (.not. ALLOCATED(pl_in)) ALLOCATE( pl_in( xfocus, yfocus, npl  ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, "T_PL", pl_varid)
                 sts = NF90_GET_VAR(ncidin, pl_varid, pl_in(:,:,:), &
@@ -1921,7 +1931,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
               END IF
 
               IF ( INDEX(var_cmip(ivar),"zg") == 1 ) THEN
-                PRINT *, "read GHT_PL"
+                PRINT *, "read GHT_PL from wrfpress files"
                 IF (.not. ALLOCATED(pl_in)) ALLOCATE( pl_in( xfocus, yfocus, npl  ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, "GHT_PL", pl_varid)
                 sts = NF90_GET_VAR(ncidin, pl_varid, pl_in(:,:,:), &
@@ -1930,13 +1940,13 @@ fnNMLvar(1) = "runctrl.vars.nml"
               END IF
 
               IF ( (INDEX(var_cmip(ivar),"ua") == 1 ) .OR. ( INDEX(var_cmip(ivar),"va") == 1) ) THEN
-                PRINT *, "read U_PL"
+                PRINT *, "read U_PL from wrfpress files"
                 IF (.not. ALLOCATED(pl_in_u)) ALLOCATE( pl_in_u( xfocus, yfocus, npl  ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, "U_PL", pl_varid_u)
                 sts = NF90_GET_VAR(ncidin, pl_varid_u, pl_in_u(:,:,:), &
                   START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, npl, 1 /) )
                   WHERE (pl_in_u < -900.) pl_in_u = mv
-                PRINT *, "read V_PL"
+                PRINT *, "read V_PL from wrfpress files"
                 IF (.not. ALLOCATED(pl_in_v)) ALLOCATE( pl_in_v( xfocus, yfocus, npl  ), STAT=sts )
                 sts = NF90_INQ_VARID(ncidin, "V_PL", pl_varid_v)
                 sts = NF90_GET_VAR(ncidin, pl_varid_v, pl_in_v(:,:,:), &
@@ -2659,6 +2669,35 @@ fnNMLvar(1) = "runctrl.vars.nml"
                 DZS(:) = DZShc(:)
                 PRINT*,'DZS ', DZS(:)
              END IF   
+             
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! mrfso, mrfsos, mrsfl [kg m-2] 
+  
+          ELSE IF ((var_cmip(ivar) == "mrfso") &
+            .OR. (var_cmip(ivar) == "mrfsos") &
+            .OR. (var_cmip(ivar) == "mrsfl")) THEN
+
+	     PRINT *, "read XLAND"
+             IF (.not. ALLOCATED(landmask_in)) ALLOCATE( landmask_in( xfocus, yfocus), STAT=sts )
+              sts = NF90_INQ_VARID(ncidin, "LANDMASK", mask_varid)
+              sts = NF90_GET_VAR(ncidin, mask_varid, landmask_in(:,:), &
+                START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+ 
+ 	     PRINT *, "read SMOIS"
+             IF (.not. ALLOCATED(smois_in)) ALLOCATE( smois_in( xfocus, yfocus, 4), STAT=sts )           
+             sts = NF90_INQ_VARID(ncidin, "SMOIS", varid)
+             sts = NF90_GET_VAR(ncidin, varid, smois_in(:,:,:), &
+               START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 4, 1 /) ) 
+
+ 	     PRINT *, "read SH20"
+             IF (.not. ALLOCATED(sh2o_in)) ALLOCATE( sh2o_in( xfocus, yfocus, 4), STAT=sts )           
+             sts = NF90_INQ_VARID(ncidin, "SH2O", sh2o_varid)
+             sts = NF90_GET_VAR(ncidin, sh2o_varid, sh2o_in(:,:,:), &
+               START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, 4, 1 /) ) 
+               
+             IF (.not. ALLOCATED(DZS)) ALLOCATE( DZS( SIZE(DZShc) ), STAT=sts )
+             DZS(:) = DZShc(:)
+             PRINT*,'DZS ', DZS(:)
   
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ! hurs [%] i Near-Surface Relative Humidity
@@ -2695,7 +2734,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
             sts = NF90_GET_VAR(ncidin, v10_varid, v10_in(:,:), &
               START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
   
-           !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+           !- - - - - - - - - - - -/ - - - - - - - - - - - - - - - - - - - - - - - - - - - -
            ! uas [m s-1] i Eastward Near-Surface Wind
            ! vas [m s-1] i Northward Near-Surface Wind
 
@@ -2852,7 +2891,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
               !$OMP END PARALLEL DO
 
             ELSE IF (INDEX(var_cmip(ivar),"hus") == 1) THEN
-              PRINT *, "calc hus..."
+              PRINT *, "interpolating hus..."
               var3d_in(:,:,:) = qv_in(:,:,:)
               !$OMP PARALLEL DO
               DO i = 1,xfocus
@@ -3620,9 +3659,41 @@ fnNMLvar(1) = "runctrl.vars.nml"
               WHERE (landmask_in == 0) data_in_3D(:,:,i) = mv 
             END DO
           END IF
+          
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! mrfso [kg m-2] Total soil Frozen Water Content
+! masking over ocean, with mv initialized
+
+          IF (var_cmip(ivar) == "mrfso") THEN   
+            data_in(:,:) =  ( ( smois_in(:,:,1) - sh2o_in(:,:,1) )*DZS(1) + &
+                              ( smois_in(:,:,2) - sh2o_in(:,:,2) )*DZS(2) + &
+                              ( smois_in(:,:,3) - sh2o_in(:,:,3) )*DZS(3) + &
+                              ( smois_in(:,:,4) - sh2o_in(:,:,4) )*DZS(4) ) * 1000.
+            WHERE (landmask_in == 0) data_in = mv
+          END IF
+          
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! mrfsos [kg m-2] Soil Frozen Water Content at the 1st model layer
+! masking over ocean, with mv initialized
+
+          IF (var_cmip(ivar) == "mrfsos") THEN    
+            data_in(:,:) =  ( (smois_in(:,:,1) - sh2o_in(:,:,1))*DZS(1)) * 1000.
+            WHERE (landmask_in == 0) data_in = mv
+          END IF
+          
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! mrsfl [kg m-2] Soil Frozen Water Content per layer
+! masking over ocean, with mv initialized
+
+          IF (var_cmip(ivar) == "mrsfl") THEN
+	    DO i = 1, 4
+	      data_in_3D(:,:,i) = (smois_in(:,:,i) - sh2o_in(:,:,i)) * DZS(i) * 1000.
+              WHERE (landmask_in == 0) data_in_3D(:,:,i) = mv 
+            END DO
+          END IF
 
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! tsl
+! tsl [K] soil temperature
 ! masking over ocean, with mv initialized
 
           IF (var_cmip(ivar) == "tsl") THEN
@@ -3769,6 +3840,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
           PRINT *, 'yfocus', yfocus
 
           IF ( (var_cmip(ivar) == "mrsol") &
+             .OR. (var_cmip(ivar) == "mrsfl") &
              .OR. (var_cmip(ivar) == "tsl")) THEN
               sts = NF90_PUT_VAR( ncid, x_varid, data_in_3D(:,:,:), &
                 START=(/ 1, 1, 1, counter /), COUNT = (/ xfocus, yfocus, 4, 1 /) )
