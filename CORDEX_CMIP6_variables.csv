@@ -114,8 +114,8 @@ rlus,ACLWUPB,W m-2,a,Surface Upwelling Longwave Radiation,surface_upwelling_long
 rlut,ACLWUPT,W m-2,a,TOA Outgoing Longwave Radiation,toa_outgoing_longwave_flux,x,x,,,x,TIER 1
 rsdt,ACSWDNT,W m-2,a,TOA Incident Shortwave Radiation,toa_incoming_shortwave_flux,x,x,,,x,TIER 1
 rsut,ACSWUPT,W m-2,a,TOA Outgoing Shortwave Radiation,toa_outgoing_shortwave_flux,x,x,,,x,TIER 1
-hfls,HFX,W m-2,a,Surface Upward Latent Heat Flux,surface_upward_latent_heat_flux,x,x,,,x,TIER 1
-hfss,LH,W m-2,a,Surface Upward Sensible Heat Flux,surface_upward_sensible_heat_flux,x,x,,,x,TIER 1
+hfls,LH,W m-2,a,Surface Upward Latent Heat Flux,surface_upward_latent_heat_flux,x,x,,,x,TIER 1
+hfss,HFX,W m-2,a,Surface Upward Sensible Heat Flux,surface_upward_sensible_heat_flux,x,x,,,x,TIER 1
 hfso,GRDFLX,W m-2,a,Surface Downward Ground Heat Flux,surface_downward_ground_heat_flux,x,x,,,x,TIER 2
 mrfso,-999,kg m-2,i,Soil Frozen Water Content,soil_frozen_water_content,x,x,x,,,TIER 1
 mrfsos,-999,kg m-2,i,Frozen Water Content in Upper Portion of Soil Column,frozen_water_content_of_soil_layer,x,x,,,x,TIER 1
