@@ -154,6 +154,16 @@ INTERFACE
   END SUBROUTINE var_zwind 
   
   
+! Josipa: Add subrotine for linear interpolation between levels 
+  SUBROUTINE linear_int(nz, var3d, z, var2d, newz, varout)
+    IMPLICIT NONE
+    INTEGER, INTENT(in)                 :: nz
+    REAL, DIMENSION(nz), INTENT(in)     :: var3d, z
+    REAL, INTENT(in)                    :: var2d, newz
+    REAL, INTENT(out)                   :: varout
+  END SUBROUTINE linear_int 
+  
+  
 END INTERFACE
 
 !===============================================================================
@@ -289,6 +299,8 @@ REAL, DIMENSION(:,:), ALLOCATABLE :: &
   rainc_max_in  , &
   rainnc_max_in , &
   landmask_in   , &
+  var2d_in      , &
+  var2d_out     , &
   var2d_u       , &
   var2d_v       , &
   hgt_in        , &       
@@ -1965,23 +1977,14 @@ fnNMLvar(1) = "runctrl.vars.nml"
               ! Josipa: ua and va at height > 10m [ms-1] wind components at heights higher then 10m 
 
               ELSE IF ( ( height(ivar) > 10. ) .AND. &
-			( (INDEX(var_cmip(ivar),"ua") == 1 ) .OR.  (INDEX(var_cmip(ivar),"va") == 1 ) ) ) THEN
+			( (INDEX(var_cmip(ivar),"ua") == 1 ) .OR.  (INDEX(var_cmip(ivar),"va") == 1 )  .OR. &
+			  (INDEX(var_cmip(ivar),"ta") == 1 ) .OR.  (INDEX(var_cmip(ivar),"hus") == 1 ) ) )THEN
 
 		PRINT *, "alocating 2D and 3D variables"
 		IF (.not. ALLOCATED(hgt_in)) ALLOCATE( hgt_in( xfocus, yfocus ), STAT=sts )
 		IF (.not. ALLOCATED(ph_in))  ALLOCATE( ph_in( xfocus, yfocus, nz_lowest + 1 ), STAT=sts )
 		IF (.not. ALLOCATED(phb_in)) ALLOCATE( phb_in( xfocus, yfocus, nz_lowest + 1 ), STAT=sts )
 		IF (.not. ALLOCATED(ph_fl))  ALLOCATE( ph_fl( xfocus, yfocus, nz_lowest ), STAT=sts )
-		IF (.not. ALLOCATED(u_in))   ALLOCATE( u_in( xfocus+1, yfocus, nz_lowest ), STAT=sts )
-		IF (.not. ALLOCATED(v_in))   ALLOCATE( v_in( xfocus, yfocus+1, nz_lowest ), STAT=sts )
-		IF (.not. ALLOCATED(u10_in)) ALLOCATE( u10_in ( xfocus, yfocus ), STAT=sts )
-		IF (.not. ALLOCATED(v10_in)) ALLOCATE( v10_in ( xfocus, yfocus ), STAT=sts ) 
-		IF (.not. ALLOCATED(var3d_in_u))  ALLOCATE( var3d_in_u ( xfocus, yfocus, nz_lowest), STAT=sts )
-		IF (.not. ALLOCATED(var3d_in_v))  ALLOCATE( var3d_in_v ( xfocus, yfocus, nz_lowest), STAT=sts )
-		IF (.not. ALLOCATED(sinalpha_in)) ALLOCATE( sinalpha_in( xfocus, yfocus ), STAT=sts )
-		IF (.not. ALLOCATED(cosalpha_in)) ALLOCATE( cosalpha_in( xfocus, yfocus ), STAT=sts )
-		IF (.not. ALLOCATED(var2d_u)) ALLOCATE( var2d_u( xfocus, yfocus ), STAT=sts )
-		IF (.not. ALLOCATED(var2d_v)) ALLOCATE( var2d_v( xfocus, yfocus ), STAT=sts )
 
 		PRINT *, "read HGT"
 		sts = NF90_INQ_VARID(ncidin, "HGT", hgt_varid)
@@ -1995,22 +1998,88 @@ fnNMLvar(1) = "runctrl.vars.nml"
 		sts = NF90_INQ_VARID(ncidin, "PHB", phb_varid)
 		sts = NF90_GET_VAR(ncidin, phb_varid, phb_in(:,:,:), &
 		  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz_lowest+1, 1 /) )
-            	PRINT *, "read U"
-            	sts = NF90_INQ_VARID(ncidin, "U", u_varid)
-            	sts = NF90_GET_VAR(ncidin, u_varid, u_in(:,:,:), &
-              	  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus+1, yfocus, nz_lowest, 1 /) )
-            	PRINT *, "read V"
-            	sts = NF90_INQ_VARID(ncidin, "V", v_varid)
-            	sts = NF90_GET_VAR(ncidin, v_varid, v_in(:,:,:), &
-              	  START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus+1, nz_lowest, 1 /) )
-            	PRINT *, "read U10"
-            	sts = NF90_INQ_VARID(ncidin, "U10", u10_varid)
-            	sts = NF90_GET_VAR(ncidin, u10_varid, u10_in(:,:), &
-                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
-            	PRINT *, "read V10"
-            	sts = NF90_INQ_VARID(ncidin, "V10", v10_varid)  
-            	sts = NF90_GET_VAR(ncidin, v10_varid, v10_in(:,:), &
-                  START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )                           				
+		  
+		  
+		IF ((INDEX(var_cmip(ivar),"ua") == 1 ) .OR.  (INDEX(var_cmip(ivar),"va") == 1 )) THEN		  
+		  
+		  IF (.not. ALLOCATED(u_in))   ALLOCATE( u_in( xfocus+1, yfocus, nz_lowest ), STAT=sts )
+		  IF (.not. ALLOCATED(v_in))   ALLOCATE( v_in( xfocus, yfocus+1, nz_lowest ), STAT=sts )
+		  IF (.not. ALLOCATED(u10_in)) ALLOCATE( u10_in ( xfocus, yfocus ), STAT=sts )
+		  IF (.not. ALLOCATED(v10_in)) ALLOCATE( v10_in ( xfocus, yfocus ), STAT=sts ) 
+		  IF (.not. ALLOCATED(var3d_in_u))  ALLOCATE( var3d_in_u ( xfocus, yfocus, nz_lowest), STAT=sts )
+		  IF (.not. ALLOCATED(var3d_in_v))  ALLOCATE( var3d_in_v ( xfocus, yfocus, nz_lowest), STAT=sts )
+		  IF (.not. ALLOCATED(sinalpha_in)) ALLOCATE( sinalpha_in( xfocus, yfocus ), STAT=sts )
+		  IF (.not. ALLOCATED(cosalpha_in)) ALLOCATE( cosalpha_in( xfocus, yfocus ), STAT=sts )
+		  IF (.not. ALLOCATED(var2d_u)) ALLOCATE( var2d_u( xfocus, yfocus ), STAT=sts )
+		  IF (.not. ALLOCATED(var2d_v)) ALLOCATE( var2d_v( xfocus, yfocus ), STAT=sts )
+		
+            	  PRINT *, "read U"
+            	  sts = NF90_INQ_VARID(ncidin, "U", u_varid)
+            	  sts = NF90_GET_VAR(ncidin, u_varid, u_in(:,:,:), &
+              	    START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus+1, yfocus, nz_lowest, 1 /) )
+            	  PRINT *, "read V"
+            	  sts = NF90_INQ_VARID(ncidin, "V", v_varid)
+            	  sts = NF90_GET_VAR(ncidin, v_varid, v_in(:,:,:), &
+              	    START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus+1, nz_lowest, 1 /) )
+            	  PRINT *, "read U10"
+            	  sts = NF90_INQ_VARID(ncidin, "U10", u10_varid)
+            	  sts = NF90_GET_VAR(ncidin, u10_varid, u10_in(:,:), &
+                    START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+            	  PRINT *, "read V10"
+            	  sts = NF90_INQ_VARID(ncidin, "V10", v10_varid)  
+            	  sts = NF90_GET_VAR(ncidin, v10_varid, v10_in(:,:), &
+                    START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+                    
+                ELSE IF (INDEX(var_cmip(ivar),"ta") == 1 ) THEN
+                
+		  IF (.not. ALLOCATED(var3d_in)) ALLOCATE( var3d_in( xfocus, yfocus, nz_lowest ), STAT=sts )
+		  IF (.not. ALLOCATED(theta_in)) ALLOCATE( theta_in( xfocus, yfocus, nz_lowest ), STAT=sts )
+		  IF (.not. ALLOCATED(pp_in)) ALLOCATE( pp_in( xfocus, yfocus, nz_lowest ), STAT=sts )
+		  IF (.not. ALLOCATED(pb_in)) ALLOCATE( pb_in( xfocus, yfocus, nz_lowest ), STAT=sts )
+		  IF (.not. ALLOCATED(p_in)) ALLOCATE( p_in( xfocus, yfocus, nz_lowest ), STAT=sts )
+		  IF (.not. ALLOCATED(var2d_in)) ALLOCATE( var2d_in( xfocus, yfocus), STAT=sts )
+		  IF (.not. ALLOCATED(var2d_out)) ALLOCATE( var2d_out( xfocus, yfocus), STAT=sts )
+             	 
+             	  PRINT *, "read P"
+
+                  sts = NF90_INQ_VARID(ncidin, "P", pp_varid)
+                  sts = NF90_GET_VAR(ncidin, pp_varid, pp_in(:,:,:), &
+                    START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz_lowest, 1 /) )
+
+                  PRINT *, "read PB"
+                  IF (.not. ALLOCATED(pb_in)) ALLOCATE( pb_in( xfocus, yfocus, nz_lowest ), STAT=sts )
+                  sts = NF90_INQ_VARID(ncidin, "PB", pb_varid)
+                  sts = NF90_GET_VAR(ncidin, pb_varid, pb_in(:,:,:), &
+                    START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz_lowest, 1 /) )
+		  
+                  PRINT *, "read T"
+            	  sts = NF90_INQ_VARID(ncidin, "T", theta_varid)
+            	  sts = NF90_GET_VAR(ncidin, theta_varid, theta_in(:,:,:), &
+              	    START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz_lowest, 1 /) )
+              	    
+                  PRINT *, "read T2"
+            	  sts = NF90_INQ_VARID(ncidin, "T2", t2_varid)
+            	  sts = NF90_GET_VAR(ncidin, t2_varid, var2d_in(:,:), &
+              	    START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+                                               				
+                                               				
+                ELSE IF (INDEX(var_cmip(ivar),"hus") == 1 ) THEN
+                
+		  IF (.not. ALLOCATED(var3d_in))   ALLOCATE( var3d_in( xfocus, yfocus, nz_lowest ), STAT=sts )
+		  IF (.not. ALLOCATED(var2d_in))   ALLOCATE( var2d_in( xfocus, yfocus), STAT=sts )
+		  IF (.not. ALLOCATED(var2d_out)) ALLOCATE( var2d_out( xfocus, yfocus), STAT=sts )
+		  
+                  PRINT *, "read QVAPOR"
+            	  sts = NF90_INQ_VARID(ncidin, "QVAPOR", qv_varid)
+            	  sts = NF90_GET_VAR(ncidin, qv_varid, var3d_in(:,:,:), &
+              	    START = (/ xoffset, yoffset, 1, it /), COUNT = (/ xfocus, yfocus, nz_lowest, 1 /) )
+              	    
+                  PRINT *, "read T2"
+            	  sts = NF90_INQ_VARID(ncidin, "Q2", q2_varid)
+            	  sts = NF90_GET_VAR(ncidin, q2_varid, var2d_in(:,:), &
+              	    START = (/ xoffset, yoffset, it /), COUNT = (/ xfocus, yfocus, 1 /) )
+              	    
+              	END IF
       				
 	    !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
             ! cll, clm, clh, clt [%] Cloud Fractions
@@ -3275,7 +3344,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
           END IF 
  
 !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-! ua and va at height > 10m [m s-1] (e.g. ua100m, va100m) wind components at height > 10m
+! ua and va at height > 10m [m s-1] (e.g. ua100m, va100m) 
 ! The code implemented from CORDEX-WRF v1.3 module https://gmd.copernicus.org/articles/12/1029/2019/
 
           IF ( ( height(ivar) > 10. ) .AND. &
@@ -3303,6 +3372,9 @@ fnNMLvar(1) = "runctrl.vars.nml"
               END DO
             END DO 
 
+            PRINT *, ph_fl(391,197,:), var3d_in_u(391,197,:), var3d_in_v(391,197,:)
+            PRINT *, u10_in(391,197), v10_in(391,197), var2d_u(391,197), var2d_v(391,197)
+              
             IF ( (INDEX(var_cmip(ivar),"ua") == 1 ) .AND. ( height(ivar) > 10 ) ) THEN
             	data_in(:,:) = var2d_u(:,:)
             ELSE IF ( (INDEX(var_cmip(ivar),"va") == 1 ) .AND. ( height(ivar) > 10 ) ) THEN
@@ -3311,9 +3383,38 @@ fnNMLvar(1) = "runctrl.vars.nml"
    
           END IF
           
-          !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-          ! Surface downward wind stress
-          ! Following Trenberth et al.(1990; doi: https://doi.org/10.1175/1520-0485(1990)020%3C1742:TMACIG%3E2.0.CO;2)
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! ta and huss at height > 10m [m s-1] (e.g. ta50m, hus50m) 
+
+          IF ( ( height(ivar) > 10. ) .AND. &
+             ( (INDEX(var_cmip(ivar),"ta") == 1 ) .OR.  (INDEX(var_cmip(ivar),"hus") == 1 ) ) ) THEN             
+             
+          
+            IF ((INDEX(var_cmip(ivar),"ta") == 1)) THEN      
+              p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)                
+              var3d_in(:,:,:) = ( theta_in(:,:,:) + T00(1) ) * ( p_in(:,:,:) / P00(1) )**(R/cp)
+            END IF
+
+            !calculating height
+            DO nl = 1,nz_lowest 
+               ph_fl(:,:,nl) = (((ph_in(:,:,nl)+phb_in(:,:,nl))+ &
+                               (ph_in(:,:,nl+1)+phb_in(:,:,nl+1)))/2./gr) - hgt_in(:,:)
+            END DO 
+      
+
+            DO i = 1,xfocus 
+              DO j = 1,yfocus
+                CALL linear_int(nz_lowest, var3d_in(i,j,:), ph_fl(i,j,:), var2d_in(i,j), real(height(ivar)), var2d_out(i,j))
+              END DO
+            END DO 
+            
+            data_in(:,:) = var2d_out(:,:)
+   
+          END IF
+          
+!- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+! Surface downward wind stress
+! Following Trenberth et al.(1990; doi: https://doi.org/10.1175/1520-0485(1990)020%3C1742:TMACIG%3E2.0.CO;2)
 
           IF ( (var_cmip(ivar) == "tauu") .OR. (var_cmip(ivar) == "tauv") ) THEN
 
@@ -4163,25 +4264,24 @@ IMPLICIT NONE
 INTEGER, INTENT(in)                 :: nz
 REAL, DIMENSION(nz), INTENT(in)     :: u,v,z
 REAL, INTENT(in)                    :: u10, v10, sa, ca, newz
-REAL, INTENT(out)                   :: unewz, vnewz
+REAL, INTENT(out)                   :: unewz, vnewz 
 
 ! Local
 INTEGER                             :: inear
 REAL                                :: zaground
 REAL, DIMENSION(2)                  :: v1, v2, zz, alpha, uvnewz
+REAL                                :: min_value=1.0e-7
+
 
 !!!!!!! Variables
 ! nz: number of vertical levels
 ! u,v: vertical wind components [ms-1]
 ! z: height above surface [m]
 ! u10,v10: 10-m wind components [ms-1]
-! topo: topographical height [m]
 ! sa, ca: local sine and cosine of map rotation [1.]
 ! newz: height to which extrapolate
 ! unewz,vnewz: Wind compoonents at the given height [ms-1]
 
-!!WRITE(message,*)' ilev zaground newz z[ilev+1] z[ilev+2] _______'
-!!CALL wrf_debug(750,message)
 ! Looking for the level  below desired height
 IF (z(1) < newz ) THEN
   DO inear = 1,nz-2
@@ -4191,55 +4291,94 @@ IF (z(1) < newz ) THEN
     ! zaground = z(inear+2)
     ! Here we interpolate between levels
     zaground = z(inear+1)
-    !!WRITE(message,*)inear, z(inear), newz, z(inear+1), z(inear+2)
-    !!CALL wrf_debug(750,message)
     IF ( zaground >= newz) EXIT
   END DO
 ELSE
-  !!WRITE(message,*)1, z(1), newz, z(2), z(3), ' z(1) > newz'
-  !!CALL wrf_debug(750,message)
   inear = nz - 2
 END IF
 
 IF (inear == nz-2) THEN
 ! No vertical pair of levels is below newz, using 10m wind as first value
 ! and the first level as the second
-   v1(1) = u10
-   v1(2) = v10
-   v2(1) = u(1)
-   v2(2) = v(1)
+   v1(1) = sign(MAX(ABS(u10),min_value),u10) 
+   v1(2) = sign(MAX(ABS(v10),min_value),v10)  
+   v2(1) = sign(MAX(ABS(u(1)),min_value),u(1)) 
+   v2(2) = sign(MAX(ABS(v(1)),min_value),v(1)) 
    zz(1) = 10.
    zz(2) = z(1)
 ELSE
-   v1(1) = u(inear)
-   v1(2) = v(inear)
-   v2(1) = u(inear+1)
-   v2(2) = v(inear+1)
+   v1(1) = sign(MAX(ABS(u(inear)),min_value),u(inear))
+   v1(2) = sign(MAX(ABS(v(inear)),min_value),v(inear))
+   v2(1) = sign(MAX(ABS(u(inear+1)),min_value),u(inear+1))
+   v2(2) = sign(MAX(ABS(v(inear+1)),min_value),v(inear+1))
    zz(1) = z(inear)
    zz(2) = z(inear+1)
 END IF
 
 ! Computing for each component
 alpha = (LOG(ABS(v2))-LOG(ABS(v1)))/(LOG(zz(2))-LOG(zz(1)))
-!!WRITE(message,*)' Computing with v1:', v1, ' ms-1 v2:', v2, ' ms-1'
-!!CALL wrf_debug(750,message)
-!!WRITE(message,*)' z1:', zz(1), 'm z2:', zz(2), ' m'
-!!CALL wrf_debug(750,message)
-!!WRITE(message,*)' alhpa u:', alpha(1), ' alpha 2:', alpha(2)
-!!CALL wrf_debug(750,message)
-
 uvnewz = v1*(newz/zz(1))**alpha
 
 ! Earth-rotation
 unewz = uvnewz(1)*ca - uvnewz(2)*sa
 vnewz = uvnewz(2)*sa + uvnewz(2)*ca
 
-!!WRITE(message,*)'  result vz:', uvnewz
-!!CALL wrf_debug(750,message)
-
 RETURN
 
 END SUBROUTINE var_zwind
+
+!===============================================================================
+
+SUBROUTINE linear_int(nz, var3d, z, var2d, newz, varout)
+!!!!!!! Variables
+! nz: number of vertical levels
+! var3d: 3d variable
+! z: height above surface [m]
+! var2d: 2d variable (near-surface variable)
+! newz: height to which extrapolate
+! unewz,vnewz: Wind compoonents at the given height [ms-1]
+
+IMPLICIT NONE
+
+INTEGER, INTENT(in)                 :: nz
+REAL, DIMENSION(nz), INTENT(in)     :: var3d, z
+REAL, INTENT(in)                    :: var2d, newz
+REAL, INTENT(out)                   :: varout 
+
+! Local
+INTEGER                             :: inear
+REAL                                :: zaground, slope
+REAL, DIMENSION(2)                  :: var, zz
+
+IF (z(1) < newz ) THEN
+  DO inear = 1,nz-2
+    zaground = z(inear+1)
+    IF ( zaground >= newz) EXIT
+  END DO
+ELSE
+  inear = nz - 2
+END IF
+
+IF (inear == nz-2) THEN
+! No vertical pair of levels is below newz, using 2m variable as first value
+! and the first level as the second
+   var(1) = var2d 
+   var(2) = var3d(1)  
+   zz(1)  = 2.
+   zz(2)  = z(1)
+ELSE
+   var(1) = var3d(inear)
+   var(2) = var3d(inear+1)
+   zz(1) = z(inear)
+   zz(2) = z(inear+1)
+END IF
+
+slope = (var(2)-var(1))/(zz(2)-zz(1))
+varout = var(1) + (newz - zz(1)*slope
+
+RETURN
+
+END SUBROUTINE linear_int
 
 !===============================================================================
 
