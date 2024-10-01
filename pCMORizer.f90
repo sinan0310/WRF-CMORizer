@@ -4374,7 +4374,7 @@ ELSE
 END IF
 
 slope = (var(2)-var(1))/(zz(2)-zz(1))
-varout = var(1) + (newz - zz(1)*slope
+varout = var(1) + (newz - zz(1))*slope
 
 RETURN
 
