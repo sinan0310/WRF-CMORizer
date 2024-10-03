@@ -73,10 +73,6 @@ tail -n +2 "$CSV_FILE" | while IFS=, eval "read "$read_template; do
     elif ! grep -q $VARIABLE CORDEX_CMIP6_variables.csv; then
         echo "Warning: Variable $VARIABLE not found in Fortran 90 file. Skipping..."
         echo "$VARIABLE" >> "variables_not_processed_${PROJECT}.txt"
-    
-    # Variables ta50m and hus50 cannot be caluclated, since vertical interpolation of scalar variables is not implemented in the code
-    elif [[ $VARIABLE == "ta50m" || $VARIABLE == "hus50m" ]]; then
-        echo "$VARIABLE" >> "variables_not_processed_${PROJECT}.txt"
 
     # Monthly aggregation is not implemnetd in the code
     elif [ $FREQ == "mon" ]; then
