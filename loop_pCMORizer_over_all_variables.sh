@@ -58,27 +58,24 @@ tail -n +2 "$CSV_FILE" | while IFS=, eval "read "$read_template; do
     FREQ=$frequency
 
     # Check if FREQ is 'day' and if VARIABLE with '1hr' does not exist, set frequency to 1hr
-    if [ "$FREQ" == "day" ] && \
-       ! grep -q "$VARIABLE,1hr" "$CSV_FILE"; then
+    if [ "$FREQ" == "day" ] && ! grep -q "$VARIABLE,1hr" "$CSV_FILE"; then
+       FREQ="1hr"
+    elif [ "$FREQ" == "mon" ] && ! grep -q "$VARIABLE,day" "$CSV_FILE"; then
        FREQ="1hr"
     fi
     
     # Check if variable can be processed - if available in wrfout or if can be calculated 
-    if grep -q "$VARIABLE,-999" CORDEX_CMIP6_variables.csv && ! grep -q $VARIABLE pCMORizer.f90 \
-	&& [[ "$VARIABLE" != "ta"* && "$VARIABLE" != "zg"* && "$VARIABLE" != "va"* \
-        && "$VARIABLE" != "ua"* && "$VARIABLE" != "wa"* && "$VARIABLE" != "hus"*  ]]; then
-        echo "Warning: Variable $VARIABLE not found in Fortran 90 file. Skipping..."
-        echo "$VARIABLE" >> "variables_not_processed_${PROJECT}.txt"
+    if [[ ${VARIABLE} == "evspsblpot" ]] && grep -q "${VARIABLE},-999" CORDEX_CMIP6_variables.csv; then
+        echo "${VARIABLE} not available in the current version of pCMORzier" >> "variables_not_processed_${PROJECT}.txt"
+
+    elif [ ${VARIABLE} == "tasmin" ] || [ ${VARIABLE} == "tasmax" ]; then
+        echo "${VARIABLE} for 1hr not needed. Daily values will be extracted from tas." >> "variables_not_processed_${PROJECT}.txt"
 
     elif ! grep -q $VARIABLE CORDEX_CMIP6_variables.csv; then
         echo "Warning: Variable $VARIABLE not found in Fortran 90 file. Skipping..."
         echo "$VARIABLE" >> "variables_not_processed_${PROJECT}.txt"
 
-    # Monthly aggregation is not implemnetd in the code
-    elif [ $FREQ == "mon" ]; then
-        echo "Warning: Frequency $FREQ cannot be processed, skipping..."
-   
-    else     
+    elif [ $FREQ != "mon" ] && [ "$FREQ" != "day" ]; then # Monthly aggregation is not implemnetd in the code
         echo "Variable: $VARIABLE, Frequency: $FREQ"
         if [ "$FREQ" != "day" ]; then
           echo "$YEAR $DOMAIN $VARIABLE $EXP"
