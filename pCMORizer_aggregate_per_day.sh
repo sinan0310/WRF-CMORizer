@@ -61,28 +61,37 @@ read_template=$(printf ' %s' "${headers[@]}")
 process_variable() {
     local VARIABLE=$1
     # Find the aggregation method in the csv file
-    local METHOD=$(grep "time:" <<< "$cell_methods" | awk -F"time: " '{print $2}' | awk '{print $1}')
+    local cell_method=$(grep "time:" <<< "$cell_methods" | awk -F"time: " '{print $2}' | awk '{print $1}')
     
     # Set the cdo command corresponing to the aggregation method
-    if [ "$METHOD" = "maximum" ]; then
+    if [ "${cell_method}" = "maximum" ]; then
         METHOD="max"
-    elif [ "$METHOD" = "minimum" ]; then
+    elif [ "${cell_method}" = "minimum" ]; then
         METHOD="min"
-    elif [ "$METHOD" = "sum" ]; then
-        METHOD="sum"
+    else
+        METHOD=${cell_method}
     fi
 
-    if [ -d "$DATAPATH/1hr/$VARIABLE" ]; then 
-        if ls "$DATAPATH/1hr/$VARIABLE/"*/*_$YEAR*.nc 1>/dev/null 2>&1; then
-            echo "Calculating daily values for $VARIABLE"
+    if [ "${VARIABLE}" == "tasmin" ] || [ "${VARIABLE}" == "tasmax" ] ; then
+      VARFILE="tas"
+    else
+      VARFILE=${VARIABLE}
+    fi
+
+    if [ -d "$DATAPATH/1hr/$VARFILE" ]; then 
+        if ls "$DATAPATH/1hr/$VARFILE/"*/*_$YEAR*.nc 1>/dev/null 2>&1; then
+            echo "Calculating daily $METHOD values for $VARFILE"
             
             # Loop over files 
-            for file in "$DATAPATH/1hr/$VARIABLE/"*/*_$YEAR*.nc; do
+            for file in "$DATAPATH/1hr/$VARFILE/"*/*_$YEAR*.nc; do
 
                 # Set the correct name of the file
                 FNAME=$(basename `ls $file`)
                 FNAME_DAY="${FNAME/_1hr_/_day_}"
                 FNAME_DAY="${FNAME_DAY//0000/}"
+                FNAME_DAY="${FNAME_DAY//2300/}"                
+                FNAME_DAY="${FNAME_DAY//0030/}"
+                FNAME_DAY="${FNAME_DAY//2330/}"
                 
                 # Create directory
                 OUTDIR=$DATAPATH/day/$VARIABLE/$VERSION/
@@ -95,7 +104,14 @@ process_variable() {
                 ncatted -O -h -a CDI,global,d,, $OUTDIR/$FNAME_DAY
                 ncatted -O -h -a history,global,d,, $OUTDIR/$FNAME_DAY
                 ncatted -O -h -a CDO,global,d,, $OUTDIR/$FNAME_DAY
-                ncatted -O -h -a tracking_id,global,m,c,"hdl:21.14103/`uuidgen`" $OUTDIR/$FNAME_DAY          
+                ncatted -O -h -a tracking_id,global,m,c,"hdl:21.14103/`uuidgen`" $OUTDIR/$FNAME_DAY       
+
+                if [ "${VARIABLE}" == "tasmin" ] || [ "${VARIABLE}" == "tasmax" ] ; then
+                  ncrename -h -v ${VARFILE},${VARIABLE} $OUTDIR/$FNAME_DAY
+                  ncatted  -h -a long_name,${VARIABLE},m,c,"Daily ${cell_method^} Near-Surface Air Temperature" $OUTDIR/$FNAME_DAY
+                  ncatted  -h -a cell_methods,${VARIABLE},m,c,"time: $METHOD" $OUTDIR/$FNAME_DAY
+                  rename ${VARFILE}_ ${VARIABLE}_ $OUTDIR/$FNAME_DAY
+                fi   
             done 
         else
             echo "$VARIABLE not processed, no 1hr data available" >> "$PWD/daily_variables_not_processed.txt"
