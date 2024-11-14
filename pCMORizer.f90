@@ -748,12 +748,14 @@ fnNMLvar(1) = "runctrl.vars.nml"
         END IF
 
         IF ( frequency(ifrq) == "fx" ) THEN
-          nfiles = 2   ! Since the loop over files does not take the last file into account
+          nfiles = 1                ! Since the loop over files does not take the last file into account
+        ELSE IF (aggregation_yearly) THEN
+          nfiles = SIZE(fl_input)-1 ! To avoid creating output for the next year with only 1 day
         ELSE
           nfiles = SIZE(fl_input)
         END IF
 
-        DO ifl = 1, nfiles-1, 1 ! operational: loop over complete filelist
+        DO ifl = 1, nfiles, 1 ! operational: loop over complete filelist
 
           PRINT *,"============================================================"
           PRINT *, "filelist filetype = ", filetype(ivar) 
