@@ -110,6 +110,7 @@ process_variable() {
                   ncrename -h -v ${VARFILE},${VARIABLE} $OUTDIR/$FNAME_DAY
                   ncatted  -h -a long_name,${VARIABLE},m,c,"Daily ${cell_method^} Near-Surface Air Temperature" $OUTDIR/$FNAME_DAY
                   ncatted  -h -a cell_methods,${VARIABLE},m,c,"time: $METHOD" $OUTDIR/$FNAME_DAY
+                  ncatted  -h -a variable_id,global,m,c,${VARIABLE} $OUTDIR/$FNAME_DAY
                   rename ${VARFILE}_ ${VARIABLE}_ $OUTDIR/$FNAME_DAY
                 fi   
             done 
