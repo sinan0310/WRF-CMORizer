@@ -4323,7 +4323,7 @@ uvnewz = v1*(newz/zz(1))**alpha
 
 ! Earth-rotation
 unewz = uvnewz(1)*ca - uvnewz(2)*sa
-vnewz = uvnewz(2)*sa + uvnewz(2)*ca
+vnewz = uvnewz(1)*sa + uvnewz(2)*ca
 
 RETURN
 
