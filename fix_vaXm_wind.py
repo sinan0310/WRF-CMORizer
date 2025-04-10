@@ -21,7 +21,7 @@ def correct_va_wind_component(ua_file_path, va_wrong_file_path, geo_em_path):
         va_wrong_file with corrected va_values
         
     To run:
-        python fix_vaXmeters_wind.py ua_file va_wrong_file geo_em
+        python fix_vaXm_wind.py ua_file va_wrong_file geo_em
     """
 
     # Load ua from correct file
