@@ -3001,12 +3001,12 @@ fnNMLvar(1) = "runctrl.vars.nml"
               DO j = 1,yfocus
                  var3d_in_v(:,j,:) = 0.5*(v_in(:,j,:)+v_in(:,j+1,:))*sinalpha_in(:,:)   
               END DO
-              var3d_in(:,:,:) = var3d_in_u(:,:,:) - var3d_in_v(:,:,:)
 
               ! linear in p
               !$OMP PARALLEL DO
               DO i = 1,xfocus 
                 DO j = 1,yfocus
+                  var3d_in(i,j,:) = var3d_in_u(i,j,:)*cosalpha_in(i,j)- var3d_in_v(i,j,:)*sinalpha_in(i,j)
                   DO nl = 1,nz - 1
                     IF (pout(np).LE.p_in(i,j,nl) .AND. pout(np).GT.p_in(i,j,nl+1)) THEN
                       slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/&
@@ -3023,17 +3023,17 @@ fnNMLvar(1) = "runctrl.vars.nml"
             ELSE IF ( (INDEX(var_cmip(ivar),"va") == 1) .AND. (filetype(ivar) == "s" ) ) THEN
               ! rotate to earth grid and destagger
               DO i = 1,xfocus
-                 var3d_in_u(i,:,:) = 0.5*(u_in(i,:,:)+u_in(i+1,:,:))*sinalpha_in(:,:) 
+                 var3d_in_u(i,:,:) = 0.5*(u_in(i,:,:)+u_in(i+1,:,:)) 
               END DO
               DO j = 1,yfocus
-                 var3d_in_v(:,j,:) = 0.5*(v_in(:,j,:)+v_in(:,j+1,:))*cosalpha_in(:,:)  
+                 var3d_in_v(:,j,:) = 0.5*(v_in(:,j,:)+v_in(:,j+1,:))  
               END DO
-              var3d_in(:,:,:) = var3d_in_u(:,:,:) + var3d_in_v(:,:,:)
-              
+
               ! linear in p
               !$OMP PARALLEL DO
               DO i = 1,xfocus 
                 DO j = 1,yfocus
+                  var3d_in(i,j,:) = var3d_in_u(i,j,:)*sinalpha_in(i,j) + var3d_in_v(i,j,:)*cosalpha_in(i,j)
                   DO nl = 1,nz - 1
                     IF (pout(np).LE.p_in(i,j,nl) .AND. pout(np).GT.p_in(i,j,nl+1)) THEN                
                       slope = (var3d_in(i,j,nl)-var3d_in(i,j,nl+1))/&
