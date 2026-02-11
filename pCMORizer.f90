@@ -2996,10 +2996,10 @@ fnNMLvar(1) = "runctrl.vars.nml"
               ! rotate to earth grid and destagger
               PRINT *, "calc ua..."
               DO i = 1,xfocus
-                 var3d_in_u(i,:,:) = 0.5*(u_in(i,:,:)+u_in(i+1,:,:))*cosalpha_in(:,:)     
+                 var3d_in_u(i,:,:) = 0.5*(u_in(i,:,:)+u_in(i+1,:,:))     
               END DO
               DO j = 1,yfocus
-                 var3d_in_v(:,j,:) = 0.5*(v_in(:,j,:)+v_in(:,j+1,:))*sinalpha_in(:,:)   
+                 var3d_in_v(:,j,:) = 0.5*(v_in(:,j,:)+v_in(:,j+1,:))
               END DO
 
               ! linear in p
