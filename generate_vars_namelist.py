@@ -174,10 +174,8 @@ def create_vararray(varname, filepath):
             if "tasmax" in varname or "tasmin" in varname:
                 #ftype="'x'"
                 ftype="'s'"
-            elif plevel != "-999" and "wa" not in varname and plevel in map(str, wrfpress_levels): 
-                ftype="'p'" 
-            elif varname == "od550aer": 
-                ftype="'p'"               
+            #elif plevel != "-999" and "wa" not in varname and plevel in map(str, wrfpress_levels): 
+            #    ftype="'p'"               
             else:
                 ftype="'s'"            
                                          
