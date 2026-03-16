@@ -15,7 +15,7 @@ clt,CLDFRA,%,a,Total Cloud Cover Percentage,cloud_area_fraction,x,x,,,x,CORE
 rsds,ACSWDNB,W m-2,a,Surface Downwelling Shortwave Radiation,surface_downwelling_shortwave_flux_in_air,x,x,,,x,CORE
 rlds,ACLWDNB,W m-2,a,Surface Downwelling Longwave Radiation,surface_downwelling_longwave_flux_in_air,x,x,,,x,CORE
 orog,HGT,m,,Surface Altitude,surface_altitude,,,,,,CORE
-sftlf,XLAND,%,,Percentage of the Grid Cell Occupied by Land,land_area_fraction,,,,,,CORE
+sftlf,LANDMASK,%,,Percentage of the Grid Cell Occupied by Land,land_area_fraction,,,,,,CORE
 evspsblpot,POTEVP,kg m-2 s-1,a,Potential Evapotranspiration,water_potential_evaporation_flux,x,x,,,x,TIER 2
 wsgsmax,-999,m s-1,,Daily Maximum Near-Surface Wind Speed of Gust,wind_speed_of_gust ,x,x,,,,TIER 2
 clh,CLDFRA,%,a,High Level Cloud Fraction,cloud_area_fraction_in_atmosphere_layer,x,x,x,,,TIER 2
