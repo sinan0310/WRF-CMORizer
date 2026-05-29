@@ -1324,28 +1324,28 @@ fnNMLvar(1) = "runctrl.vars.nml"
               IF ( projection == "LCC" ) THEN
               	! included for for lamber conformal projection 
 
-                sts = nf90_def_var(ncid, "x", NF90_DOUBLE, (/ x_dimid /), xlon_varid)
+                sts = nf90_def_var(ncid, "x", NF90_DOUBLE, (/ x_dimid /), xlon_varid, fletcher32 = .true.)
                 sts = nf90_def_var_deflate(ncid, xlon_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, xlon_varid, "standard_name", "projection_x_coordinate")
                 sts = nf90_put_att(ncid, xlon_varid, "long_name", "X Coordinate Of Projection")
                 sts = nf90_put_att(ncid, xlon_varid, "units", "m")
                 sts = nf90_put_att(ncid, xlon_varid, "axis", "X")
   
-                sts = nf90_def_var(ncid, "y", NF90_DOUBLE, (/ y_dimid /), ylat_varid)
+                sts = nf90_def_var(ncid, "y", NF90_DOUBLE, (/ y_dimid /), ylat_varid, fletcher32 = .true.))
                 sts = nf90_def_var_deflate(ncid, ylat_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, ylat_varid, "standard_name", "projection_y_coordinate")
                 sts = nf90_put_att(ncid, ylat_varid, "long_name", "Y Coordinate Of Projection")
                 sts = nf90_put_att(ncid, ylat_varid, "units", "m")
                 sts = nf90_put_att(ncid, ylat_varid, "axis", "Y")
  
-                sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ x_dimid, y_dimid /), lon_varid)
+                sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ x_dimid, y_dimid /), lon_varid, fletcher32 = .true.))
                 sts = nf90_def_var_deflate(ncid, lon_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, lon_varid, "standard_name", "longitude")
                 sts = nf90_put_att(ncid, lon_varid, "long_name", "Longitude")
                 sts = nf90_put_att(ncid, lon_varid, "units", "degrees_east")
                 sts = nf90_put_att(ncid, lon_varid, "_CoordinateAxisType", "Lon") ! special addon, not needed, but allowed
 
-                sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ x_dimid, y_dimid /), lat_varid)
+                sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ x_dimid, y_dimid /), lat_varid, fletcher32 = .true.))
                 sts = nf90_def_var_deflate(ncid, lat_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, lat_varid, "standard_name", "latitude")
                 sts = nf90_put_att(ncid, lat_varid, "long_name", "Latitude")
@@ -1363,37 +1363,37 @@ fnNMLvar(1) = "runctrl.vars.nml"
                 
               ELSE              
               	! included for for rotated projection  
-                sts = nf90_def_var(ncid, "rlon", NF90_DOUBLE, (/ lon_dimid /), rlon_varid)
+                sts = nf90_def_var(ncid, "rlon", NF90_DOUBLE, (/ lon_dimid /), rlon_varid, fletcher32 = .true.))
                 sts = nf90_def_var_deflate(ncid, rlon_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, rlon_varid, "standard_name", "grid_longitude")
                 sts = nf90_put_att(ncid, rlon_varid, "long_name", "Longitude in rotated pole grid")
                 sts = nf90_put_att(ncid, rlon_varid, "units", "degrees")
                 sts = nf90_put_att(ncid, rlon_varid, "axis", "X")
   
-                sts = nf90_def_var(ncid, "rlat", NF90_DOUBLE, (/ lat_dimid /), rlat_varid)
+                sts = nf90_def_var(ncid, "rlat", NF90_DOUBLE, (/ lat_dimid /), rlat_varid, fletcher32 = .true.))
                 sts = nf90_def_var_deflate(ncid, rlat_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, rlat_varid, "standard_name", "grid_latitude")
                 sts = nf90_put_att(ncid, rlat_varid, "long_name", "Latitude in rotated pole grid")
                 sts = nf90_put_att(ncid, rlat_varid, "units", "degrees")
                 sts = nf90_put_att(ncid, rlat_varid, "axis", "Y")
 
-                sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lon_varid)
+                sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lon_varid, fletcher32 = .true.))
                 sts = nf90_def_var_deflate(ncid, lon_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, lon_varid, "standard_name", "longitude")
                 sts = nf90_put_att(ncid, lon_varid, "long_name", "Longitude")
                 sts = nf90_put_att(ncid, lon_varid, "units", "degrees_east")
 
-                sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lat_varid)
+                sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lat_varid, fletcher32 = .true.))
                 sts = nf90_def_var_deflate(ncid, lat_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, lat_varid, "standard_name", "latitude")
                 sts = nf90_put_att(ncid, lat_varid, "long_name", "Latitude")
                 sts = nf90_put_att(ncid, lat_varid, "units", "degrees_north") 
 
-		sts = nf90_def_var(ncid, "crs", NF90_CHAR, rotated_pole_varid)
-		!sts = nf90_put_att(ncid, rotated_pole_varid, "long_name", "Coordinates of the rotated North Pole")
-		sts = nf90_put_att(ncid, rotated_pole_varid, "grid_mapping_name", "rotated_latitude_longitude")
-		sts = nf90_put_att(ncid, rotated_pole_varid, "grid_north_pole_latitude", GeoNPLat)
-		sts = nf90_put_att(ncid, rotated_pole_varid, "grid_north_pole_longitude", GeoNPLon)
+		            sts = nf90_def_var(ncid, "crs", NF90_CHAR, rotated_pole_varid)
+		            !sts = nf90_put_att(ncid, rotated_pole_varid, "long_name", "Coordinates of the rotated North Pole")
+		            sts = nf90_put_att(ncid, rotated_pole_varid, "grid_mapping_name", "rotated_latitude_longitude")
+		            sts = nf90_put_att(ncid, rotated_pole_varid, "grid_north_pole_latitude", GeoNPLat)
+		            sts = nf90_put_att(ncid, rotated_pole_varid, "grid_north_pole_longitude", GeoNPLon)
                 sts = nf90_put_att(ncid, rotated_pole_varid, "earth_radius", erad)
 
 		! additional and useful
@@ -1409,7 +1409,8 @@ fnNMLvar(1) = "runctrl.vars.nml"
 
               ! included for near surface variables at some height
               IF ( height(ivar) /= -999 ) THEN
-                sts = nf90_def_var(ncid, "height", NF90_DOUBLE, (/ height_dimid /), height_varid)
+                sts = nf90_def_var(ncid, "height", NF90_DOUBLE, (/ height_dimid /), height_varid, fletcher32 = .true.)
+                sts = nf90_def_var_deflate(ncid, height_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, height_varid, "standard_name", "height")
                 sts = nf90_put_att(ncid, height_varid, "long_name", "height")
                 sts = nf90_put_att(ncid, height_varid, "units", "m")
@@ -1419,7 +1420,8 @@ fnNMLvar(1) = "runctrl.vars.nml"
 
               ! included for variables on some pressure level
               IF ( plevel(ivar) /= -999 ) THEN
-                sts = nf90_def_var(ncid, "plev", NF90_DOUBLE, (/ plev_dimid /), plev_varid)
+                sts = nf90_def_var(ncid, "plev", NF90_DOUBLE, (/ plev_dimid /), plev_varid, fletcher32 = .true.)
+                sts = nf90_def_var_deflate(ncid, plev_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, plev_varid, "standard_name", "air_pressure")
                 sts = nf90_put_att(ncid, plev_varid, "long_name", "pressure")
                 sts = nf90_put_att(ncid, plev_varid, "units", "Pa")
@@ -1434,24 +1436,28 @@ fnNMLvar(1) = "runctrl.vars.nml"
               IF ((TRIM(var_cmip(ivar)) == 'mrsol') .OR. &
                   (TRIM(var_cmip(ivar)) == 'mrsfl') .OR. &
                   (TRIM(var_cmip(ivar)) == 'tsl')) THEN
-                sts = nf90_def_var(ncid, "sdepth", NF90_DOUBLE, (/ depth_dimid /), depth_varid)
+                sts = nf90_def_var(ncid, "sdepth", NF90_DOUBLE, (/ depth_dimid /), depth_varid, fletcher32 = .true.)
+                sts = nf90_def_var_deflate(ncid, depth_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, depth_varid, "standard_name", "depth")
                 sts = nf90_put_att(ncid, depth_varid, "long_name", "Soil layer depth")
                 sts = nf90_put_att(ncid, depth_varid, "units", "m")
                 sts = nf90_put_att(ncid, depth_varid, "positive", "down")
                 sts = nf90_put_att(ncid, depth_varid, "axis", "Z")
                 sts = nf90_put_att(ncid, depth_varid, "bounds", "sdepth_bnds")
-                sts = nf90_def_var(ncid, "sdepth_bnds", NF90_DOUBLE, (/ nb2_dimid, depth_dimid /), soillayerbnds_varid)
+                sts = nf90_def_var(ncid, "sdepth_bnds", NF90_DOUBLE, (/ nb2_dimid, depth_dimid /), soillayerbnds_varid, fletcher32 = .true.)
+                sts = nf90_def_var_deflate(ncid, soillayerbnds_varid, 1, 1, 1)
               ENDIF
  
               ! included variabels averaged between levels  
               IF ( cell_methods(ivar) == "vmean" ) THEN
-                sts = nf90_def_var(ncid, "plev_bnds", NF90_DOUBLE, (/ nb2_dimid /), plevbnds_varid)
+                sts = nf90_def_var(ncid, "plev_bnds", NF90_DOUBLE, (/ nb2_dimid /), plevbnds_varid, fletcher32 = .true.)
+                sts = nf90_def_var_deflate(ncid, plevbnds_varid, 1, 1, 1)
               END IF
   
               ! included always
               IF (frequency(ifrq) /= 'fx') THEN
-                sts = nf90_def_var(ncid, "time", NF90_DOUBLE, (/ rec_dimid /), rec_varid)
+                sts = nf90_def_var(ncid, "time", NF90_DOUBLE, (/ rec_dimid /), rec_varid, fletcher32 = .true.)
+                sts = nf90_def_var_deflate(ncid, rec_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, rec_varid, "standard_name", "time")
                 sts = nf90_put_att(ncid, rec_varid, "long_name", "Time")
                 sts = nf90_put_att(ncid, rec_varid, "units", "days since " // tstot(1:10) // "T" // tstot(12:19) // "Z" )
@@ -1468,7 +1474,8 @@ fnNMLvar(1) = "runctrl.vars.nml"
                      ( cell_methods(ivar) == "sum" ) .OR. &
                      ( cell_methods(ivar) == "minimum" ) .OR. &
                      ( cell_methods(ivar) == "maximum" ) ) THEN
-                  sts = nf90_def_var(ncid, "time_bnds", NF90_DOUBLE, (/ nb2_dimid, rec_dimid /), recbnds_varid)
+                  sts = nf90_def_var(ncid, "time_bnds", NF90_DOUBLE, (/ nb2_dimid, rec_dimid /), recbnds_varid, fletcher32 = .true.)
+                  sts = nf90_def_var_deflate(ncid, recbnds_varid, 1, 1, 1)
                 END IF
               END IF        
 
@@ -1509,24 +1516,23 @@ fnNMLvar(1) = "runctrl.vars.nml"
               ! compression on/off: 19MB->12MB, 0.1s->0.5s
               ! chunking: needs some careful considerations
               ! nf90_def_var_deflate(ncid, varid, shuffle, deflate, deflate_level)
-              sts = nf90_def_var_deflate(ncid, x_varid, 1, 1, 1)
              
               ! Define dimensions for the LCC and ROT projections
               IF ( projection == "LCC" ) THEN
                 IF ((var_cmip(ivar) == "mrsol") .OR. (var_cmip(ivar) == "mrsfl") .OR. (var_cmip(ivar) == "tsl")) THEN
-                  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid, depth_dimid, rec_dimid /), x_varid)
+                  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid, depth_dimid, rec_dimid /), x_varid, fletcher32 = .true.)
                 ELSE IF (frequency(ifrq) == 'fx') THEN
-                  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid/), x_varid)
+                  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid/), x_varid, fletcher32 = .true.)
                 ELSE
-                  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid, rec_dimid /), x_varid)
+                  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ x_dimid, y_dimid, rec_dimid /), x_varid, fletcher32 = .true.)
                 END IF                 
               ELSE
                 IF ((var_cmip(ivar) == "mrsol") .OR. (var_cmip(ivar) == "mrsfl") .OR. (var_cmip(ivar) == "tsl")) THEN
-                  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, depth_dimid, rec_dimid /), x_varid)
+                  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, depth_dimid, rec_dimid /), x_varid, fletcher32 = .true.)
                 ELSE IF (frequency(ifrq) == 'fx') THEN
-                  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid/), x_varid)
+                  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid/), x_varid, fletcher32 = .true.)
                 ELSE
-                  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, rec_dimid /), x_varid)
+                  sts = nf90_def_var(ncid, var_cmip(ivar), NF90_FLOAT, (/ lon_dimid, lat_dimid, rec_dimid /), x_varid, fletcher32 = .true.)
                 END IF
               END IF            
 
@@ -1556,18 +1562,14 @@ fnNMLvar(1) = "runctrl.vars.nml"
                 sts = nf90_put_att(ncid, x_varid, "coordinates", "lat lon")
               END IF
 
-              IF ( projection == "LCC" ) THEN
-                sts = nf90_put_att(ncid, x_varid, "grid_mapping", "crs")              
-              ELSE
-                sts = nf90_put_att(ncid, x_varid, "grid_mapping", "crs")
-              END IF
+              sts = nf90_put_att(ncid, x_varid, "grid_mapping", "crs")
 
               ! Set missing value and fill_value for the variable
               sts = nf90_put_att(ncid, x_varid, "missing_value", mv)
               sts = nf90_put_att(ncid, x_varid, "_FillValue", mv)
-
+              
               !-----------------------------------------------------------------
-  
+              sts = nf90_def_var_deflate(ncid, x_varid, 1, 1, 1)
               sts = NF90_ENDDEF(ncid)
 
               !-----------------------------------------------------------------
