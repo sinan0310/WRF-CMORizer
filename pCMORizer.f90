@@ -1331,21 +1331,21 @@ fnNMLvar(1) = "runctrl.vars.nml"
                 sts = nf90_put_att(ncid, xlon_varid, "units", "m")
                 sts = nf90_put_att(ncid, xlon_varid, "axis", "X")
   
-                sts = nf90_def_var(ncid, "y", NF90_DOUBLE, (/ y_dimid /), ylat_varid, fletcher32 = .true.))
+                sts = nf90_def_var(ncid, "y", NF90_DOUBLE, (/ y_dimid /), ylat_varid, fletcher32 = .true.)
                 sts = nf90_def_var_deflate(ncid, ylat_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, ylat_varid, "standard_name", "projection_y_coordinate")
                 sts = nf90_put_att(ncid, ylat_varid, "long_name", "Y Coordinate Of Projection")
                 sts = nf90_put_att(ncid, ylat_varid, "units", "m")
                 sts = nf90_put_att(ncid, ylat_varid, "axis", "Y")
  
-                sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ x_dimid, y_dimid /), lon_varid, fletcher32 = .true.))
+                sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ x_dimid, y_dimid /), lon_varid, fletcher32 = .true.)
                 sts = nf90_def_var_deflate(ncid, lon_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, lon_varid, "standard_name", "longitude")
                 sts = nf90_put_att(ncid, lon_varid, "long_name", "Longitude")
                 sts = nf90_put_att(ncid, lon_varid, "units", "degrees_east")
                 sts = nf90_put_att(ncid, lon_varid, "_CoordinateAxisType", "Lon") ! special addon, not needed, but allowed
 
-                sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ x_dimid, y_dimid /), lat_varid, fletcher32 = .true.))
+                sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ x_dimid, y_dimid /), lat_varid, fletcher32 = .true.)
                 sts = nf90_def_var_deflate(ncid, lat_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, lat_varid, "standard_name", "latitude")
                 sts = nf90_put_att(ncid, lat_varid, "long_name", "Latitude")
@@ -1363,27 +1363,27 @@ fnNMLvar(1) = "runctrl.vars.nml"
                 
               ELSE              
               	! included for for rotated projection  
-                sts = nf90_def_var(ncid, "rlon", NF90_DOUBLE, (/ lon_dimid /), rlon_varid, fletcher32 = .true.))
+                sts = nf90_def_var(ncid, "rlon", NF90_DOUBLE, (/ lon_dimid /), rlon_varid, fletcher32 = .true.)
                 sts = nf90_def_var_deflate(ncid, rlon_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, rlon_varid, "standard_name", "grid_longitude")
                 sts = nf90_put_att(ncid, rlon_varid, "long_name", "Longitude in rotated pole grid")
                 sts = nf90_put_att(ncid, rlon_varid, "units", "degrees")
                 sts = nf90_put_att(ncid, rlon_varid, "axis", "X")
   
-                sts = nf90_def_var(ncid, "rlat", NF90_DOUBLE, (/ lat_dimid /), rlat_varid, fletcher32 = .true.))
+                sts = nf90_def_var(ncid, "rlat", NF90_DOUBLE, (/ lat_dimid /), rlat_varid, fletcher32 = .true.)
                 sts = nf90_def_var_deflate(ncid, rlat_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, rlat_varid, "standard_name", "grid_latitude")
                 sts = nf90_put_att(ncid, rlat_varid, "long_name", "Latitude in rotated pole grid")
                 sts = nf90_put_att(ncid, rlat_varid, "units", "degrees")
                 sts = nf90_put_att(ncid, rlat_varid, "axis", "Y")
 
-                sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lon_varid, fletcher32 = .true.))
+                sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lon_varid, fletcher32 = .true.)
                 sts = nf90_def_var_deflate(ncid, lon_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, lon_varid, "standard_name", "longitude")
                 sts = nf90_put_att(ncid, lon_varid, "long_name", "Longitude")
                 sts = nf90_put_att(ncid, lon_varid, "units", "degrees_east")
 
-                sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lat_varid, fletcher32 = .true.))
+                sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lat_varid, fletcher32 = .true.)
                 sts = nf90_def_var_deflate(ncid, lat_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, lat_varid, "standard_name", "latitude")
                 sts = nf90_put_att(ncid, lat_varid, "long_name", "Latitude")
