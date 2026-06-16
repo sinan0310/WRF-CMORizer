@@ -1690,7 +1690,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
             ! Read the variables                   
             sts = NF90_INQ_VARID(ncidin, "T00", t00_varid)
             IF ( sts /= NF90_NOERR ) THEN
-              T00(1) = 290.0 !300.0
+              T00(1) = 300.0 !previously used 290.0
             ELSE
               sts = NF90_GET_VAR(ncidin, t00_varid, T00(:), &
               START = (/ it /), COUNT = (/ 1 /) )
