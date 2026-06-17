@@ -183,6 +183,11 @@ INTEGER :: calc_slp_type = 2
 INTEGER :: vint_type = 1
 
 !-------------------------------------------------------------------------------
+! constant base temperature and pressure
+REAL, PARAMETER :: T00 = 300.0
+REAL, PARAMETER :: P00 = 100000.0
+
+!-------------------------------------------------------------------------------
 ! constants 
 REAL, PARAMETER :: cp = 1004.0      ! [J kg-1 K-1]
 REAL, PARAMETER :: R = 287.04       ! [J kg-1 K-1]
@@ -1331,21 +1336,21 @@ fnNMLvar(1) = "runctrl.vars.nml"
                 sts = nf90_put_att(ncid, xlon_varid, "units", "m")
                 sts = nf90_put_att(ncid, xlon_varid, "axis", "X")
   
-                sts = nf90_def_var(ncid, "y", NF90_DOUBLE, (/ y_dimid /), ylat_varid, fletcher32 = .true.))
+                sts = nf90_def_var(ncid, "y", NF90_DOUBLE, (/ y_dimid /), ylat_varid, fletcher32 = .true.)
                 sts = nf90_def_var_deflate(ncid, ylat_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, ylat_varid, "standard_name", "projection_y_coordinate")
                 sts = nf90_put_att(ncid, ylat_varid, "long_name", "Y Coordinate Of Projection")
                 sts = nf90_put_att(ncid, ylat_varid, "units", "m")
                 sts = nf90_put_att(ncid, ylat_varid, "axis", "Y")
  
-                sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ x_dimid, y_dimid /), lon_varid, fletcher32 = .true.))
+                sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ x_dimid, y_dimid /), lon_varid, fletcher32 = .true.)
                 sts = nf90_def_var_deflate(ncid, lon_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, lon_varid, "standard_name", "longitude")
                 sts = nf90_put_att(ncid, lon_varid, "long_name", "Longitude")
                 sts = nf90_put_att(ncid, lon_varid, "units", "degrees_east")
                 sts = nf90_put_att(ncid, lon_varid, "_CoordinateAxisType", "Lon") ! special addon, not needed, but allowed
 
-                sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ x_dimid, y_dimid /), lat_varid, fletcher32 = .true.))
+                sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ x_dimid, y_dimid /), lat_varid, fletcher32 = .true.)
                 sts = nf90_def_var_deflate(ncid, lat_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, lat_varid, "standard_name", "latitude")
                 sts = nf90_put_att(ncid, lat_varid, "long_name", "Latitude")
@@ -1363,27 +1368,27 @@ fnNMLvar(1) = "runctrl.vars.nml"
                 
               ELSE              
               	! included for for rotated projection  
-                sts = nf90_def_var(ncid, "rlon", NF90_DOUBLE, (/ lon_dimid /), rlon_varid, fletcher32 = .true.))
+                sts = nf90_def_var(ncid, "rlon", NF90_DOUBLE, (/ lon_dimid /), rlon_varid, fletcher32 = .true.)
                 sts = nf90_def_var_deflate(ncid, rlon_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, rlon_varid, "standard_name", "grid_longitude")
                 sts = nf90_put_att(ncid, rlon_varid, "long_name", "Longitude in rotated pole grid")
                 sts = nf90_put_att(ncid, rlon_varid, "units", "degrees")
                 sts = nf90_put_att(ncid, rlon_varid, "axis", "X")
   
-                sts = nf90_def_var(ncid, "rlat", NF90_DOUBLE, (/ lat_dimid /), rlat_varid, fletcher32 = .true.))
+                sts = nf90_def_var(ncid, "rlat", NF90_DOUBLE, (/ lat_dimid /), rlat_varid, fletcher32 = .true.)
                 sts = nf90_def_var_deflate(ncid, rlat_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, rlat_varid, "standard_name", "grid_latitude")
                 sts = nf90_put_att(ncid, rlat_varid, "long_name", "Latitude in rotated pole grid")
                 sts = nf90_put_att(ncid, rlat_varid, "units", "degrees")
                 sts = nf90_put_att(ncid, rlat_varid, "axis", "Y")
 
-                sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lon_varid, fletcher32 = .true.))
+                sts = nf90_def_var(ncid, "lon", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lon_varid, fletcher32 = .true.)
                 sts = nf90_def_var_deflate(ncid, lon_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, lon_varid, "standard_name", "longitude")
                 sts = nf90_put_att(ncid, lon_varid, "long_name", "Longitude")
                 sts = nf90_put_att(ncid, lon_varid, "units", "degrees_east")
 
-                sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lat_varid, fletcher32 = .true.))
+                sts = nf90_def_var(ncid, "lat", NF90_DOUBLE, (/ lon_dimid, lat_dimid /), lat_varid, fletcher32 = .true.)
                 sts = nf90_def_var_deflate(ncid, lat_varid, 1, 1, 1)
                 sts = nf90_put_att(ncid, lat_varid, "standard_name", "latitude")
                 sts = nf90_put_att(ncid, lat_varid, "long_name", "Latitude")
@@ -1684,28 +1689,8 @@ fnNMLvar(1) = "runctrl.vars.nml"
 
             PRINT *, "*** SOME VARS ALWAYS HAVE TO BE READ: (T00), P00 ***"
   
-	    ! Open the file
-            sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin) 
-     
-            ! Read the variables                   
-            sts = NF90_INQ_VARID(ncidin, "T00", t00_varid)
-            IF ( sts /= NF90_NOERR ) THEN
-              T00(1) = 300.0 !previously used 290.0
-            ELSE
-              sts = NF90_GET_VAR(ncidin, t00_varid, T00(:), &
-              START = (/ it /), COUNT = (/ 1 /) )
-            END IF
-  
-            ! HTr: use actual value of base state pressure P00, if possible
-            sts = NF90_INQ_VARID(ncidin, "P00", p00_varid)
-            IF ( sts /= NF90_NOERR ) THEN
-              P00(1) = 100000.
-            ELSE
-              sts = NF90_GET_VAR(ncidin, p00_varid, P00(:), &
-              START = (/ it /), COUNT = (/ 1 /) )
-            END IF
-          
-            PRINT *, T00(1), P00(1)
+	       ! Open the file
+            sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin)
 
             !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -2929,8 +2914,8 @@ fnNMLvar(1) = "runctrl.vars.nml"
 
             ! transfer theta-t0 to total potential temperature [K]
             ! and then convert potential temperature theta to absolute temperature
-            t_in(:,:,:) = ( theta_in(:,:,:) + T00(1) ) * &
-                          ( p_in(:,:,:) / P00(1) )**(R/cp)
+            t_in(:,:,:) = ( theta_in(:,:,:) + T00) * &
+                          ( p_in(:,:,:) / P00 )**(R/cp)
                          
             !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -3119,7 +3104,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
               CASE(1)
                 ! modified version from wrf_interp.F90
                 PRINT *, "psl calc option 1: p_interp"
-                CALL calcslp(psl_in,p_in,qv_in,theta_in,ph_fl,nz,yfocus,xfocus,T00(1))
+                CALL calcslp(psl_in,p_in,qv_in,theta_in,ph_fl,nz,yfocus,xfocus,T00)
               CASE(2)
                 ! officially agreed upon variant using ECMWF methodology as
                 ! decided during autumn 2018 Trieste CORDEX FPS CEM meeting
@@ -3179,7 +3164,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
 
             IF ( (var_cmip(ivar) == "clivi")) THEN
     
-              !t_in(:,:,:) = (theta_in(:,:,:)+T00(1))*((pp_in(:,:,:)+pb_in(:,:,:))/P00(1))**(R/cp)
+              !t_in(:,:,:) = (theta_in(:,:,:)+T00)*((pp_in(:,:,:)+pb_in(:,:,:))/P00)**(R/cp)
               !p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
     
               clivi(:,:) = 0.
@@ -3198,7 +3183,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
 
             IF ( (var_cmip(ivar) == "clgvi")) THEN
 
-              !t_in(:,:,:) = (theta_in(:,:,:)+T00(1))*((pp_in(:,:,:)+pb_in(:,:,:))/P00(1))**(R/cp)
+              !t_in(:,:,:) = (theta_in(:,:,:)+T00)*((pp_in(:,:,:)+pb_in(:,:,:))/P00)**(R/cp)
               !p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
 
               clgvi(:,:) = 0.
@@ -3217,7 +3202,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
 
             IF ( (var_cmip(ivar) == "clhvi")) THEN
 
-              !t_in(:,:,:) = (theta_in(:,:,:)+T00(1))*((pp_in(:,:,:)+pb_in(:,:,:))/P00(1))**(R/cp)
+              !t_in(:,:,:) = (theta_in(:,:,:)+T00)*((pp_in(:,:,:)+pb_in(:,:,:))/P00)**(R/cp)
               !p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)
 
               clhvi(:,:) = 0.
@@ -3252,7 +3237,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
                     qvs(i,j,nl) = 0.622*a*exp(b*(t_p(i,j,nl)-c)/(t_p(i,j,nl)-d))/p_in(i,j,nl)
     
                     IF (qvs(i,j,nl) .gt. qv_in(i,j,1)) THEN ! dry adiabatic ascent                   
-                      t_p(i,j,nl+1) = (theta_in(i,j,1)+T00(1))*(p_in(i,j,nl+1)/P00(1))**(R/cp)
+                      t_p(i,j,nl+1) = (theta_in(i,j,1)+T00)*(p_in(i,j,nl+1)/P00)**(R/cp)
     
                     ELSE IF (qvs(i,j,nl) .lt. qv_in(i,j,1)) THEN ! moist adiabatic ascent    
                       IF (lcl(i,j) .eq. -999) THEN ! lifting condensation level
@@ -3262,9 +3247,9 @@ fnNMLvar(1) = "runctrl.vars.nml"
                       t_tmp = 0.
                       DO ii = 1,100 ! solve iteratively 
                         qvs(i,j,nl+1) = 0.622*a*exp(b*(t_ii-c)/(t_ii-d))/p_in(i,j,nl+1)    
-                        t_ii = t_ii - (t_ii*(P00(1)/p_in(i,j,nl+1))**(R/cp)*exp(L*qvs(i,j,nl+1)/(cp*t_ii)) - &
-                               (t_p(i,j,nl)*(P00(1)/p_in(i,j,nl))**(R/cp)*exp(L*qvs(i,j,nl)/(cp*t_p(i,j,nl))))) / &
-                               ( (P00(1)/p_in(i,j,nl+1))**(R/cp)*exp(n/(p_in(i,j,nl+1)*t_ii)*exp(b*(t_ii-c)/(t_ii-d))) * &
+                        t_ii = t_ii - (t_ii*(P00/p_in(i,j,nl+1))**(R/cp)*exp(L*qvs(i,j,nl+1)/(cp*t_ii)) - &
+                               (t_p(i,j,nl)*(P00/p_in(i,j,nl))**(R/cp)*exp(L*qvs(i,j,nl)/(cp*t_p(i,j,nl))))) / &
+                               ( (P00/p_in(i,j,nl+1))**(R/cp)*exp(n/(p_in(i,j,nl+1)*t_ii)*exp(b*(t_ii-c)/(t_ii-d))) * &
                                (1 - (n/p_in(i,j,nl+1)*exp(b*(t_ii-c)/(t_ii-d))*(t_ii*(t_ii-b*c)+(b-2)*d*t_ii+d**2))/(t_ii*(d-t_ii)**2)) )  
                         IF ( ABS(t_ii - t_tmp) .le. 0.01 ) THEN
                           exit
@@ -3396,7 +3381,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
           
             IF ((INDEX(var_cmip(ivar),"ta") == 1)) THEN      
               p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)                
-              var3d_in(:,:,:) = ( theta_in(:,:,:) + T00(1) ) * ( p_in(:,:,:) / P00(1) )**(R/cp)
+              var3d_in(:,:,:) = ( theta_in(:,:,:) + T00) * ( p_in(:,:,:) / P00 )**(R/cp)
             END IF
 
             !calculating height
