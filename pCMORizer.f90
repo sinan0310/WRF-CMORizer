@@ -173,8 +173,10 @@ END INTERFACE
 ! dataset and experiment
 
 CHARACTER (LEN=*), PARAMETER :: fnNMLexp = "runctrl.current.nml"
+CHARACTER (LEN=*), PARAMETER :: fnVersion = "VERSION.txt"
 CHARACTER (LEN=100), DIMENSION(:), ALLOCATABLE :: fnNMLvar
 CHARACTER (LEN=200) :: pn_out, fn_out, iflWRFin
+CHARACTER (LEN=100) :: cmorizer_version
 
 ! Choose how psl is calculated, 0 OK, 1 OK, 2 OK, no not change throughout
 INTEGER :: calc_slp_type = 2 
@@ -363,9 +365,6 @@ REAL, DIMENSION(:,:,:), ALLOCATABLE :: &
 REAL, DIMENSION(:,:,:,:), ALLOCATABLE :: &
   cldfra_in
 
-! Base temperature of temperature and pressure
-REAL, DIMENSION(1) :: T00, P00 ! base temperature of temperature and pressure
-
 ! Soil data dimension
 REAL, DIMENSION(:), ALLOCATABLE :: DZS ! soil layer thickness may vary from simulation to simulation
 REAL, DIMENSION(4) :: DZShc = (/0.1, 0.3, 0.6, 1.0/)
@@ -435,6 +434,13 @@ INTEGER :: ierr, rank, numtasks
 PRINT *, "============================================================"
 PRINT *, "WRF RCM CMORizer"
 PRINT *, "============================================================"
+
+OPEN(2,FILE=fnVersion,STATUS='old',ACTION='read',IOSTAT=sts)
+  IF (sts /= 0) STOP "*** Could not open VERSION.txt, stopping***"
+  READ(UNIT=2,FMT='(A)',IOSTAT=sts) cmorizer_version
+CLOSE(2)
+IF (sts /= 0) STOP "*** Could not read VERSION.txt, stopping***"
+cmorizer_version = TRIM(ADJUSTL(cmorizer_version))
 
 PRINT *, "============================================================"
 PRINT *, "*** CENTRAL NAMELIST READING ***"
@@ -1486,6 +1492,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
 
               !-----------------------------------------------------------------              
               ! global attributes always included
+              sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "WRF_CMORizer_version", cmorizer_version)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "activity_id", activity_id)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "contact", contact)
               sts = NF90_PUT_ATT(ncid, NF90_GLOBAL, "Conventions", Conventions)
@@ -1687,7 +1694,6 @@ fnNMLvar(1) = "runctrl.vars.nml"
           ! "it" controls it all: timestep in the individual WRF file
           ! there is only one variable at a time under processing
 
-            PRINT *, "*** SOME VARS ALWAYS HAVE TO BE READ: (T00), P00 ***"
   
 	       ! Open the file
             sts = NF90_OPEN(iflWRFin, NF90_NOWRITE, ncidin)
