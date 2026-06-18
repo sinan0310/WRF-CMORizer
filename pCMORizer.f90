@@ -189,6 +189,7 @@ INTEGER :: vint_type = 1
 REAL, PARAMETER :: T00 = 300.0
 REAL, PARAMETER :: P00 = 100000.0
 
+!-------------------------------------------------------------------------------
 ! constants
 REAL, PARAMETER :: cp = 1004.0      ! [J kg-1 K-1]
 REAL, PARAMETER :: R = 287.04       ! [J kg-1 K-1]
@@ -2919,7 +2920,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
 
             ! transfer theta-t0 to total potential temperature [K]
             ! and then convert potential temperature theta to absolute temperature
-            t_in(:,:,:) = ( theta_in(:,:,:) + T00 ) * &
+            t_in(:,:,:) = ( theta_in(:,:,:) + T00) * &
                           ( p_in(:,:,:) / P00 )**(R/cp)
                          
             !- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3386,7 +3387,7 @@ fnNMLvar(1) = "runctrl.vars.nml"
           
             IF ((INDEX(var_cmip(ivar),"ta") == 1)) THEN      
               p_in(:,:,:) = pp_in(:,:,:) + pb_in(:,:,:)                
-              var3d_in(:,:,:) = ( theta_in(:,:,:) + T00 ) * ( p_in(:,:,:) / P00 )**(R/cp)
+              var3d_in(:,:,:) = ( theta_in(:,:,:) + T00) * ( p_in(:,:,:) / P00 )**(R/cp)
             END IF
 
             !calculating height
