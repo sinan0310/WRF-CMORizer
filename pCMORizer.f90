@@ -190,7 +190,7 @@ REAL, PARAMETER :: T00 = 300.0
 REAL, PARAMETER :: P00 = 100000.0
 
 !-------------------------------------------------------------------------------
-! constants 
+! constants
 REAL, PARAMETER :: cp = 1004.0      ! [J kg-1 K-1]
 REAL, PARAMETER :: R = 287.04       ! [J kg-1 K-1]
 REAL, PARAMETER :: L = 2501000.0    ! [J kg-1]
